@@ -327,7 +327,7 @@ export function NocRequestsManager({
                   {item.documentUrl ? (
                     <button
                       type="button"
-                      onClick={() => setPreviewDoc({ url: item.documentUrl!, title: `NOC - ${item.company} (${item.studentName || item.rollNumber})` })}
+                      onClick={() => setPreviewDoc({ url: `/api/noc-documents/${item.id}`, title: `NOC - ${item.company} (${item.studentName || item.rollNumber})` })}
                       style={{
                         display: "inline-flex",
                         alignItems: "center",
@@ -557,7 +557,7 @@ export function NocRequestsManager({
                   <button
                     type="button"
                     onClick={() => {
-                      setPreviewDoc({ url: detailItem.documentUrl!, title: `NOC - ${detailItem.company}` });
+                      setPreviewDoc({ url: `/api/noc-documents/${detailItem.id}`, title: `NOC - ${detailItem.company}` });
                     }}
                     style={{
                       background: "var(--green)",

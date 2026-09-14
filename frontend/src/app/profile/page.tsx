@@ -59,7 +59,6 @@ export default async function Page() {
       name: resume.fileName,
       fileUrl: resume.fileUrl.startsWith("http") ? resume.fileUrl : `/api/resumes/${resume.id}`,
       uploadedAt: resume.uploadedAt,
-      fileUrl: resume.fileUrl,
     })),
   };
 

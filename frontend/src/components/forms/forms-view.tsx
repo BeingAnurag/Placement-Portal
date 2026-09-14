@@ -287,7 +287,7 @@ export function FormsView({ initialNocs = [] }: { initialNocs?: LocalNoc[] }) {
                       {isApproved && noc.documentUrl && (
                         <button
                           type="button"
-                          onClick={() => setPreviewDocUrl({ url: noc.documentUrl!, title: `NOC - ${noc.company}` })}
+                          onClick={() => setPreviewDocUrl({ url: `/api/noc-documents/${noc.id}`, title: `NOC - ${noc.company}` })}
                           title="View certificate"
                           style={{
                             display: "inline-flex",
@@ -522,7 +522,7 @@ export function FormsView({ initialNocs = [] }: { initialNocs?: LocalNoc[] }) {
                   <button
                     type="button"
                     onClick={() => {
-                      setPreviewDocUrl({ url: viewingNoc.documentUrl!, title: `NOC - ${viewingNoc.company}` });
+                      setPreviewDocUrl({ url: `/api/noc-documents/${viewingNoc.id}`, title: `NOC - ${viewingNoc.company}` });
                     }}
                     style={{
                       background: "var(--green)",

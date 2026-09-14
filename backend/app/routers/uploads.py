@@ -8,18 +8,14 @@ from __future__ import annotations
 
 import re
 import uuid
-
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from typing import Optional
-import uuid
-from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile, File
+
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.core.storage import StorageError, validate_pdf, upload_pdf, delete_file
-from app.dependencies import get_db, require_admin, require_student
 from app.core.security import (
     PERM_APPLICATIONS_READ,
     PERM_STUDENTS_READ,
@@ -27,7 +23,7 @@ from app.core.security import (
     is_admin_email,
     is_elevated_role,
 )
-from app.core.storage import get_local_file_path, upload_pdf, validate_pdf
+from app.core.storage import StorageError, delete_file, get_local_file_path, upload_pdf, validate_pdf
 from app.dependencies import get_current_user, get_db, require_admin, require_student
 from app.models.db import NocRequest, Resume
 from app.schemas.student import ResumeResponse
@@ -56,7 +52,7 @@ async def upload_resume(
     content = await file.read()
     if len(content) == 0:
         raise HTTPException(status_code=400, detail="The uploaded file is empty.")
-    if len(content) > MAX_RESUME_BYTES:
+    if len(content) > settings.allowed_pdf_size_mb * 1024 * 1024:
         raise HTTPException(
             status_code=400,
             detail=f"File exceeds the {settings.allowed_pdf_size_mb} MB limit. "
