@@ -17,6 +17,7 @@ export const PERM_NOC_MANAGE = "noc:manage";
 export const PERM_TEAM_MANAGE = "team:manage";
 export const PERM_ANALYTICS_VIEW = "analytics:view";
 export const PERM_SETTINGS_MANAGE = "settings:manage";
+export const PERM_INTERVIEW_EXPERIENCES_MANAGE = "interview_experiences:manage";
 
 export const ALL_PERMISSIONS = [
   PERM_USERS_READ,
@@ -35,6 +36,7 @@ export const ALL_PERMISSIONS = [
   PERM_TEAM_MANAGE,
   PERM_ANALYTICS_VIEW,
   PERM_SETTINGS_MANAGE,
+  PERM_INTERVIEW_EXPERIENCES_MANAGE,
 ] as const;
 
 export type PermissionKey = (typeof ALL_PERMISSIONS)[number];
@@ -42,7 +44,7 @@ export type PermissionKey = (typeof ALL_PERMISSIONS)[number];
 export type PermissionDefinition = {
   key: PermissionKey;
   label: string;
-  category: "Users & RBAC" | "Companies" | "Job Profiles" | "Applications" | "Students" | "Announcements" | "Feedback" | "Forms & NOC" | "Team" | "Analytics" | "Settings";
+  category: "Users & RBAC" | "Companies" | "Job Profiles" | "Applications" | "Students" | "Announcements" | "Feedback" | "Forms & NOC" | "Team" | "Analytics" | "Settings" | "Interview Experiences";
   description: string;
 };
 
@@ -143,6 +145,12 @@ export const PERMISSION_DEFINITIONS: PermissionDefinition[] = [
     category: "Settings",
     description: "Configure portal settings, allowlists, and system policies.",
   },
+  {
+    key: PERM_INTERVIEW_EXPERIENCES_MANAGE,
+    label: "Manage Interview Experiences",
+    category: "Interview Experiences",
+    description: "Review, approve, reject, and remove student-submitted interview experiences.",
+  },
 ];
 
 export const ROLE_DEFAULT_PERMISSIONS: Record<Role, readonly PermissionKey[]> = {
@@ -164,6 +172,7 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<Role, readonly PermissionKey[]> = 
     PERM_TEAM_MANAGE,
     PERM_ANALYTICS_VIEW,
     PERM_SETTINGS_MANAGE,
+    PERM_INTERVIEW_EXPERIENCES_MANAGE,
   ],
   OFFICER: [
     PERM_USERS_READ,
@@ -179,6 +188,7 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<Role, readonly PermissionKey[]> = 
     PERM_NOC_MANAGE,
     PERM_TEAM_MANAGE,
     PERM_ANALYTICS_VIEW,
+    PERM_INTERVIEW_EXPERIENCES_MANAGE,
   ],
   COORDINATOR: [
     PERM_COMPANIES_READ,

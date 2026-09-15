@@ -6,7 +6,7 @@ Last updated: 2026-08-20
 
 The IIIT Lucknow Training & Placement Portal serves two roles:
 
-- Students discover opportunities, maintain profiles and resumes, apply, track outcomes, submit feedback, request NOCs, and access placement resources.
+- Students discover opportunities, maintain profiles and resumes, apply, track outcomes, submit feedback, request NOCs, browse and share moderated interview experiences, and access placement resources.
 - Administrators manage announcements, companies, job profiles, applications, students, feedback, NOCs, team members, administrators, and placement analytics.
 
 ## Current architecture
@@ -33,7 +33,7 @@ See `docs/DECISIONS.md` (2026-08-20) for why data access moved to FastAPI while 
 
 `database/prisma/schema.prisma` is authoritative for the database structure. The SQLAlchemy models in `backend/app/models/db.py` mirror it and must never call `Base.metadata.create_all()` or otherwise migrate. Any schema change is a Prisma migration plus a matching model update.
 
-Main entities: User, Account, Session, Company, JobProfile, Application, Announcement, Feedback, NocRequest, Resume, Coordinator, TeamMember, Notification.
+Main entities: User, Account, Session, Company, JobProfile, Application, Announcement, Feedback, NocRequest, InterviewExperience, Resume, Coordinator, TeamMember, Notification.
 
 Important invariants:
 
@@ -49,7 +49,7 @@ Google is the only sign-in method. There are no password accounts in any environ
 
 - Students must hold a Google account on `STUDENT_EMAIL_DOMAIN` (default `iiitl.ac.in`), matched on the exact domain so lookalike domains are rejected.
 - `ADMIN_EMAILS` serves as the emergency bootstrap superadmin allowlist: addresses listed here receive `SUPER_ADMIN` / `ADMIN` rights automatically and may sign in from outside the institute domain.
-- The portal enforces a 5-tier role hierarchy: `STUDENT` (Tier 1), `COORDINATOR` (Tier 2), `OFFICER` (Tier 3), `ADMIN` (Tier 4), `SUPER_ADMIN` (Tier 5), backed by a 16-permission RBAC catalog.
+- The portal enforces a 5-tier role hierarchy: `STUDENT` (Tier 1), `COORDINATOR` (Tier 2), `OFFICER` (Tier 3), `ADMIN` (Tier 4), `SUPER_ADMIN` (Tier 5), backed by a 17-permission RBAC catalog.
 - In addition to role defaults, any user account supports granular per-user custom permission overrides (`customPermissions String[]` on `User`).
 - Full user lifecycle and RBAC management is available on `/admin/users`, including account provisioning, role elevation & de-elevation, custom permission matrix editing, suspension/activation, and guarded deletion.
 - Guardrails protect against self-demotion, self-deactivation, self-deletion, and removal of the last active super-administrator.
@@ -114,6 +114,6 @@ docs/                            Shared project memory and decisions
 
 ## Current implementation boundary
 
-Data access is mid-migration. Profile, resumes, NOC/forms, uploads, and feedback submission call FastAPI through `frontend/src/lib/api-client.ts`. The dashboard, company events, applications, feedback listing, and every `/admin` surface still call Prisma directly from Next.js server components and actions; porting them to backend endpoints is the outstanding work from the 2026-08-20 decision.
+Data access is mid-migration. Profile, resumes, NOC/forms, uploads, feedback submission, and interview experiences call FastAPI through `frontend/src/lib/api-client.ts`. The dashboard, company events, applications, feedback listing, and every other `/admin` surface still call Prisma directly from Next.js server components and actions; porting them to backend endpoints is the outstanding work from the 2026-08-20 decision. Interview experiences was built FastAPI-only from the start, with no Prisma fallback in the frontend.
 
 Google-authenticated students are resolved to their Auth.js/Prisma `User`. The student shell, dashboard, company events, eligibility, applications, core profile fields, and feedback read user-owned records and show explicit empty/incomplete states instead of demonstration data. The admin shell identity, overview metrics, company management, student directory/profile inspection, and job-profile publishing are persistent. Resume file storage, NOC workflows, team/contact management, announcements, and the remaining admin workflows are incomplete and show explicit implementation states rather than fake records. Consult `docs/FEATURE_STATUS.md` before extending a feature.

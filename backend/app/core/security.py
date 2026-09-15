@@ -32,6 +32,7 @@ PERM_NOC_MANAGE = "noc:manage"
 PERM_TEAM_MANAGE = "team:manage"
 PERM_ANALYTICS_VIEW = "analytics:view"
 PERM_SETTINGS_MANAGE = "settings:manage"
+PERM_INTERVIEW_EXPERIENCES_MANAGE = "interview_experiences:manage"
 
 ALL_PERMISSIONS = [
     PERM_USERS_READ,
@@ -50,6 +51,7 @@ ALL_PERMISSIONS = [
     PERM_TEAM_MANAGE,
     PERM_ANALYTICS_VIEW,
     PERM_SETTINGS_MANAGE,
+    PERM_INTERVIEW_EXPERIENCES_MANAGE,
 ]
 
 ROLE_DEFAULT_PERMISSIONS: dict[str, list[str]] = {
@@ -71,6 +73,7 @@ ROLE_DEFAULT_PERMISSIONS: dict[str, list[str]] = {
         PERM_TEAM_MANAGE,
         PERM_ANALYTICS_VIEW,
         PERM_SETTINGS_MANAGE,
+        PERM_INTERVIEW_EXPERIENCES_MANAGE,
     ],
     "OFFICER": [
         PERM_USERS_READ,
@@ -86,6 +89,7 @@ ROLE_DEFAULT_PERMISSIONS: dict[str, list[str]] = {
         PERM_NOC_MANAGE,
         PERM_TEAM_MANAGE,
         PERM_ANALYTICS_VIEW,
+        PERM_INTERVIEW_EXPERIENCES_MANAGE,
     ],
     "COORDINATOR": [
         PERM_COMPANIES_READ,
@@ -196,6 +200,12 @@ PERMISSION_METADATA = [
         "label": "System Settings",
         "category": "Settings",
         "description": "Manage portal system settings and configuration.",
+    },
+    {
+        "key": PERM_INTERVIEW_EXPERIENCES_MANAGE,
+        "label": "Manage Interview Experiences",
+        "category": "Interview Experiences",
+        "description": "Review, approve, reject, and remove student-submitted interview experiences.",
     },
 ]
 

@@ -26,7 +26,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-from app.routers import auth, dashboard, profile, jobs, applications, feedback, noc, announcements, team, notifications, uploads, users
+from app.routers import auth, dashboard, profile, jobs, applications, feedback, noc, announcements, team, notifications, uploads, users, interview_experiences
 
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(dashboard.router, prefix="/api/v1")
@@ -40,6 +40,7 @@ app.include_router(team.router, prefix="/api/v1")
 app.include_router(notifications.router, prefix="/api/v1")
 app.include_router(uploads.router, prefix="/api/v1")
 app.include_router(users.router, prefix="/api/v1")
+app.include_router(interview_experiences.router, prefix="/api/v1")
 
 @app.get("/api/health")
 async def health_check():

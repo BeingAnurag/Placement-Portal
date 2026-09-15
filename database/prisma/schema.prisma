@@ -54,55 +54,63 @@ enum AnnouncementCategory {
   GENERAL
 }
 
+enum InterviewExperienceStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 model User {
-  id                   String         @id @default(cuid())
-  name                 String?
-  email                String?        @unique
-  emailVerified        DateTime?
-  image                String?
-  role                 Role           @default(STUDENT)
-  customPermissions    String[]       @default([])
-  isActive             Boolean        @default(true)
-  title                String?
-  personalEmail        String?
-  rollNumber           String?        @unique
-  branch               String?
-  batch                Int?
-  degree               String?
-  category             String?
-  gender               String?
-  dateOfBirth          DateTime?
-  bloodGroup           String?
-  contactNumber        String?
-  altContactNumber     String?
-  currentAddress       String?
-  permanentAddress     String?
-  aadhaarEncrypted     String?
-  aadhaarDocUrl        String?
-  aadhaarDocFileName   String?
-  panCardEncrypted     String?
-  panCardDocUrl        String?
-  panCardDocFileName   String?
-  class10Percent       Float?
-  class12Percent       Float?
-  semGPAs              Float[]
-  cgpa                 Float?
-  cgpaBeforeDrop       Float?
-  graduationGPA        Float?
-  backlogs             Int            @default(0)
-  bans                 Int            @default(0)
-  qrCodeData           String?
-  createdAt            DateTime       @default(now())
-  updatedAt            DateTime       @updatedAt
-  accounts             Account[]
-  sessions             Session[]
-  applications         Application[]
-  resumes              Resume[]
-  feedbacks            Feedback[]
-  nocRequests          NocRequest[]
-  notifications        Notification[]
-  createdJobs          JobProfile[]   @relation("JobCreator")
-  createdAnnouncements Announcement[] @relation("AnnouncementCreator")
+  id                           String                @id @default(cuid())
+  name                         String?
+  email                        String?               @unique
+  emailVerified                DateTime?
+  image                        String?
+  role                         Role                  @default(STUDENT)
+  customPermissions            String[]              @default([])
+  isActive                     Boolean               @default(true)
+  title                        String?
+  personalEmail                String?
+  rollNumber                   String?               @unique
+  branch                       String?
+  batch                        Int?
+  degree                       String?
+  category                     String?
+  gender                       String?
+  dateOfBirth                  DateTime?
+  bloodGroup                   String?
+  contactNumber                String?
+  altContactNumber             String?
+  currentAddress               String?
+  permanentAddress             String?
+  aadhaarEncrypted             String?
+  aadhaarDocUrl                String?
+  aadhaarDocFileName           String?
+  panCardEncrypted             String?
+  panCardDocUrl                String?
+  panCardDocFileName           String?
+  class10Percent               Float?
+  class12Percent               Float?
+  semGPAs                      Float[]
+  cgpa                         Float?
+  cgpaBeforeDrop               Float?
+  graduationGPA                Float?
+  backlogs                     Int                   @default(0)
+  bans                         Int                   @default(0)
+  qrCodeData                   String?
+  createdAt                    DateTime              @default(now())
+  updatedAt                    DateTime              @updatedAt
+  accounts                     Account[]
+  sessions                     Session[]
+  applications                 Application[]
+  resumes                      Resume[]
+  feedbacks                    Feedback[]
+  nocRequests                  NocRequest[]
+  notifications                Notification[]
+  createdJobs                  JobProfile[]          @relation("JobCreator")
+  createdAnnouncements         Announcement[]        @relation("AnnouncementCreator")
+  interviewExperiences         InterviewExperience[] @relation("InterviewExperienceAuthor")
+  reviewedInterviewExperiences InterviewExperience[] @relation("InterviewExperienceReviewer")
 }
 
 model Account {
@@ -235,12 +243,47 @@ model NocRequest {
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
+model InterviewExperience {
+  id                      String                    @id @default(cuid())
+  userId                  String
+  companyName             String
+  role                    String
+  batch                   Int
+  interviewType           String
+  dsaQuestions            String?
+  oopsQuestions           String?
+  dbmsQuestions           String?
+  osQuestions             String?
+  cnQuestions             String?
+  sqlQuestions            String?
+  systemDesignQuestions   String?
+  csFundamentalsQuestions String?
+  resumeQuestions         String?
+  projectsDiscussed       String?
+  codingQuestions         String?
+  aptitudeQuestions       String?
+  hrQuestions             String?
+  behavioralQuestions     String?
+  resources               String?
+  unansweredQuestions     String?
+  tips                    String?
+  status                  InterviewExperienceStatus @default(PENDING)
+  reviewNote              String?
+  reviewedById            String?
+  reviewedAt              DateTime?
+  createdAt               DateTime                  @default(now())
+  updatedAt               DateTime                  @updatedAt
+  user                    User                      @relation("InterviewExperienceAuthor", fields: [userId], references: [id], onDelete: Cascade)
+  reviewedBy              User?                     @relation("InterviewExperienceReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+}
+
 model Resume {
   id           String        @id @default(cuid())
   userId       String
   label        String
   fileUrl      String
   fileName     String
+  publicId     String?
   uploadedAt   DateTime      @default(now())
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   applications Application[]
@@ -278,5 +321,5 @@ model Notification {
 model SystemSetting {
   key       String   @id
   value     String
-  updatedAt DateTime @updatedAt
+  updatedAt DateTime @default(now()) @updatedAt
 }

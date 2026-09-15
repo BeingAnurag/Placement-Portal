@@ -13,6 +13,7 @@ import {
   GraduationCap,
   LogOut,
   Menu,
+  MessageSquareText,
   Settings,
   ShieldCheck,
   Users,
@@ -33,6 +34,7 @@ const nav = [
   ["Users & RBAC", "/admin/users", ShieldCheck],
   ["Feedbacks", "/admin/feedbacks", FileQuestion],
   ["NOC requests", "/admin/noc-requests", FileText],
+  ["Interview experiences", "/admin/interview-experiences", MessageSquareText],
   ["Team", "/admin/team", Users],
   ["Settings", "/admin/settings", Settings],
 ] as const;

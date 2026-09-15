@@ -110,6 +110,17 @@ Add new colour work as tokens. Literal brand hex values in component styles are 
 - **Default Permissions Management**: Added `SystemSetting` table (`key`, `value`, `updatedAt`) in Prisma and SQLAlchemy to persist the admin-configurable default permissions set for the single placement team (`placement_team_default_permissions`).
 - **Automated Permission Synchronization**: Adding a team member with an email automatically assigns the placement team's default permissions to their `User.customPermissions` (and on new user creation in `auth.ts`). Removing a member automatically revokes the default permissions while preserving any prior custom permissions. Admins retain full control to further adjust individual permissions manually in User Management.
 
+## 2026-09-15 — Interview Experiences (moderated community submissions)
+
+Replaces the manual Google Form previously used to collect company-wise interview questions from students.
+
+- Added an `InterviewExperience` model (Prisma-owned schema, SQLAlchemy mirror) capturing company, role, batch, interview type, and one optional free-text field per question category from the old form (DSA, OOPS, DBMS, OS, CN, SQL, system design, CS fundamentals, resume, projects, coding, aptitude, HR, behavioral, resources, unanswered questions, tips).
+- **Moderation, not open publishing**: submissions start `PENDING` and are only visible to other students once an admin/coordinator with the new `interview_experiences:manage` permission (`SUPER_ADMIN`, `ADMIN`, `OFFICER` by default) approves them, mirroring the NOC request review workflow rather than the always-visible Feedback pattern. This keeps a single Placement Cell as the quality gate against copy-pasted or low-effort submissions, same as review of NOC requests.
+- **Company is free text**, not a foreign key to `Company`, because students report on off-campus and pooled-campus interviews at companies the admin may never have added to the portal — the same reasoning already applied to `NocRequest.company`.
+- **Submissions are locked after posting**: students cannot edit or delete their own entries once submitted, only admins can (edit is not yet implemented; delete is). This avoids a published, publicly-read record silently changing under readers after the fact.
+- Endpoints live under `/api/v1/interview-experiences` (`FastAPI`): student submit/list-mine/browse-approved/company-list, and admin list/approve/reject/delete guarded by the new permission. Approval and rejection notify the author via in-app `Notification` and background email, matching the NOC/Feedback pattern.
+- This is the 17th entry in the RBAC permission catalog; the RBAC user-management matrix picks it up automatically from `PERMISSION_METADATA` / `PERMISSION_DEFINITIONS`, no separate UI change needed.
+
 
 
 

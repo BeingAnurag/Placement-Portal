@@ -82,6 +82,12 @@ class AnnouncementCategory(str, enum.Enum):
     GENERAL = "GENERAL"
 
 
+class InterviewExperienceStatus(str, enum.Enum):
+    PENDING = "PENDING"
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
+
+
 # ---------------------------------------------------------------------------
 # Models
 # ---------------------------------------------------------------------------
@@ -136,6 +142,12 @@ class User(Base):
     notifications: Mapped[list["Notification"]] = relationship(back_populates="user")
     created_jobs: Mapped[list["JobProfile"]] = relationship(back_populates="created_by", foreign_keys="JobProfile.createdById")
     created_announcements: Mapped[list["Announcement"]] = relationship(back_populates="created_by")
+    interview_experiences: Mapped[list["InterviewExperience"]] = relationship(
+        back_populates="user", foreign_keys="InterviewExperience.userId"
+    )
+    reviewed_interview_experiences: Mapped[list["InterviewExperience"]] = relationship(
+        back_populates="reviewed_by", foreign_keys="InterviewExperience.reviewedById"
+    )
 
 
 class Company(Base):
@@ -251,6 +263,46 @@ class NocRequest(Base):
     updatedAt: Mapped[datetime] = mapped_column(DateTime(timezone=True), onupdate=func.now(), server_default=func.now())
 
     user: Mapped["User"] = relationship(back_populates="noc_requests")
+
+
+class InterviewExperience(Base):
+    __tablename__ = "InterviewExperience"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    userId: Mapped[str] = mapped_column(String, ForeignKey("User.id", ondelete="CASCADE"))
+    companyName: Mapped[str] = mapped_column(String)
+    role: Mapped[str] = mapped_column(String)
+    batch: Mapped[int] = mapped_column(Integer)
+    interviewType: Mapped[str] = mapped_column(String)
+    dsaQuestions: Mapped[str | None] = mapped_column(Text, nullable=True)
+    oopsQuestions: Mapped[str | None] = mapped_column(Text, nullable=True)
+    dbmsQuestions: Mapped[str | None] = mapped_column(Text, nullable=True)
+    osQuestions: Mapped[str | None] = mapped_column(Text, nullable=True)
+    cnQuestions: Mapped[str | None] = mapped_column(Text, nullable=True)
+    sqlQuestions: Mapped[str | None] = mapped_column(Text, nullable=True)
+    systemDesignQuestions: Mapped[str | None] = mapped_column(Text, nullable=True)
+    csFundamentalsQuestions: Mapped[str | None] = mapped_column(Text, nullable=True)
+    resumeQuestions: Mapped[str | None] = mapped_column(Text, nullable=True)
+    projectsDiscussed: Mapped[str | None] = mapped_column(Text, nullable=True)
+    codingQuestions: Mapped[str | None] = mapped_column(Text, nullable=True)
+    aptitudeQuestions: Mapped[str | None] = mapped_column(Text, nullable=True)
+    hrQuestions: Mapped[str | None] = mapped_column(Text, nullable=True)
+    behavioralQuestions: Mapped[str | None] = mapped_column(Text, nullable=True)
+    resources: Mapped[str | None] = mapped_column(Text, nullable=True)
+    unansweredQuestions: Mapped[str | None] = mapped_column(Text, nullable=True)
+    tips: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[InterviewExperienceStatus] = mapped_column(
+        Enum(InterviewExperienceStatus, name="InterviewExperienceStatus"),
+        default=InterviewExperienceStatus.PENDING,
+    )
+    reviewNote: Mapped[str | None] = mapped_column(Text, nullable=True)
+    reviewedById: Mapped[str | None] = mapped_column(String, ForeignKey("User.id", ondelete="SET NULL"), nullable=True)
+    reviewedAt: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    createdAt: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updatedAt: Mapped[datetime] = mapped_column(DateTime(timezone=True), onupdate=func.now(), server_default=func.now())
+
+    user: Mapped["User"] = relationship(back_populates="interview_experiences", foreign_keys=[userId])
+    reviewed_by: Mapped["User | None"] = relationship(back_populates="reviewed_interview_experiences", foreign_keys=[reviewedById])
 
 
 class Resume(Base):
