@@ -131,6 +131,33 @@ Added `GET /api/v1/students/admin/flags` (new `students` FastAPI router) and a "
 - The heavy lifting (`compute_missed_streak`) lives in `app/services/student_flags.py` as a pure, DB-free function over plain dicts, unit tested directly in `backend/tests/test_student_flags.py` — the router only loads rows and shapes them into that function's input.
 - The admin students directory (`/admin/students`) itself is still Prisma-direct (legacy, per the 2026-08-20 decision); this feature was added as a new FastAPI endpoint the page additionally calls via `backendFetch`, rather than porting the whole directory or adding a new Prisma call for it.
 
+## 2026-09-17 — `cmdk` for searchable pickers; still no UI component kit
+
+Refines the *UI system* section of `docs/PROJECT_CONTEXT.md` and the 2026-08-21 palette decision. The interview-experience form offers a curated list of ~1000 recruiters (`frontend/src/lib/company-options.ts`), which is unusable as a native `<select>` and awkward as a `<datalist>`.
+
+`cmdk` is added as the single new UI dependency, wrapped by `frontend/src/components/common/company-picker.tsx`. It was chosen over a component kit deliberately:
+
+- **Material UI** was rejected: it ships an Emotion CSS-in-JS runtime, the Material Design visual language, and its own `ThemeProvider`, which would run in parallel with the CSS-custom-property theme system from 2026-08-25 and fight it.
+- **HeroUI** was rejected: it is configured as a Tailwind plugin through `tailwind.config.js`, and this repo runs Tailwind 4 with CSS-first config and no JS config file.
+- **shadcn/ui** was not adopted wholesale, but is the right choice if a kit is ever wanted, because it copies source into the repository rather than adding a dependency. `cmdk` is the primitive its `Command` component wraps, so adopting shadcn later does not invalidate this.
+
+Components remain styled with repository-owned semantic CSS in `globals.css` using the existing logo-derived tokens; `cmdk` is unstyled and contributes behaviour (filtering, keyboard navigation, `aria-selected`) only. Do not add a component kit without a new entry here.
+
+The picker submits through a hidden input so the company rules stay in the Zod schema at the server boundary rather than being duplicated client-side, and `allowCustom` preserves the free-text company decision from 2026-09-15.
+
+## 2026-09-17 — Teal palette replaces the logo-derived palette
+
+Supersedes *2026-08-21 — Palette derived from the institute logo*. The blue/orange/green sampled from `iiitl-logo.png` is replaced site-wide, in both themes, by a single teal ramp chosen by the placement cell:
+
+`#def7f9 · #92dce2 · #35bdc8 · #2ca0ab · #20808d · #1a6872 · #114f56 · #0b363c · #081f22`, anchored by `#091717` (darkest surface) and `#fbfaf4` (lightest surface).
+
+- **The ramp is the only place literal brand hex values may appear.** It is declared once in the first `:root` block of `globals.css`; every rule reads a semantic token. The 2026-08-21 warning still applies and is the reason this migration was a token edit rather than another 108-replacement sweep.
+- **Token names were kept, values remapped.** `--blue`, `--navy`, `--navy-deep`, and `--brown` now resolve to rungs of the teal ramp. Renaming them would have touched ~400 declarations across `globals.css` and `admin.css` for no behavioural gain; the names are now hue-inaccurate, which is the deliberate cost.
+- **`rgba()` tints read channel tokens.** `rgba()` cannot consume a hex custom property, so `--brand-rgb`, `--deep-rgb`, `--shadow-rgb`, `--warning-rgb`, `--success-rgb`, and `--danger-rgb` carry the channels separately and are themed alongside the hex tokens. Previously these tints were frozen hex triplets that silently kept the old blue and orange when the theme changed.
+- **Status hues deliberately survive the migration.** Green (success), orange (warning/pending/interview), red (error), and purple (shortlisted) are not teal. A monochrome portal would make the application funnel stages and the resolved/pending badges indistinguishable, so those colours now carry meaning only, never brand identity. Orange in particular was demoted: it was the CTA, eyebrow, and active-nav colour, and all of those are now teal.
+- **Both sidebars share one gradient.** The student shell was navy and the admin shell was brown; they now both read `--sidebar-from`/`--sidebar-to`, with `--on-brand`, `--on-brand-soft`, and `--on-brand-muted` for text on those always-dark surfaces.
+- The logo still renders on a white tile, for the contrast reason recorded in 2026-08-21. That has not changed and recolouring the logo is still not an option.
+
 
 
 

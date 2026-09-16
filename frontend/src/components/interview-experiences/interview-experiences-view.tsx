@@ -15,6 +15,8 @@ import {
 } from "lucide-react";
 import { useMemo, useState, useTransition } from "react";
 import { submitInterviewExperienceAction } from "@/app/interview-experiences/actions";
+import { CompanyPicker } from "@/components/common/company-picker";
+import { COMPANY_OPTIONS } from "@/lib/company-options";
 import { INTERVIEW_TYPE_OPTIONS } from "@/lib/interview-experience-schema";
 
 export type InterviewExperienceItem = {
@@ -345,7 +347,7 @@ export function InterviewExperiencesView({
 
               <label>
                 Company name
-                <input name="companyName" required minLength={2} placeholder="e.g. Amazon India" />
+                <CompanyPicker name="companyName" options={COMPANY_OPTIONS} />
               </label>
               <label>
                 Role

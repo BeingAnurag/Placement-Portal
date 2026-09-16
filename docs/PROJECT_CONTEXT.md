@@ -70,16 +70,17 @@ The reusable eligibility rules live in `frontend/src/lib/eligibility.ts` and `ba
 
 ## UI system
 
-The palette is sampled from the institute logo (`frontend/public/iiitl-logo.png`)
-and declared as CSS custom properties in `frontend/src/app/globals.css`. Use the
-tokens rather than new literal hex values.
+The palette is a teal ramp declared once in the first `:root` block of
+`frontend/src/app/globals.css`. That ramp is the only place literal brand hex
+values may appear; every rule reads a semantic token. See `docs/DECISIONS.md`
+(2026-09-17) for why it replaced the logo-derived blue/orange.
 
-- Primary blue: `#005F99` (`--blue`) — the logo letterforms
-- Deep blue: `#00446D` (`--navy`) and `#002F4D` (`--navy-deep`) — sidebars, banners
-- Circuit green: `#008325` (`--green`) — success and positive states
-- Arch orange: `#DE6C1A` (`--orange`) — eyebrows, CTAs, active markers
-- Brown: `#782D0D` (`--brown`) — deep warm accents
-- Surface: `#F5F7FB` (`--surface`), ink `#102033`, muted `#64748B`, border `#E2E8F0`
+- Ramp: `--teal-50` `#DEF7F9` → `--teal-950` `#081F22`, plus `--ink-black` `#091717` and `--paper` `#FBFAF4`
+- Primary: `--blue` (`--teal-600` `#20808D` light, `--teal-400` `#35BDC8` dark) — CTAs, eyebrows, active markers, brand icons
+- Deep: `--navy` and `--navy-deep` — sidebars, banners, primary modal buttons
+- Sidebars: `--sidebar-from`/`--sidebar-to` with `--on-brand`, `--on-brand-soft`, `--on-brand-muted` for text on those always-dark surfaces
+- Status hues are not teal and carry meaning only: `--green` success, `--orange` warning/pending/interview, red error, purple shortlisted
+- `rgba()` tints must use the channel tokens (`--brand-rgb`, `--deep-rgb`, `--shadow-rgb`, `--warning-rgb`, `--success-rgb`, `--danger-rgb`), because `rgba()` cannot read a hex custom property
 - Rounded cards, restrained shadows, high information density, and mobile-first responsive layouts
 - Student pages use `PortalShell`; admin pages use `AdminShell`.
 - Use CSS transitions only unless the architecture decision is deliberately changed.
