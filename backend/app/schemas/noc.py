@@ -37,13 +37,15 @@ class NocCreate(NocBase):
         return self
 
 
+# A decision carries the placement cell's remarks, never the student's, so the
+# field is named for who writes it.
 class NocApproveRequest(BaseModel):
-    message: Optional[str] = Field(None, max_length=2000)
+    adminRemarks: Optional[str] = Field(None, max_length=2000)
     documentUrl: Optional[str] = None
 
 
 class NocRejectRequest(BaseModel):
-    message: Optional[str] = Field(None, max_length=2000)
+    adminRemarks: Optional[str] = Field(None, max_length=2000)
 
 
 class NocDocument(BaseModel):
@@ -54,6 +56,8 @@ class NocResponse(NocBase):
     id: str
     userId: str
     status: str
+    # Read-only for students: they see the decision remarks, they do not set them.
+    adminRemarks: Optional[str] = None
     documentUrl: Optional[str] = None
     createdAt: datetime
     updatedAt: datetime

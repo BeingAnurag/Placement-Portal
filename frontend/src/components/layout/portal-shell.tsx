@@ -11,6 +11,7 @@ import {
   ClipboardList,
   FileQuestion,
   FileText,
+  KeyRound,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -138,6 +139,14 @@ export function PortalShell({
                       <strong className="block text-xs font-bold text-[var(--ink)] truncate">{student.name}</strong>
                       <span className="block text-[10px] text-[var(--muted)] truncate">{student.subtitle}</span>
                     </div>
+                    <Link
+                      href="/account/password"
+                      onClick={() => setProfileOpen(false)}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-[var(--ink)] hover:bg-[var(--surface-alt)] font-semibold rounded-xl no-underline transition-colors"
+                    >
+                      <KeyRound size={15} />
+                      Password
+                    </Link>
                     <form action={handleSignOut}>
                       <button
                         type="submit"

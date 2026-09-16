@@ -335,6 +335,11 @@ async def update_user_role(
                 detail="Cannot demote the last active administrator.",
             )
 
+    # An elevation deliberately leaves the account's password in place. A
+    # password is the only way in now, so clearing one here would lock the
+    # person out of the role they were just given. Confirm who holds an
+    # account before elevating it, and use the reset control on /admin/users
+    # if there is any doubt.
     user.role = new_role
     if data.title is not None:
         user.title = data.title.strip() if data.title else None

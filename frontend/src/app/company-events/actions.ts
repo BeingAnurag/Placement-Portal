@@ -28,7 +28,7 @@ export async function applyToJob(
 
   const student = await requireStudent();
   if (!student.user) {
-    return { error: "Persistent applications require Google sign-in." };
+    return { error: "Persistent applications require you to be signed in." };
   }
 
   // Attempt backend FastAPI endpoint
@@ -96,6 +96,8 @@ export async function applyToJob(
         minCgpa: job.minCGPA,
         batch: job.batch,
         branches: job.allowedBranches,
+        degrees: job.allowedDegrees,
+        genders: job.allowedGenders,
         maxBacklogs: job.maxBacklogs,
         maxBans: job.maxBans,
       }),

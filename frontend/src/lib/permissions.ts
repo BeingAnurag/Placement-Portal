@@ -294,16 +294,24 @@ export function hasPermission(
   return effective.includes(permission);
 }
 
+/**
+ * Every admin route, and the permissions any one of which grants access. This
+ * is also the source for the admin sidebar: a route missing from here is
+ * hidden from the navigation, so a new admin page must be registered before it
+ * becomes reachable.
+ */
 export const ROUTE_PERMISSIONS: Record<string, PermissionKey[]> = {
   "/admin/dashboard": [PERM_ANALYTICS_VIEW, PERM_USERS_READ],
   "/admin/users": [PERM_USERS_READ, PERM_USERS_MANAGE],
   "/admin/companies": [PERM_COMPANIES_READ, PERM_COMPANIES_MANAGE],
   "/admin/job-profiles": [PERM_JOBS_READ, PERM_JOBS_MANAGE],
   "/admin/applications": [PERM_APPLICATIONS_READ, PERM_APPLICATIONS_MANAGE],
+  "/admin/placement-records": [PERM_APPLICATIONS_MANAGE],
   "/admin/students": [PERM_STUDENTS_READ, PERM_STUDENTS_MANAGE],
   "/admin/announcements": [PERM_ANNOUNCEMENTS_MANAGE],
   "/admin/feedbacks": [PERM_FEEDBACKS_MANAGE],
   "/admin/noc-requests": [PERM_NOC_MANAGE],
+  "/admin/interview-experiences": [PERM_INTERVIEW_EXPERIENCES_MANAGE],
   "/admin/team": [PERM_TEAM_MANAGE],
   "/admin/settings": [PERM_SETTINGS_MANAGE, PERM_USERS_MANAGE],
 };

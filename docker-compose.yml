@@ -80,8 +80,6 @@ services:
       AUTH_SECRET: ${AUTH_SECRET:?AUTH_SECRET must be set in .env}
       AUTH_URL: ${AUTH_URL:-http://localhost:3000}
       AUTH_TRUST_HOST: "true"
-      AUTH_GOOGLE_ID: ${AUTH_GOOGLE_ID:?AUTH_GOOGLE_ID must be set in .env}
-      AUTH_GOOGLE_SECRET: ${AUTH_GOOGLE_SECRET:?AUTH_GOOGLE_SECRET must be set in .env}
       ADMIN_EMAILS: ${ADMIN_EMAILS:-}
       STUDENT_EMAIL_DOMAIN: ${STUDENT_EMAIL_DOMAIN:-iiitl.ac.in}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?ENCRYPTION_KEY must be set in .env}

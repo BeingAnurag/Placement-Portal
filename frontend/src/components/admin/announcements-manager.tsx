@@ -6,26 +6,34 @@ import {
   Calendar,
   Edit3,
   Eye,
+  FileClock,
   Megaphone,
   Plus,
   Search,
+  Send,
   Trash2,
+  Undo2,
   User,
   X,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   deleteAnnouncementAction,
   saveAnnouncementAction,
+  setAnnouncementStatusAction,
   type AnnouncementActionResult,
 } from "@/app/admin/announcements/actions";
+import type { AnnouncementStatus } from "@/lib/announcement-schema";
 
 export type AdminAnnouncementItem = {
   id: string;
   title: string;
   content: string;
   category: "COMPANY_EVENT" | "GENERAL";
+  /** DRAFT is placement-cell only; PUBLISHED is on every student's feed. */
+  status: AnnouncementStatus;
+  publishedAt: string | null;
   tags: string[];
   companyId: string | null;
   companyName: string | null;
@@ -35,10 +43,29 @@ export type AdminAnnouncementItem = {
   createdByEmail: string | null;
 };
 
+/**
+ * The screen is three sections, not one filtered list: composing a company
+ * drive notice, composing a general notice, and managing what is live against
+ * what is still a draft.
+ */
+type Section = "COMPANY_EVENT" | "GENERAL" | "MANAGE";
+
+const SECTIONS: Array<{ key: Section; label: string; icon: typeof Building2 }> = [
+  { key: "COMPANY_EVENT", label: "Company event announcements", icon: Building2 },
+  { key: "GENERAL", label: "General announcements", icon: Megaphone },
+  { key: "MANAGE", label: "Active & drafts", icon: FileClock },
+];
+
 export type CompanyOption = {
   id: string;
   name: string;
 };
+
+const dateOnly = new Intl.DateTimeFormat("en-IN", {
+  day: "2-digit",
+  month: "short",
+  year: "numeric",
+});
 
 const PRESET_TAGS = [
   "Shortlist",
@@ -62,8 +89,9 @@ export function AnnouncementsManager({
   canPersist: boolean;
 }) {
   const router = useRouter();
+  const [section, setSection] = useState<Section>("COMPANY_EVENT");
   const [query, setQuery] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState<"ALL" | "COMPANY_EVENT" | "GENERAL">("ALL");
+  const [statusFilter, setStatusFilter] = useState<"ALL" | AnnouncementStatus>("ALL");
   const [companyFilter, setCompanyFilter] = useState<string>("ALL");
   const [editing, setEditing] = useState<AdminAnnouncementItem | null | undefined>(undefined);
   const [previewing, setPreviewing] = useState<AdminAnnouncementItem | null>(null);
@@ -75,6 +103,9 @@ export function AnnouncementsManager({
   const [formCategory, setFormCategory] = useState<"COMPANY_EVENT" | "GENERAL">("GENERAL");
   const [formTags, setFormTags] = useState<string[]>([]);
   const [customTagInput, setCustomTagInput] = useState("");
+  // Which footer button was pressed. A ref, not state, because the value has
+  // to be readable inside the submit handler of the same click.
+  const submitStatus = useRef<AnnouncementStatus>("PUBLISHED");
 
   const visible = useMemo(() => {
     return announcements.filter((item) => {
@@ -82,28 +113,38 @@ export function AnnouncementsManager({
         `${item.title} ${item.content} ${item.companyName ?? ""} ${item.tags.join(" ")} ${item.createdByName ?? ""}`
           .toLowerCase()
           .includes(query.toLowerCase());
-      const matchesCat =
-        categoryFilter === "ALL" || item.category === categoryFilter;
+      const matchesSection = section === "MANAGE" || item.category === section;
+      const matchesStatus = statusFilter === "ALL" || item.status === statusFilter;
       const matchesComp =
         companyFilter === "ALL" || item.companyId === companyFilter;
-      return matchesSearch && matchesCat && matchesComp;
+      return matchesSearch && matchesSection && matchesStatus && matchesComp;
     });
-  }, [announcements, query, categoryFilter, companyFilter]);
+  }, [announcements, query, section, statusFilter, companyFilter]);
 
-  // Metrics computation
   const metrics = useMemo(() => {
-    const total = announcements.length;
     const companyEvents = announcements.filter((a) => a.category === "COMPANY_EVENT").length;
     const general = announcements.filter((a) => a.category === "GENERAL").length;
-    return { total, companyEvents, general };
+    const active = announcements.filter((a) => a.status === "PUBLISHED").length;
+    const drafts = announcements.filter((a) => a.status === "DRAFT").length;
+    return { companyEvents, general, active, drafts };
   }, [announcements]);
 
   function openCreateModal() {
     setResult({});
-    setFormCategory("GENERAL");
+    // The section decides what is being written, so the form opens on it.
+    setFormCategory(section === "COMPANY_EVENT" ? "COMPANY_EVENT" : "GENERAL");
     setFormTags([]);
     setCustomTagInput("");
+    submitStatus.current = "PUBLISHED";
     setEditing(null);
+  }
+
+  async function changeStatus(formData: FormData) {
+    setSaving(true);
+    const nextResult = await setAnnouncementStatusAction(formData);
+    setResult(nextResult);
+    setSaving(false);
+    if (nextResult.success) router.refresh();
   }
 
   function openEditModal(item: AdminAnnouncementItem) {
@@ -111,6 +152,9 @@ export function AnnouncementsManager({
     setFormCategory(item.category);
     setFormTags([...item.tags]);
     setCustomTagInput("");
+    // Editing keeps the announcement where it is: saving a live announcement
+    // must not quietly withdraw it, and saving a draft must not publish it.
+    submitStatus.current = item.status;
     setEditing(item);
   }
 
@@ -136,6 +180,7 @@ export function AnnouncementsManager({
     setSaving(true);
     formData.set("tags", JSON.stringify(formTags));
     formData.set("category", formCategory);
+    formData.set("status", submitStatus.current);
     const nextResult = await saveAnnouncementAction(formData);
     setResult(nextResult);
     setSaving(false);
@@ -163,18 +208,47 @@ export function AnnouncementsManager({
           <span className="eyebrow">Communications & Drives</span>
           <h1>Announcements</h1>
           <p>
-            Publish recruitment updates, shortlists, test schedules, and placement guidelines.
+            {section === "COMPANY_EVENT"
+              ? "Drive updates tied to a recruiting company: shortlists, test schedules, and results."
+              : section === "GENERAL"
+                ? "Institute-wide notices: policy, deadlines, and campus placement guidelines."
+                : "Everything published or held as a draft, and the control to move one to the other."}
           </p>
         </div>
-        <button
-          onClick={openCreateModal}
-          disabled={!canPersist}
-          title={!canPersist ? "Administrator permission required" : "Publish new announcement"}
-        >
-          <Plus />
-          New announcement
-        </button>
+        {section === "MANAGE" ? null : (
+          <button
+            onClick={openCreateModal}
+            disabled={!canPersist}
+            title={!canPersist ? "Administrator permission required" : "Write a new announcement"}
+          >
+            <Plus />
+            {section === "COMPANY_EVENT" ? "New company event" : "New general notice"}
+          </button>
+        )}
       </section>
+
+      <nav className="admin-tabs" aria-label="Announcement sections">
+        {SECTIONS.map(({ key, label, icon: Icon }) => (
+          <button
+            key={key}
+            type="button"
+            className={section === key ? "active" : ""}
+            aria-current={section === key ? "page" : undefined}
+            onClick={() => {
+              setSection(key);
+              setStatusFilter("ALL");
+            }}
+          >
+            <Icon />
+            {label}
+            <b>
+              {key === "MANAGE"
+                ? announcements.length
+                : announcements.filter((item) => item.category === key).length}
+            </b>
+          </button>
+        ))}
+      </nav>
 
       {result.success ? <div className="admin-success">{result.success}</div> : null}
       {result.error ? <div className="admin-error">{result.error}</div> : null}
@@ -183,34 +257,45 @@ export function AnnouncementsManager({
       <section className="admin-metrics">
         <article>
           <div className="metric-icon blue">
-            <Megaphone />
-          </div>
-          <div>
-            <small>Total Announcements</small>
-            <strong>{metrics.total}</strong>
-            <b>Active placement communications</b>
-          </div>
-        </article>
-
-        <article>
-          <div className="metric-icon orange">
             <Building2 />
           </div>
           <div>
             <small>Company Drives</small>
             <strong>{metrics.companyEvents}</strong>
-            <b style={{ color: "var(--orange)" }}>Hiring updates & shortlists</b>
+            <b>Hiring updates &amp; shortlists</b>
           </div>
         </article>
 
         <article>
           <div className="metric-icon violet">
-            <BellRing />
+            <Megaphone />
           </div>
           <div>
             <small>General Notices</small>
             <strong>{metrics.general}</strong>
-            <b style={{ color: "var(--badge-purple-text)" }}>Policy & campus updates</b>
+            <b style={{ color: "var(--badge-purple-text)" }}>Policy &amp; campus updates</b>
+          </div>
+        </article>
+
+        <article>
+          <div className="metric-icon green">
+            <BellRing />
+          </div>
+          <div>
+            <small>Active</small>
+            <strong>{metrics.active}</strong>
+            <b>Visible to students now</b>
+          </div>
+        </article>
+
+        <article>
+          <div className="metric-icon orange">
+            <FileClock />
+          </div>
+          <div>
+            <small>Drafts</small>
+            <strong>{metrics.drafts}</strong>
+            <b style={{ color: "var(--orange)" }}>Not visible to students</b>
           </div>
         </article>
       </section>
@@ -227,13 +312,13 @@ export function AnnouncementsManager({
         </label>
 
         <select
-          value={categoryFilter}
-          onChange={(e) => setCategoryFilter(e.target.value as "ALL" | "COMPANY_EVENT" | "GENERAL")}
-          aria-label="Filter by category"
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value as "ALL" | AnnouncementStatus)}
+          aria-label="Filter by status"
         >
-          <option value="ALL">All Categories</option>
-          <option value="COMPANY_EVENT">Company Events</option>
-          <option value="GENERAL">General Updates</option>
+          <option value="ALL">Active &amp; drafts</option>
+          <option value="PUBLISHED">Active only</option>
+          <option value="DRAFT">Drafts only</option>
         </select>
 
         {companies.length > 0 ? (
@@ -256,10 +341,10 @@ export function AnnouncementsManager({
       <section className="admin-table" style={{ marginTop: 14 }}>
         <div
           className="admin-row admin-row-head"
-          style={{ gridTemplateColumns: "1.6fr 1fr 1fr 1fr 100px" }}
+          style={{ gridTemplateColumns: "1.6fr 1fr 1fr 1fr 132px" }}
         >
           <span>Title & Overview</span>
-          <span>Category & Target</span>
+          <span>Status & Target</span>
           <span>Tags</span>
           <span>Author & Published</span>
           <span style={{ textAlign: "right" }}>Actions</span>
@@ -269,7 +354,7 @@ export function AnnouncementsManager({
           <div
             className="admin-row"
             key={item.id}
-            style={{ gridTemplateColumns: "1.6fr 1fr 1fr 1fr 100px" }}
+            style={{ gridTemplateColumns: "1.6fr 1fr 1fr 1fr 132px" }}
           >
             {/* Title & Preview */}
             <div style={{ display: "flex", alignItems: "flex-start", gap: 10, minWidth: 0 }}>
@@ -325,21 +410,17 @@ export function AnnouncementsManager({
               </div>
             </div>
 
-            {/* Category & Company */}
+            {/* Status, category, and company */}
             <div>
               <span
-                className={`cell-status ${
-                  item.category === "COMPANY_EVENT" ? "" : "development"
-                }`}
-                style={{
-                  fontSize: 9.5,
-                  padding: "3px 8px",
-                  borderRadius: 6,
-                  fontWeight: 700,
-                }}
+                className={`cell-status ${item.status === "DRAFT" ? "draft" : ""}`}
+                style={{ fontSize: 9.5, padding: "3px 8px", borderRadius: 6, fontWeight: 700 }}
               >
-                {item.category === "COMPANY_EVENT" ? "Company Event" : "General Update"}
+                {item.status === "DRAFT" ? "Draft" : "Active"}
               </span>
+              <small style={{ display: "block", color: "var(--muted)", marginTop: 4 }}>
+                {item.category === "COMPANY_EVENT" ? "Company event" : "General update"}
+              </small>
               {item.companyName ? (
                 <small
                   style={{
@@ -398,16 +479,33 @@ export function AnnouncementsManager({
                 {item.createdByName || item.createdByEmail || "Placement Cell"}
               </span>
               <small style={{ color: "var(--muted)", fontSize: 10 }}>
-                {new Intl.DateTimeFormat("en-IN", {
-                  day: "2-digit",
-                  month: "short",
-                  year: "numeric",
-                }).format(new Date(item.createdAt))}
+                {item.status === "PUBLISHED" && item.publishedAt
+                  ? `Published ${dateOnly.format(new Date(item.publishedAt))}`
+                  : `Written ${dateOnly.format(new Date(item.createdAt))}`}
               </small>
             </div>
 
             {/* Actions */}
             <div className="row-actions" style={{ justifyContent: "flex-end" }}>
+              <form action={changeStatus}>
+                <input type="hidden" name="announcementId" value={item.id} />
+                <input
+                  type="hidden"
+                  name="status"
+                  value={item.status === "PUBLISHED" ? "DRAFT" : "PUBLISHED"}
+                />
+                <button
+                  title={
+                    item.status === "PUBLISHED"
+                      ? "Withdraw to drafts — students stop seeing it"
+                      : "Publish — students see it immediately"
+                  }
+                  disabled={!canPersist || saving}
+                  type="submit"
+                >
+                  {item.status === "PUBLISHED" ? <Undo2 /> : <Send />}
+                </button>
+              </form>
               <button
                 title="Preview announcement"
                 onClick={() => setPreviewing(item)}
@@ -436,11 +534,17 @@ export function AnnouncementsManager({
         {!visible.length ? (
           <div className="admin-empty">
             <Megaphone />
-            <h2>{announcements.length ? "No matching announcements" : "No announcements published yet"}</h2>
+            <h2>
+              {announcements.length
+                ? "No announcements in this view"
+                : "No announcements written yet"}
+            </h2>
             <p>
               {announcements.length
-                ? "Try clearing filters or refining your search term."
-                : "Use 'New announcement' above to post the first campus placement update."}
+                ? "Clear the search or the status filter, or switch to another section."
+                : section === "MANAGE"
+                  ? "Write a company event or general announcement; it appears here once saved."
+                  : "Use the button above to write the first one. You can publish it or keep it as a draft."}
             </p>
           </div>
         ) : null}
@@ -719,8 +823,29 @@ export function AnnouncementsManager({
               <button type="button" onClick={() => setEditing(undefined)}>
                 Cancel
               </button>
-              <button type="submit" disabled={saving}>
-                {saving ? "Publishing…" : editing ? "Save changes" : "Publish announcement"}
+              {/* Two submit buttons rather than a status dropdown: the choice
+                  is the act, and the label says who will see the result. */}
+              <button
+                type="submit"
+                disabled={saving}
+                onClick={() => {
+                  submitStatus.current = "DRAFT";
+                }}
+              >
+                {saving ? "Saving…" : "Save as draft"}
+              </button>
+              <button
+                type="submit"
+                disabled={saving}
+                onClick={() => {
+                  submitStatus.current = "PUBLISHED";
+                }}
+              >
+                {saving
+                  ? "Publishing…"
+                  : editing?.status === "PUBLISHED"
+                    ? "Save & keep live"
+                    : "Publish to students"}
               </button>
             </footer>
           </form>

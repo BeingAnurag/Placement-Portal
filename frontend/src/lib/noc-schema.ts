@@ -48,15 +48,17 @@ export const nocFormSchema = z
     }
   );
 
+// A decision carries the placement cell's remarks. The student's `message`
+// stays as submitted, so these schemas never accept it.
 export const nocApproveSchema = z.object({
   nocId: z.string().min(1, "NOC request ID is required."),
-  message: z.string().trim().max(2000).optional().nullable(),
+  adminRemarks: z.string().trim().max(2000).optional().nullable(),
   documentUrl: z.string().trim().optional().nullable(),
 });
 
 export const nocRejectSchema = z.object({
   nocId: z.string().min(1, "NOC request ID is required."),
-  message: z.string().trim().min(2, "Rejection reason is required.").max(2000),
+  adminRemarks: z.string().trim().min(2, "Rejection reason is required.").max(2000),
 });
 
 export const nocCancelSchema = z.object({

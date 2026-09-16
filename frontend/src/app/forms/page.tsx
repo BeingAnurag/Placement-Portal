@@ -30,6 +30,7 @@ export default async function Page() {
           endDate: r.endDate.toISOString(),
           status: r.status,
           message: r.message,
+          adminRemarks: r.adminRemarks,
           documentUrl: r.documentUrl,
           createdAt: r.createdAt.toISOString(),
         }));

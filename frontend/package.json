@@ -8,12 +8,12 @@
     "start": "next start",
     "lint": "eslint .",
     "type-check": "tsc --noEmit",
-    "test": "node --import tsx --test src/lib/auth-access.test.ts src/lib/permissions.test.ts src/lib/company-schema.test.ts src/lib/job-profile-schema.test.ts src/lib/application-schema.test.ts src/lib/eligibility.test.ts src/lib/encryption.test.ts src/lib/student-profile.test.ts src/lib/announcement-schema.test.ts src/lib/noc-schema.test.ts src/lib/feedback-schema.test.ts src/lib/team-schema.test.ts src/lib/interview-experience-schema.test.ts"
+    "test": "node --import tsx --test src/lib/auth-access.test.ts src/lib/credentials-schema.test.ts src/lib/login-throttle.test.ts src/lib/permissions.test.ts src/lib/company-schema.test.ts src/lib/job-profile-schema.test.ts src/lib/application-schema.test.ts src/lib/eligibility.test.ts src/lib/encryption.test.ts src/lib/student-profile.test.ts src/lib/announcement-schema.test.ts src/lib/noc-schema.test.ts src/lib/offer-schema.test.ts src/lib/feedback-schema.test.ts src/lib/team-schema.test.ts src/lib/interview-experience-schema.test.ts"
   },
   "dependencies": {
-    "@auth/prisma-adapter": "^2.11.2",
     "@prisma/client": "^6.19.0",
     "@tailwindcss/postcss": "^4.3.2",
+    "bcryptjs": "^3.0.3",
     "cmdk": "^1.1.1",
     "jose": "^6.2.8",
     "lucide-react": "^1.24.0",

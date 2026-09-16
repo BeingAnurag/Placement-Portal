@@ -82,6 +82,24 @@ class AnnouncementCategory(str, enum.Enum):
     GENERAL = "GENERAL"
 
 
+class AnnouncementStatus(str, enum.Enum):
+    DRAFT = "DRAFT"
+    PUBLISHED = "PUBLISHED"
+
+
+class OfferType(str, enum.Enum):
+    FTE = "FTE"
+    PPO = "PPO"
+    INTERNSHIP = "INTERNSHIP"
+
+
+class OfferStatus(str, enum.Enum):
+    OFFERED = "OFFERED"
+    ACCEPTED = "ACCEPTED"
+    DECLINED = "DECLINED"
+    REVOKED = "REVOKED"
+
+
 class InterviewExperienceStatus(str, enum.Enum):
     PENDING = "PENDING"
     APPROVED = "APPROVED"
@@ -100,6 +118,10 @@ class User(Base):
     email: Mapped[str | None] = mapped_column(String, unique=True, nullable=True)
     emailVerified: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     image: Mapped[str | None] = mapped_column(String, nullable=True)
+    # Mirrors Prisma. The backend never reads or verifies this; password
+    # sign-in happens in the Auth.js layer and the backend only ever sees the
+    # resulting signed JWT.
+    passwordHash: Mapped[str | None] = mapped_column(String, nullable=True)
     role: Mapped[Role] = mapped_column(Enum(Role, name="Role"), default=Role.STUDENT)
     customPermissions: Mapped[list[str]] = mapped_column(ARRAY(String), default=list)
     isActive: Mapped[bool] = mapped_column(Boolean, default=True)
@@ -148,6 +170,10 @@ class User(Base):
     reviewed_interview_experiences: Mapped[list["InterviewExperience"]] = relationship(
         back_populates="reviewed_by", foreign_keys="InterviewExperience.reviewedById"
     )
+    offers: Mapped[list["Offer"]] = relationship(back_populates="user", foreign_keys="Offer.userId")
+    recorded_offers: Mapped[list["Offer"]] = relationship(
+        back_populates="created_by", foreign_keys="Offer.createdById"
+    )
 
 
 class Company(Base):
@@ -162,6 +188,7 @@ class Company(Base):
 
     jobs: Mapped[list["JobProfile"]] = relationship(back_populates="company", cascade="all, delete-orphan")
     announcements: Mapped[list["Announcement"]] = relationship(back_populates="company")
+    offers: Mapped[list["Offer"]] = relationship(back_populates="company", cascade="all, delete-orphan")
 
 
 class JobProfile(Base):
@@ -194,6 +221,7 @@ class JobProfile(Base):
     created_by: Mapped["User"] = relationship(back_populates="created_jobs", foreign_keys=[createdById])
     applications: Mapped[list["Application"]] = relationship(back_populates="job_profile", cascade="all, delete-orphan")
     coordinators: Mapped[list["Coordinator"]] = relationship(back_populates="job_profile", cascade="all, delete-orphan")
+    offers: Mapped[list["Offer"]] = relationship(back_populates="job_profile")
 
 
 class Application(Base):
@@ -211,6 +239,55 @@ class Application(Base):
     user: Mapped["User"] = relationship(back_populates="applications")
     job_profile: Mapped["JobProfile"] = relationship(back_populates="applications")
     resume: Mapped["Resume | None"] = relationship(back_populates="applications")
+    offer: Mapped["Offer | None"] = relationship(back_populates="application")
+
+
+class Offer(Base):
+    """
+    A recorded placement, pre-placement, or internship offer.
+
+    `Application` tracks a student through a drive; `Offer` is the outcome, and
+    it exists even for offers the portal never ran a drive for. Every package
+    statistic on the admin dashboard is aggregated from this table.
+    """
+
+    __tablename__ = "Offer"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    userId: Mapped[str] = mapped_column(String, ForeignKey("User.id", ondelete="CASCADE"))
+    companyId: Mapped[str] = mapped_column(String, ForeignKey("Company.id", ondelete="CASCADE"))
+    jobProfileId: Mapped[str | None] = mapped_column(
+        String, ForeignKey("JobProfile.id", ondelete="SET NULL"), nullable=True
+    )
+    applicationId: Mapped[str | None] = mapped_column(
+        String, ForeignKey("Application.id", ondelete="SET NULL"), unique=True, nullable=True
+    )
+    type: Mapped[OfferType] = mapped_column(Enum(OfferType, name="OfferType"))
+    status: Mapped[OfferStatus] = mapped_column(
+        Enum(OfferStatus, name="OfferStatus"), default=OfferStatus.OFFERED
+    )
+    # Placement season, held as the graduating batch year.
+    batch: Mapped[int] = mapped_column(Integer)
+    # Annual CTC in rupees for FTE and PPO offers.
+    ctc: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # Monthly stipend in rupees for internship offers.
+    stipend: Mapped[float | None] = mapped_column(Float, nullable=True)
+    location: Mapped[str | None] = mapped_column(String, nullable=True)
+    offeredAt: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    decidedAt: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    joiningDate: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    remarks: Mapped[str | None] = mapped_column(Text, nullable=True)
+    createdAt: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updatedAt: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), onupdate=func.now(), server_default=func.now()
+    )
+    createdById: Mapped[str] = mapped_column(String, ForeignKey("User.id"))
+
+    user: Mapped["User"] = relationship(back_populates="offers", foreign_keys=[userId])
+    company: Mapped["Company"] = relationship(back_populates="offers")
+    job_profile: Mapped["JobProfile | None"] = relationship(back_populates="offers")
+    application: Mapped["Application | None"] = relationship(back_populates="offer")
+    created_by: Mapped["User"] = relationship(back_populates="recorded_offers", foreign_keys=[createdById])
 
 
 class Announcement(Base):
@@ -222,6 +299,12 @@ class Announcement(Base):
     content: Mapped[str] = mapped_column(Text)
     tags: Mapped[list[str]] = mapped_column(ARRAY(String), default=list)
     category: Mapped[AnnouncementCategory] = mapped_column(Enum(AnnouncementCategory, name="AnnouncementCategory"))
+    # A DRAFT is placement-cell only. Every student-facing query filters to
+    # PUBLISHED.
+    status: Mapped[AnnouncementStatus] = mapped_column(
+        Enum(AnnouncementStatus, name="AnnouncementStatus"), default=AnnouncementStatus.PUBLISHED
+    )
+    publishedAt: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     createdAt: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     createdById: Mapped[str] = mapped_column(String, ForeignKey("User.id"))
 
@@ -257,7 +340,11 @@ class NocRequest(Base):
     startDate: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     endDate: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     status: Mapped[NocStatus] = mapped_column(Enum(NocStatus, name="NocStatus"), default=NocStatus.PENDING)
+    # The student's own remarks. Only the student writes this.
     message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # The placement cell's remarks on the decision, kept separate so approving
+    # or rejecting never overwrites what the student wrote.
+    adminRemarks: Mapped[str | None] = mapped_column(Text, nullable=True)
     documentUrl: Mapped[str | None] = mapped_column(String, nullable=True)
     createdAt: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updatedAt: Mapped[datetime] = mapped_column(DateTime(timezone=True), onupdate=func.now(), server_default=func.now())

@@ -63,23 +63,34 @@ test("nocFormSchema rejects invalid 5-digit or alphanumeric pincode", () => {
 test("nocApproveSchema and nocRejectSchema validate parameters properly", () => {
   const validApprove = nocApproveSchema.safeParse({
     nocId: "noc_123",
-    message: "Approved for summer period",
+    adminRemarks: "Approved for summer period",
     documentUrl: "/api/v1/uploads/files/noc_docs/cert.pdf",
   });
   assert.equal(validApprove.success, true);
 
   const validReject = nocRejectSchema.safeParse({
     nocId: "noc_123",
-    message: "Company is not verified on our register.",
+    adminRemarks: "Company is not verified on our register.",
   });
   assert.equal(validReject.success, true);
 
   const emptyRejectReason = nocRejectSchema.safeParse({
     nocId: "noc_123",
-    message: "",
+    adminRemarks: "",
   });
   assert.equal(emptyRejectReason.success, false);
 
   const cancelValid = nocCancelSchema.safeParse({ nocId: "noc_123" });
   assert.equal(cancelValid.success, true);
+});
+
+test("a decision never carries the student's own message", () => {
+  // `message` belongs to the student. Sending it to a decision must not stand
+  // in for the remarks the placement cell is required to write.
+  const approve = nocApproveSchema.parse({ nocId: "noc_123", message: "student text" });
+  assert.equal(approve.adminRemarks, undefined);
+  assert.equal("message" in approve, false);
+
+  const reject = nocRejectSchema.safeParse({ nocId: "noc_123", message: "student text" });
+  assert.equal(reject.success, false);
 });

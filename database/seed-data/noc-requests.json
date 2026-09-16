@@ -23,7 +23,8 @@
     "startDaysFromNow": 45,
     "durationDays": 90,
     "status": "APPROVED",
-    "message": "Summer research internship with the systems lab."
+    "message": "Summer research internship with the systems lab.",
+    "adminRemarks": "Approved. Academic calendar is unaffected; submit the joining letter to the placement cell."
   },
   {
     "slug": "vivaan-startup-noc",
@@ -37,6 +38,7 @@
     "durationDays": 120,
     "status": "REJECTED",
     "message": "Requesting NOC for an off-campus role.",
+    "adminRemarks": "Rejected. The engagement overlaps the placement drive window and the organisation is unregistered with the institute.",
     "documentUrl": null
   },
   {
@@ -63,7 +65,8 @@
     "startDaysFromNow": 25,
     "durationDays": 150,
     "status": "APPROVED",
-    "message": "Fully remote internship. No relocation required and coursework is unaffected."
+    "message": "Fully remote internship. No relocation required and coursework is unaffected.",
+    "adminRemarks": "Approved for the remote engagement. Attendance in core courses must be maintained."
   },
   {
     "slug": "aditya-summer-noc",
@@ -89,6 +92,7 @@
     "startDaysFromNow": 70,
     "durationDays": 90,
     "status": "APPROVED",
-    "message": "Research internship offer in the machine learning group."
+    "message": "Research internship offer in the machine learning group.",
+    "adminRemarks": "Approved. Certificate issued by the placement cell."
   }
 ]

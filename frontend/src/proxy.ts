@@ -26,6 +26,7 @@ export default auth((request) => {
 
 export const config = {
   matcher: [
+    "/account/:path*",
     "/dashboard/:path*",
     "/company-events/:path*",
     "/applications/:path*",

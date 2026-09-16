@@ -26,7 +26,7 @@ export async function submitNocRequest(formData: FormData): Promise<NocSubmitRes
 
   const student = await requireStudent();
   if (!student.user) {
-    return { error: "Google sign-in required to request an NOC." };
+    return { error: "Sign in to request an NOC." };
   }
 
   try {
@@ -84,7 +84,7 @@ export async function cancelNocRequestAction(formData: FormData): Promise<NocSub
 
   const student = await requireStudent();
   if (!student.user) {
-    return { error: "Google sign-in required to cancel an NOC request." };
+    return { error: "Sign in to cancel an NOC request." };
   }
 
   try {

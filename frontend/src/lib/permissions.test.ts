@@ -4,10 +4,12 @@ import {
   ALL_PERMISSIONS,
   PERM_APPLICATIONS_MANAGE,
   PERM_COMPANIES_MANAGE,
+  PERM_INTERVIEW_EXPERIENCES_MANAGE,
   PERM_JOBS_MANAGE,
   PERM_SETTINGS_MANAGE,
   PERM_USERS_MANAGE,
   PERM_USERS_READ,
+  ROUTE_PERMISSIONS,
   canAccessAdminRoute,
   computeEffectivePermissions,
   hasPermission,
@@ -91,4 +93,38 @@ test("canAccessAdminRoute guards routes based on permission requirements", () =>
     customPermissions: [PERM_USERS_READ],
   };
   assert.equal(canAccessAdminRoute(elevatedStudent, "/admin/users"), true);
+});
+
+test("interview experiences are registered and need their own permission", () => {
+  assert.deepEqual(ROUTE_PERMISSIONS["/admin/interview-experiences"], [
+    PERM_INTERVIEW_EXPERIENCES_MANAGE,
+  ]);
+
+  const coordinator = { role: "COORDINATOR", email: "coord@iiitl.ac.in" };
+  assert.equal(canAccessAdminRoute(coordinator, "/admin/interview-experiences"), false);
+
+  const officer = { role: "OFFICER", email: "officer@iiitl.ac.in" };
+  assert.equal(canAccessAdminRoute(officer, "/admin/interview-experiences"), true);
+});
+
+test("the admin sidebar only offers routes the account can open", () => {
+  // The shell derives its links from these keys, so this is the nav a
+  // coordinator sees: no user management, no NOC queue, no moderation.
+  const coordinator = { role: "COORDINATOR", email: "coord@iiitl.ac.in" };
+  const visible = Object.keys(ROUTE_PERMISSIONS).filter((path) =>
+    canAccessAdminRoute(coordinator, path),
+  );
+
+  assert.ok(visible.includes("/admin/applications"));
+  assert.ok(visible.includes("/admin/job-profiles"));
+  assert.equal(visible.includes("/admin/users"), false);
+  assert.equal(visible.includes("/admin/noc-requests"), false);
+  assert.equal(visible.includes("/admin/interview-experiences"), false);
+  assert.equal(visible.includes("/admin/settings"), false);
+
+  const superAdmin = { role: "SUPER_ADMIN", email: "boss@iiitl.ac.in" };
+  assert.equal(
+    Object.keys(ROUTE_PERMISSIONS).filter((path) => canAccessAdminRoute(superAdmin, path)).length,
+    Object.keys(ROUTE_PERMISSIONS).length,
+  );
 });

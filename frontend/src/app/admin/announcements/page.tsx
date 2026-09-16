@@ -32,6 +32,8 @@ export default async function Page() {
     title: a.title,
     content: a.content,
     category: a.category,
+    status: a.status,
+    publishedAt: a.publishedAt?.toISOString() ?? null,
     tags: a.tags,
     companyId: a.companyId,
     companyName: a.company?.name ?? null,

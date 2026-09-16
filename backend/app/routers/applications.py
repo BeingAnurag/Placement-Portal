@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Response
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
 
@@ -135,12 +135,16 @@ async def apply_to_job(
         cgpa=profile["cgpa"],
         batch=profile["batch"],
         branch=profile["branch"],
+        degree=profile["degree"],
+        gender=profile["gender"],
         backlogs=profile["backlogs"],
         bans=profile["bans"],
         documents_complete=profile["documents_complete"],
         min_cgpa=job.minCGPA,
         job_batch=job.batch,
         allowed_branches=job.allowedBranches,
+        allowed_degrees=job.allowedDegrees,
+        allowed_genders=job.allowedGenders,
         max_backlogs=job.maxBacklogs,
         max_bans=job.maxBans,
     )
@@ -422,6 +426,7 @@ async def export_applications_csv(
     status: Optional[str] = Query(None),
     branch: Optional[str] = Query(None),
     batch: Optional[int] = Query(None),
+    search: Optional[str] = Query(None),
     admin_payload: dict = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
@@ -443,12 +448,29 @@ async def export_applications_csv(
             stmt = stmt.where(Application.status == enum_status)
         except KeyError:
             pass
-    if (branch and branch != "ALL") or batch:
+
+    term = (search or "").strip()
+
+    if (branch and branch != "ALL") or batch or term:
         stmt = stmt.join(Application.user)
         if branch and branch != "ALL":
             stmt = stmt.where(User.branch == branch)
         if batch:
             stmt = stmt.where(User.batch == batch)
+
+    # Mirrors the free-text box on /admin/applications so the export covers the
+    # same rows the administrator is looking at.
+    if term:
+        pattern = f"%{term}%"
+        stmt = stmt.join(Application.job_profile).outerjoin(JobProfile.company).where(
+            or_(
+                User.name.ilike(pattern),
+                User.email.ilike(pattern),
+                User.rollNumber.ilike(pattern),
+                JobProfile.title.ilike(pattern),
+                Company.name.ilike(pattern),
+            )
+        )
 
     result = await db.scalars(stmt)
     apps = result.unique().all()

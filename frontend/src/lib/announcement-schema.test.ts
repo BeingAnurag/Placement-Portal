@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { announcementDeleteSchema, announcementFormSchema } from "./announcement-schema";
+import {
+  announcementDeleteSchema,
+  announcementFormSchema,
+  announcementStatusSchema,
+} from "./announcement-schema";
 
 test("announcement schema trims values and handles comma-separated tags", () => {
   const parsed = announcementFormSchema.parse({
@@ -54,6 +58,53 @@ test("announcement schema rejects invalid input", () => {
     category: "UNKNOWN_CAT",
   });
   assert.equal(invalidCat.success, false);
+});
+
+test("an announcement publishes unless it is saved as a draft", () => {
+  // An omitted status must never hide an announcement the cell meant to send.
+  const omitted = announcementFormSchema.parse({
+    title: "Placement Policy Update",
+    content: "Please review the updated placement guidelines.",
+    category: "GENERAL",
+  });
+  assert.equal(omitted.status, "PUBLISHED");
+
+  const draft = announcementFormSchema.parse({
+    title: "Placement Policy Update",
+    content: "Please review the updated placement guidelines.",
+    category: "GENERAL",
+    status: "DRAFT",
+  });
+  assert.equal(draft.status, "DRAFT");
+
+  assert.equal(
+    announcementFormSchema.safeParse({
+      title: "Placement Policy Update",
+      content: "Please review the updated placement guidelines.",
+      category: "GENERAL",
+      status: "ARCHIVED",
+    }).success,
+    false,
+  );
+});
+
+test("the publish control accepts only the two real states", () => {
+  assert.equal(
+    announcementStatusSchema.safeParse({ announcementId: "ann_1", status: "PUBLISHED" }).success,
+    true,
+  );
+  assert.equal(
+    announcementStatusSchema.safeParse({ announcementId: "ann_1", status: "DRAFT" }).success,
+    true,
+  );
+  assert.equal(
+    announcementStatusSchema.safeParse({ announcementId: "ann_1", status: "LIVE" }).success,
+    false,
+  );
+  assert.equal(
+    announcementStatusSchema.safeParse({ announcementId: "", status: "DRAFT" }).success,
+    false,
+  );
 });
 
 test("announcement delete schema validates required ID", () => {

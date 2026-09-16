@@ -22,7 +22,7 @@ export async function submitFeedback(formData: FormData): Promise<FeedbackSubmit
 
   const student = await requireStudent();
   if (!student.user) {
-    return { error: "Google sign-in required to submit feedback." };
+    return { error: "Sign in to submit feedback." };
   }
 
   const jsonContent = JSON.stringify({

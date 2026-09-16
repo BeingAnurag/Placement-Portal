@@ -88,7 +88,7 @@ export async function updateAadhaarAction(formData: FormData): Promise<{ success
 
   const student = await requireStudent();
   if (!student.user) {
-    return { error: "Google sign-in required to update identity documents." };
+    return { error: "Sign in to update identity documents." };
   }
 
   try {
@@ -126,7 +126,7 @@ export async function updatePanAction(formData: FormData): Promise<{ success?: s
 
   const student = await requireStudent();
   if (!student.user) {
-    return { error: "Google sign-in required to update identity documents." };
+    return { error: "Sign in to update identity documents." };
   }
 
   try {
@@ -161,7 +161,7 @@ export async function renameResumeAction(resumeId: string, label: string): Promi
 
   const student = await requireStudent();
   if (!student.user) {
-    return { error: "Google sign-in required." };
+    return { error: "Sign in to continue." };
   }
 
   try {
@@ -189,7 +189,7 @@ export async function renameResumeAction(resumeId: string, label: string): Promi
 export async function deleteResumeAction(resumeId: string): Promise<{ success?: string; error?: string }> {
   const student = await requireStudent();
   if (!student.user) {
-    return { error: "Google sign-in required." };
+    return { error: "Sign in to continue." };
   }
 
   try {
@@ -233,7 +233,7 @@ export async function uploadAadhaarDocAction(formData: FormData): Promise<{ succ
 
   const student = await requireStudent();
   if (!student.user) {
-    return { error: "Google sign-in required." };
+    return { error: "Sign in to continue." };
   }
 
   try {
@@ -310,7 +310,7 @@ export async function uploadPanDocAction(formData: FormData): Promise<{ success?
 
   const student = await requireStudent();
   if (!student.user) {
-    return { error: "Google sign-in required." };
+    return { error: "Sign in to continue." };
   }
 
   try {

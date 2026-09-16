@@ -39,7 +39,8 @@ def compute_missed_streak(
 ) -> MissedStreakResult:
     """
     `jobs_in_chronological_order` entries need: id, companyId, companyName, title,
-    minCGPA, batch, allowedBranches, maxBacklogs, maxBans, registrationDeadline.
+    minCGPA, batch, allowedBranches, allowedDegrees, allowedGenders, maxBacklogs,
+    maxBans, registrationDeadline.
 
     Companies are deduplicated by first eligible appearance in the given order.
     A company counts as "applied" if the student applied to any job profile at
@@ -54,12 +55,16 @@ def compute_missed_streak(
             cgpa=profile["cgpa"],
             batch=profile["batch"],
             branch=profile["branch"],
+            degree=profile["degree"],
+            gender=profile["gender"],
             backlogs=profile["backlogs"],
             bans=profile["bans"],
             documents_complete=profile["documents_complete"],
             min_cgpa=job["minCGPA"],
             job_batch=job["batch"],
             allowed_branches=job["allowedBranches"],
+            allowed_degrees=job["allowedDegrees"],
+            allowed_genders=job["allowedGenders"],
             max_backlogs=job["maxBacklogs"],
             max_bans=job.get("maxBans", 0),
         )

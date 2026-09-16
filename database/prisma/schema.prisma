@@ -54,6 +54,27 @@ enum AnnouncementCategory {
   GENERAL
 }
 
+enum AnnouncementStatus {
+  DRAFT
+  PUBLISHED
+}
+
+enum OfferType {
+  /// Full-time placement offer.
+  FTE
+  /// Pre-placement offer converted from an internship.
+  PPO
+  /// Internship offer, paid as a monthly stipend.
+  INTERNSHIP
+}
+
+enum OfferStatus {
+  OFFERED
+  ACCEPTED
+  DECLINED
+  REVOKED
+}
+
 enum InterviewExperienceStatus {
   PENDING
   APPROVED
@@ -66,6 +87,9 @@ model User {
   email                        String?               @unique
   emailVerified                DateTime?
   image                        String?
+  // bcrypt hash for institute-domain password sign-in. Null for accounts that
+  // only use Google. Password sign-in is refused for non-STUDENT roles.
+  passwordHash                 String?
   role                         Role                  @default(STUDENT)
   customPermissions            String[]              @default([])
   isActive                     Boolean               @default(true)
@@ -109,6 +133,8 @@ model User {
   notifications                Notification[]
   createdJobs                  JobProfile[]          @relation("JobCreator")
   createdAnnouncements         Announcement[]        @relation("AnnouncementCreator")
+  offers                       Offer[]               @relation("OfferHolder")
+  recordedOffers               Offer[]               @relation("OfferRecorder")
   interviewExperiences         InterviewExperience[] @relation("InterviewExperienceAuthor")
   reviewedInterviewExperiences InterviewExperience[] @relation("InterviewExperienceReviewer")
 }
@@ -154,6 +180,7 @@ model Company {
   createdAt     DateTime       @default(now())
   jobs          JobProfile[]
   announcements Announcement[]
+  offers        Offer[]
 }
 
 model JobProfile {
@@ -183,6 +210,7 @@ model JobProfile {
   createdBy            User          @relation("JobCreator", fields: [createdById], references: [id])
   applications         Application[]
   coordinators         Coordinator[]
+  offers               Offer[]
 }
 
 model Application {
@@ -196,6 +224,7 @@ model Application {
   user         User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   jobProfile   JobProfile        @relation(fields: [jobProfileId], references: [id], onDelete: Cascade)
   resume       Resume?           @relation(fields: [resumeId], references: [id], onDelete: SetNull)
+  offer        Offer?
 
   @@unique([userId, jobProfileId])
 }
@@ -207,10 +236,56 @@ model Announcement {
   content     String
   tags        String[]
   category    AnnouncementCategory
+  // A DRAFT is visible only to the placement cell. Students see PUBLISHED rows
+  // and nothing else, on every surface that lists announcements.
+  status      AnnouncementStatus   @default(PUBLISHED)
+  publishedAt DateTime?
   createdAt   DateTime             @default(now())
   createdById String
   company     Company?             @relation(fields: [companyId], references: [id], onDelete: SetNull)
   createdBy   User                 @relation("AnnouncementCreator", fields: [createdById], references: [id])
+
+  @@index([status])
+}
+
+/// A recorded placement, pre-placement, or internship offer. This is the
+/// placement record the office keeps: `Application` tracks a student through a
+/// drive, while `Offer` is the outcome, and it exists even when the offer came
+/// from somewhere the portal never ran a drive for. Package statistics are
+/// aggregated from here and nowhere else.
+model Offer {
+  id            String      @id @default(cuid())
+  userId        String
+  companyId     String
+  jobProfileId  String?
+  applicationId String?     @unique
+  type          OfferType
+  status        OfferStatus @default(OFFERED)
+  /// Placement season, held as the graduating batch year.
+  batch         Int
+  /// Annual CTC in rupees. Required for FTE and PPO offers.
+  ctc           Float?
+  /// Monthly stipend in rupees. Required for internship offers.
+  stipend       Float?
+  location      String?
+  offeredAt     DateTime    @default(now())
+  /// When the student accepted or declined.
+  decidedAt     DateTime?
+  joiningDate   DateTime?
+  remarks       String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  createdById   String
+
+  user        User         @relation("OfferHolder", fields: [userId], references: [id], onDelete: Cascade)
+  company     Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  jobProfile  JobProfile?  @relation(fields: [jobProfileId], references: [id], onDelete: SetNull)
+  application Application? @relation(fields: [applicationId], references: [id], onDelete: SetNull)
+  createdBy   User         @relation("OfferRecorder", fields: [createdById], references: [id])
+
+  @@index([batch])
+  @@index([userId])
+  @@index([companyId])
 }
 
 model Feedback {
@@ -226,21 +301,26 @@ model Feedback {
 }
 
 model NocRequest {
-  id          String    @id @default(cuid())
-  userId      String
-  company     String
-  address     String
-  city        String
-  state       String
-  pincode     String
-  startDate   DateTime
-  endDate     DateTime
-  status      NocStatus @default(PENDING)
-  message     String?
-  documentUrl String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id           String    @id @default(cuid())
+  userId       String
+  company      String
+  address      String
+  city         String
+  state        String
+  pincode      String
+  startDate    DateTime
+  endDate      DateTime
+  status       NocStatus @default(PENDING)
+  // The student's own remarks on the request. Only the student writes this.
+  message      String?
+  // The placement cell's remarks on the decision: the reason for a rejection,
+  // or any condition attached to an approval. Kept separate from `message` so
+  // a decision never overwrites what the student wrote.
+  adminRemarks String?
+  documentUrl  String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model InterviewExperience {

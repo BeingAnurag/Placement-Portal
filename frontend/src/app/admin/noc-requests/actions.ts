@@ -13,12 +13,12 @@ export async function approveNocAction(formData: FormData): Promise<NocActionRes
   await requirePermission(PERM_NOC_MANAGE);
 
   const rawNocId = formData.get("nocId");
-  const rawMessage = formData.get("message");
+  const rawRemarks = formData.get("adminRemarks");
   const rawDocUrl = formData.get("documentUrl");
 
   const parsed = nocApproveSchema.safeParse({
     nocId: rawNocId,
-    message: rawMessage || undefined,
+    adminRemarks: rawRemarks || undefined,
     documentUrl: rawDocUrl || undefined,
   });
 
@@ -26,14 +26,14 @@ export async function approveNocAction(formData: FormData): Promise<NocActionRes
     return { error: parsed.error.issues[0]?.message ?? "Invalid approval parameters." };
   }
 
-  const { nocId, message, documentUrl } = parsed.data;
+  const { nocId, adminRemarks, documentUrl } = parsed.data;
 
   try {
     try {
       await backendFetch(`/api/v1/noc/admin/${nocId}/approve`, {
         method: "POST",
         body: JSON.stringify({
-          message: message ?? undefined,
+          adminRemarks: adminRemarks ?? undefined,
           documentUrl: documentUrl ?? undefined,
         }),
       });
@@ -43,7 +43,7 @@ export async function approveNocAction(formData: FormData): Promise<NocActionRes
         where: { id: nocId },
         data: {
           status: "APPROVED",
-          message: message ?? undefined,
+          adminRemarks: adminRemarks ?? undefined,
           documentUrl: documentUrl ?? undefined,
         },
       });
@@ -62,25 +62,25 @@ export async function rejectNocAction(formData: FormData): Promise<NocActionResu
   await requirePermission(PERM_NOC_MANAGE);
 
   const rawNocId = formData.get("nocId");
-  const rawMessage = formData.get("message");
+  const rawRemarks = formData.get("adminRemarks");
 
   const parsed = nocRejectSchema.safeParse({
     nocId: rawNocId,
-    message: rawMessage,
+    adminRemarks: rawRemarks,
   });
 
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Please provide a rejection reason." };
   }
 
-  const { nocId, message } = parsed.data;
+  const { nocId, adminRemarks } = parsed.data;
 
   try {
     try {
       await backendFetch(`/api/v1/noc/admin/${nocId}/reject`, {
         method: "POST",
         body: JSON.stringify({
-          message,
+          adminRemarks,
         }),
       });
     } catch {
@@ -89,7 +89,7 @@ export async function rejectNocAction(formData: FormData): Promise<NocActionResu
         where: { id: nocId },
         data: {
           status: "REJECTED",
-          message,
+          adminRemarks,
         },
       });
     }

@@ -17,7 +17,7 @@ function revalidateJobPages() {
 export async function saveJobProfile(formData: FormData): Promise<JobProfileActionResult> {
   const admin = await requireAdmin();
   if (!admin.user) {
-    return { error: "Use a Google administrator account to create persistent job profiles." };
+    return { error: "Sign in as an administrator to create persistent job profiles." };
   }
 
   const parsed = jobProfileFormSchema.safeParse({

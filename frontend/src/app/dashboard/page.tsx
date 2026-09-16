@@ -23,7 +23,9 @@ export default async function DashboardPage() {
     userId
       ? db.application.findMany({ where: { userId }, select: { status: true } })
       : Promise.resolve([]),
+    // Drafts belong to the placement cell. A student's feed never sees one.
     db.announcement.findMany({
+      where: { status: "PUBLISHED" },
       orderBy: { createdAt: "desc" },
       take: 20,
       include: { company: true },
@@ -41,6 +43,8 @@ export default async function DashboardPage() {
             minCgpa: job.minCGPA,
             batch: job.batch,
             branches: job.allowedBranches,
+            degrees: job.allowedDegrees,
+            genders: job.allowedGenders,
             maxBacklogs: job.maxBacklogs,
             maxBans: job.maxBans,
           }),

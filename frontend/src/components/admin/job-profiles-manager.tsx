@@ -89,7 +89,7 @@ export function JobProfilesManager({
   }
 
   const createDisabledReason = !canPersist
-    ? "Sign in with a Google administrator account to publish persistent jobs."
+    ? "Sign in as an administrator to publish persistent jobs."
     : !companies.length
       ? "Add a company before creating its job profile."
       : null;

@@ -54,6 +54,7 @@ def _to_admin_noc_response(noc: NocRequest) -> AdminNocResponse:
         endDate=noc.endDate,
         status=status_val,
         message=noc.message,
+        adminRemarks=noc.adminRemarks,
         documentUrl=noc.documentUrl,
         createdAt=noc.createdAt,
         updatedAt=noc.updatedAt,
@@ -238,8 +239,8 @@ async def approve_noc(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="NOC request not found.")
 
     noc.status = NocStatus.APPROVED
-    if data.message is not None:
-        noc.message = data.message.strip() if data.message.strip() else None
+    if data.adminRemarks is not None:
+        noc.adminRemarks = data.adminRemarks.strip() or None
     if data.documentUrl is not None:
         noc.documentUrl = data.documentUrl.strip() if data.documentUrl.strip() else None
     noc.updatedAt = datetime.now(timezone.utc)
@@ -289,11 +290,11 @@ async def reject_noc(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="NOC request not found.")
 
     noc.status = NocStatus.REJECTED
-    if data.message:
-        noc.message = data.message.strip()
+    if data.adminRemarks:
+        noc.adminRemarks = data.adminRemarks.strip()
     noc.updatedAt = datetime.now(timezone.utc)
 
-    reason_text = f" Reason: {noc.message}" if noc.message else ""
+    reason_text = f" Reason: {noc.adminRemarks}" if noc.adminRemarks else ""
 
     # In-app notification for the student
     notif = Notification(
@@ -317,7 +318,7 @@ async def reject_noc(
                 f"Hello {noc.user.name or 'Student'},\n\n"
                 f"Your No Objection Certificate (NOC) request for {noc.company} has been reviewed "
                 f"and rejected by the Placement Cell.\n\n"
-                f"{'Remarks: ' + noc.message if noc.message else ''}\n\n"
+                f"{'Remarks: ' + noc.adminRemarks if noc.adminRemarks else ''}\n\n"
                 f"Please contact the Placement Cell or submit feedback if you have any questions."
             ),
         )

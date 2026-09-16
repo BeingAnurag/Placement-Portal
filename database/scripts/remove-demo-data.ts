@@ -36,6 +36,8 @@ async function removeLegacyDemoJob() {
 async function main() {
   // Ordered so that rows are gone before the records they point at, rather than
   // relying on which relations happen to cascade.
+  // Offers point at applications, jobs, companies, and students, so they go first.
+  const offer = await db.offer.deleteMany({ where: demoRows });
   const application = await db.application.deleteMany({ where: demoRows });
   const coordinator = await db.coordinator.deleteMany({ where: demoRows });
   const announcement = await db.announcement.deleteMany({ where: demoRows });
@@ -49,6 +51,7 @@ async function main() {
   const legacy = await removeLegacyDemoJob();
 
   const removed = {
+    offers: offer.count,
     applications: application.count,
     coordinators: coordinator.count,
     announcements: announcement.count,

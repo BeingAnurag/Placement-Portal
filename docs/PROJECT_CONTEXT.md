@@ -39,15 +39,20 @@ Important invariants:
 
 - One application per student/job profile.
 - Company names, user emails, and student roll numbers are unique where present.
-- Job eligibility is evaluated from the student's current profile and job criteria.
+- Job eligibility is evaluated from the student's current profile and job criteria: CGPA, batch, branch, degree, gender, backlogs, placement bans, and document completeness. An empty `allowedDegrees` or `allowedGenders` list, or one holding `all`/`any`, places no restriction; a restriction the profile cannot answer fails.
+- `NocRequest.message` is the student's remarks and `NocRequest.adminRemarks` is the placement cell's decision remarks. A decision never writes over the student's text.
 - Sensitive Aadhaar/PAN fields contain encrypted payloads, not plaintext.
 - Destructive administrative operations require server-side admin authorization.
 
 ## Authentication and roles
 
-Google is the only sign-in method. There are no password accounts in any environment, and the Auth.js credentials provider has been removed.
+Sign-in is an institute email address and a password. There is no OAuth provider, no Auth.js adapter, and no verification or reset email. See the 2026-09-17 entries in `docs/DECISIONS.md` for what that costs and why it was chosen.
 
-- Students must hold a Google account on `STUDENT_EMAIL_DOMAIN` (default `iiitl.ac.in`), matched on the exact domain so lookalike domains are rejected.
+- Signing in requires an address on `STUDENT_EMAIL_DOMAIN` (default `iiitl.ac.in`), matched on the exact domain so lookalike domains are rejected, or an address on the `ADMIN_EMAILS` allowlist.
+- `/register` is institute-domain only and never accepts an allowlisted administrator address. It creates a student account, or claims an existing student row that has no password yet, so accounts from the Google era keep their data.
+- `/account/password` is where any signed-in user changes their own password, confirming the current one.
+- Accounts seeded from `ADMIN_EMAILS` start with no password. `npm run db:set-password -- <email>` sets the first one from the server shell; after that the set-password control on `/admin/users` provisions staff and recovers lost student passwords.
+- Failed sign-ins are throttled per address in the frontend process, not in a shared store.
 - `ADMIN_EMAILS` serves as the emergency bootstrap superadmin allowlist: addresses listed here receive `SUPER_ADMIN` / `ADMIN` rights automatically and may sign in from outside the institute domain.
 - The portal enforces a 5-tier role hierarchy: `STUDENT` (Tier 1), `COORDINATOR` (Tier 2), `OFFICER` (Tier 3), `ADMIN` (Tier 4), `SUPER_ADMIN` (Tier 5), backed by a 17-permission RBAC catalog.
 - In addition to role defaults, any user account supports granular per-user custom permission overrides (`customPermissions String[]` on `User`).
@@ -66,7 +71,7 @@ The reusable access rules live in `frontend/src/lib/auth-access.ts` and `fronten
 4. Applications tracks `APPLIED → SHORTLISTED → INTERVIEW → SELECTED` plus rejected/withdrawn outcomes.
 5. Dashboard aggregates open roles, deadlines, announcements, eligibility, and application counts.
 
-The reusable eligibility rules live in `frontend/src/lib/eligibility.ts` and `backend/app/services/eligibility.py`. Do not implement a third eligibility algorithm in a page component.
+The reusable eligibility rules live in `frontend/src/lib/eligibility.ts` and `backend/app/services/eligibility.py`. Do not implement a third eligibility algorithm in a page component. Both engines take every criterion as a required argument so that adding one forces each call site to supply it rather than silently skipping the check.
 
 ## UI system
 

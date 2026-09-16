@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  canUseGoogleAccount,
+  canSelfRegister,
+  canUsePasswordAccount,
   isAdminEmail,
   isStudentEmail,
   resolveRole,
@@ -9,20 +10,20 @@ import {
 } from "./auth-access";
 
 test("institute accounts sign in as students", () => {
-  assert.equal(canUseGoogleAccount("student@iiitl.ac.in", "external@gmail.com"), true);
+  assert.equal(canUsePasswordAccount("student@iiitl.ac.in", "external@gmail.com"), true);
   assert.equal(isStudentEmail("student@iiitl.ac.in"), true);
   assert.equal(isAdminEmail("student@iiitl.ac.in", "external@gmail.com"), false);
   assert.equal(resolveRole("student@iiitl.ac.in", "external@gmail.com"), "STUDENT");
 });
 
 test("configured external administrators are allowed and receive admin access", () => {
-  assert.equal(canUseGoogleAccount("EXTERNAL@GMAIL.COM", "external@gmail.com"), true);
+  assert.equal(canUsePasswordAccount("EXTERNAL@GMAIL.COM", "external@gmail.com"), true);
   assert.equal(isAdminEmail("  External@Gmail.com  ", "external@gmail.com"), true);
   assert.equal(resolveRole("external@gmail.com", "external@gmail.com"), "ADMIN");
 });
 
 test("unlisted external accounts are rejected", () => {
-  assert.equal(canUseGoogleAccount("someone@gmail.com", "external@gmail.com"), false);
+  assert.equal(canUsePasswordAccount("someone@gmail.com", "external@gmail.com"), false);
   assert.equal(resolveRole("someone@gmail.com", "external@gmail.com"), "STUDENT");
 });
 
@@ -30,7 +31,7 @@ test("there is no built-in administrator when ADMIN_EMAILS is empty", () => {
   assert.equal(isAdminEmail("placements@iiitl.ac.in", ""), false);
   assert.equal(resolveRole("placements@iiitl.ac.in", ""), "STUDENT");
   // The institute domain still grants student access.
-  assert.equal(canUseGoogleAccount("placements@iiitl.ac.in", ""), true);
+  assert.equal(canUsePasswordAccount("placements@iiitl.ac.in", ""), true);
 });
 
 test("an institute administrator keeps admin only while listed", () => {
@@ -42,7 +43,7 @@ test("lookalike domains are not treated as institute accounts", () => {
   assert.equal(isStudentEmail("attacker@notiiitl.ac.in"), false);
   assert.equal(isStudentEmail("attacker@evil-iiitl.ac.in"), false);
   assert.equal(isStudentEmail("attacker@sub.iiitl.ac.in"), false);
-  assert.equal(canUseGoogleAccount("attacker@notiiitl.ac.in", ""), false);
+  assert.equal(canUsePasswordAccount("attacker@notiiitl.ac.in", ""), false);
 });
 
 test("the student domain is configurable and tolerates a leading @", () => {
@@ -52,13 +53,24 @@ test("the student domain is configurable and tolerates a leading @", () => {
   assert.equal(studentEmailDomain(""), "iiitl.ac.in");
   assert.equal(isStudentEmail("student@example.edu", "example.edu"), true);
   assert.equal(isStudentEmail("student@iiitl.ac.in", "example.edu"), false);
+  assert.equal(canUsePasswordAccount("student@example.edu", "", "example.edu"), true);
+});
+
+test("self-registration is institute-only and never reaches an allowlisted address", () => {
+  assert.equal(canSelfRegister("student@iiitl.ac.in"), true);
+  // An external administrator can sign in, but cannot create their own account.
+  assert.equal(canUsePasswordAccount("external@gmail.com", "external@gmail.com"), true);
+  assert.equal(canSelfRegister("external@gmail.com"), false);
+  assert.equal(canSelfRegister("attacker@notiiitl.ac.in"), false);
+  assert.equal(canSelfRegister(null), false);
+  assert.equal(canSelfRegister("student@example.edu", "example.edu"), true);
 });
 
 test("blank and malformed values never grant access", () => {
-  assert.equal(canUseGoogleAccount(null, "external@gmail.com"), false);
-  assert.equal(canUseGoogleAccount(undefined, "external@gmail.com"), false);
-  assert.equal(canUseGoogleAccount("", "external@gmail.com"), false);
-  assert.equal(canUseGoogleAccount("no-at-sign", "external@gmail.com"), false);
+  assert.equal(canUsePasswordAccount(null, "external@gmail.com"), false);
+  assert.equal(canUsePasswordAccount(undefined, "external@gmail.com"), false);
+  assert.equal(canUsePasswordAccount("", "external@gmail.com"), false);
+  assert.equal(canUsePasswordAccount("no-at-sign", "external@gmail.com"), false);
   // An empty ADMIN_EMAILS entry must not match an empty-ish address.
   assert.equal(isAdminEmail("", " , , "), false);
 });

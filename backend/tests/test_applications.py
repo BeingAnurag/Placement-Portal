@@ -35,12 +35,16 @@ def test_eligibility_evaluation_passes_for_qualifying_student():
         cgpa=8.5,
         batch=2026,
         branch="CSE",
+        degree="B.Tech",
+        gender="Male",
         backlogs=0,
         bans=0,
         documents_complete=True,
         min_cgpa=7.5,
         job_batch=2026,
         allowed_branches=["CSE", "IT"],
+        allowed_degrees=["B.Tech"],
+        allowed_genders=[],
         max_backlogs=0,
         max_bans=0,
     )
@@ -53,12 +57,16 @@ def test_eligibility_evaluation_fails_when_cgpa_or_branch_mismatches():
         cgpa=6.8,
         batch=2026,
         branch="ECE",
+        degree="MBA",
+        gender="Male",
         backlogs=0,
         bans=0,
         documents_complete=True,
         min_cgpa=7.5,
         job_batch=2026,
         allowed_branches=["CSE", "IT"],
+        allowed_degrees=["B.Tech"],
+        allowed_genders=[],
         max_backlogs=0,
         max_bans=0,
     )
@@ -66,6 +74,7 @@ def test_eligibility_evaluation_fails_when_cgpa_or_branch_mismatches():
     failed = [c.key for c in checks if not c.passed]
     assert "cgpa" in failed
     assert "branch" in failed
+    assert "degree" in failed
 
 
 def test_application_schemas_validation():

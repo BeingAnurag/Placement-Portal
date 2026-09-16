@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import {
+  Award,
   BarChart3,
   BellRing,
   BriefcaseBusiness,
@@ -11,6 +12,7 @@ import {
   FileQuestion,
   FileText,
   GraduationCap,
+  KeyRound,
   LogOut,
   Menu,
   MessageSquareText,
@@ -30,6 +32,7 @@ const nav = [
   ["Companies", "/admin/companies", Building2],
   ["Job profiles", "/admin/job-profiles", BriefcaseBusiness],
   ["Applications", "/admin/applications", ClipboardCheck],
+  ["Placement records", "/admin/placement-records", Award],
   ["Students", "/admin/students", GraduationCap],
   ["Users & RBAC", "/admin/users", ShieldCheck],
   ["Feedbacks", "/admin/feedbacks", FileQuestion],
@@ -42,11 +45,15 @@ const nav = [
 export function AdminShell({
   children,
   admin,
+  allowedPaths,
 }: {
   children: React.ReactNode;
   admin: { name: string; initials: string; role?: string; title?: string | null };
+  /** Routes this account may open, computed from ROUTE_PERMISSIONS on the server. */
+  allowedPaths: string[];
 }) {
   const path = usePathname();
+  const visibleNav = nav.filter(([, href]) => allowedPaths.includes(href));
   const [open, setOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
 
@@ -88,7 +95,7 @@ export function AdminShell({
           </div>
         </div>
         <nav>
-          {nav.map(([label, href, Icon]) => (
+          {visibleNav.map(([label, href, Icon]) => (
             <Link
               className={path === href ? "active" : ""}
               href={href}
@@ -130,6 +137,14 @@ export function AdminShell({
                     onClick={() => setProfileOpen(false)}
                   />
                   <div className="absolute right-0 mt-3 w-48 bg-[var(--card-bg)] border border-[var(--border)] rounded-xl shadow-xl z-50 overflow-hidden animate-[fadeSlideUp_0.15s_ease]">
+                    <Link
+                      href="/account/password"
+                      onClick={() => setProfileOpen(false)}
+                      className="w-full flex items-center gap-2 px-4 py-3 text-sm text-[var(--ink)] hover:bg-[var(--surface-alt)] font-semibold no-underline transition-colors"
+                    >
+                      <KeyRound size={16} />
+                      Password
+                    </Link>
                     <form action={handleSignOut}>
                       <button
                         type="submit"

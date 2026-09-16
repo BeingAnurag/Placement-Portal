@@ -50,7 +50,10 @@ export type LocalNoc = {
   startDate: string;
   endDate: string;
   status: "PENDING" | "APPROVED" | "REJECTED" | string;
+  /** The student's own remarks, as submitted. */
   message?: string | null;
+  /** The placement cell's remarks on the decision. Read-only here. */
+  adminRemarks?: string | null;
   documentUrl?: string | null;
   createdAt?: string;
 };
@@ -510,6 +513,15 @@ export function FormsView({ initialNocs = [] }: { initialNocs?: LocalNoc[] }) {
                   <p style={{ margin: "4px 0 0", fontStyle: "italic", lineHeight: "1.5" }}>
                     &ldquo;{viewingNoc.message}&rdquo;
                   </p>
+                </div>
+              )}
+
+              {viewingNoc.adminRemarks && (
+                <div style={{ background: "var(--surface-alt)", padding: "10px 14px", borderRadius: "10px", border: "1px solid var(--border)" }}>
+                  <span style={{ color: "var(--muted)", fontSize: "10px", textTransform: "uppercase", fontWeight: 700 }}>
+                    {viewingNoc.status === "REJECTED" ? "Reason for rejection" : "Placement cell remarks"}
+                  </span>
+                  <p style={{ margin: "4px 0 0", lineHeight: "1.5" }}>{viewingNoc.adminRemarks}</p>
                 </div>
               )}
 

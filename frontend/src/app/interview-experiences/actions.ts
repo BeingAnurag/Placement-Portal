@@ -48,7 +48,7 @@ export async function submitInterviewExperienceAction(
 
   const student = await requireStudent();
   if (!student.user) {
-    return { error: "Google sign-in required to submit an interview experience." };
+    return { error: "Sign in to submit an interview experience." };
   }
 
   try {

@@ -99,9 +99,11 @@ node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"  
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"        # ENCRYPTION_KEY
 ```
 
-Set `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`, and at least one address in
-`ADMIN_EMAILS`. Compose refuses to start if `AUTH_SECRET`, `ENCRYPTION_KEY`, or
-the Google credentials are missing. Never commit `.env` or real student data.
+Set at least one address in `ADMIN_EMAILS`, then give that account a password
+with `npm run db:set-password -- <email>` once the database is seeded; there is
+no other way to reach the first administrator. Compose refuses to start if
+`AUTH_SECRET` or `ENCRYPTION_KEY` is missing. Never commit `.env` or real
+student data.
 
 ### 2. Run everything with Docker
 
@@ -192,15 +194,35 @@ npm run db:pack:demo
 
 ## Authentication and access control
 
-Sign-in is Google-only; there are no password accounts. A user record is created
-automatically on first successful sign-in.
+Sign-in is an email address and a password. There is no Google sign-in and no
+OAuth client to configure.
 
-- **Students** must use a Google account on the domain in `STUDENT_EMAIL_DOMAIN`
-  (`iiitl.ac.in` by default). Any other account is refused with an explanation
-  on the sign-in page.
+- **Students** register themselves at `/register` with an address on the domain
+  in `STUDENT_EMAIL_DOMAIN` (`iiitl.ac.in` by default). Any other address is
+  refused with an explanation. Registering with an address that already has a
+  passwordless student account claims that account, so profiles and
+  applications from before survive.
 - **Administrators** are defined solely by `ADMIN_EMAILS`. There is no built-in
   administrator account, and an address listed there may sign in from outside
-  the institute domain.
+  the institute domain. Those accounts are seeded without a password.
+- **The first administrator** gets a password from the server shell:
+
+  ```bash
+  npm run db:set-password -- head.tpo@iiitl.ac.in
+  ```
+
+  The password is typed at a prompt, not passed as an argument, so it stays out
+  of shell history.
+- **Everyone else is provisioned from `/admin/users`**, which has a set-password
+  control on each row. That is also the recovery path for a student who has lost
+  their password, because there is no reset email.
+- **`/account/password`** is where a signed-in user changes their own password,
+  confirming the current one. It is in the account menu of both shells.
+
+Registration does not send a verification email, so whoever registers an unused
+institute address owns it. This is a deliberate, recorded trade-off; read the
+2026-09-17 entries in `docs/DECISIONS.md` before exposing the portal beyond the
+campus network.
 
 ```env
 STUDENT_EMAIL_DOMAIN="iiitl.ac.in"

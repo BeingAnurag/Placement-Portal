@@ -52,6 +52,8 @@ async def list_students_with_missed_streaks(
             "minCGPA": job.minCGPA,
             "batch": job.batch,
             "allowedBranches": job.allowedBranches,
+            "allowedDegrees": job.allowedDegrees,
+            "allowedGenders": job.allowedGenders,
             "maxBacklogs": job.maxBacklogs,
             "maxBans": job.maxBans,
             "registrationDeadline": job.registrationDeadline,

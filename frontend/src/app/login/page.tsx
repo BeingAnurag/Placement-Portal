@@ -1,34 +1,30 @@
 import { AlertCircle, ShieldCheck } from "lucide-react";
 import Image from "next/image";
+import Link from "next/link";
 import { redirect } from "next/navigation";
-import { auth, signIn } from "@/lib/auth";
+import { auth } from "@/lib/auth";
 import { studentEmailDomain } from "@/lib/auth-access";
 import { isElevatedRole } from "@/lib/permissions";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
+import { passwordSignInAction } from "./actions";
 
 function describeError(code: string | undefined, domain: string) {
   if (!code) return null;
-  if (code === "AccessDenied") {
+  if (code === "CredentialsSignin" || code === "AccessDenied") {
     return {
-      title: "That account cannot access this portal",
-      body: `Sign in with your institute Google account ending in @${domain}. External accounts are only accepted when the placement office has added them as administrators.`,
-    };
-  }
-  if (code === "OAuthAccountNotLinked") {
-    return {
-      title: "This email is already registered another way",
-      body: "Sign in using the provider you originally used for this email address.",
+      title: "Incorrect email or password",
+      body: `Sign-in needs an @${domain} account that has a password set. Repeated failures lock the address for fifteen minutes. If your account was created by the placement office, ask them for its password.`,
     };
   }
   if (code === "Configuration") {
     return {
       title: "Sign-in is not configured correctly",
-      body: "Google credentials are missing or invalid on the server. Contact the placement office.",
+      body: "The server is missing its authentication secret. Contact the placement office.",
     };
   }
   return {
     title: "Sign-in could not be completed",
-    body: "Something went wrong while contacting Google. Please try again.",
+    body: "Something went wrong while signing you in. Please try again.",
   };
 }
 
@@ -71,7 +67,7 @@ export default async function LoginPage({
           </div>
           <span className="eyebrow">Student portal</span>
           <h2>Welcome back</h2>
-          <p>Sign in with your institute Google account. Your account is created automatically on first sign-in.</p>
+          <p>Sign in with your institute email address and password.</p>
           {problem ? (
             <div className="login-alert" role="alert">
               <AlertCircle />
@@ -81,21 +77,33 @@ export default async function LoginPage({
               </span>
             </div>
           ) : null}
-          <form
-            action={async () => {
-              "use server";
-              await signIn("google", { redirectTo: "/dashboard" });
-            }}
-          >
-            <button type="submit">
-              <span className="google-g">G</span>
-              Continue with Google
+          <form action={passwordSignInAction} className="login-fields">
+            <label>
+              <span>Institute email</span>
+              <input
+                type="email"
+                name="email"
+                autoComplete="email"
+                placeholder={`you@${domain}`}
+                required
+              />
+            </label>
+            <label>
+              <span>Password</span>
+              <input type="password" name="password" autoComplete="current-password" required />
+            </label>
+            <button type="submit" className="login-submit">
+              Sign in
             </button>
           </form>
+          <p className="login-switch">
+            No password account yet? <Link href="/register">Create one</Link>
+          </p>
           <div className="login-note">
-            Students sign in with <strong>@{domain}</strong> accounts.
+            Students register and sign in with <strong>@{domain}</strong> addresses.
             <br />
-            Administrator access is granted only to addresses configured by the placement office.
+            Placement office accounts are created by the office, which also sets their first
+            password.
           </div>
         </div>
       </section>

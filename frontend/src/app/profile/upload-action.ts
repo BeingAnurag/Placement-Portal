@@ -19,7 +19,7 @@ export async function uploadResume(formData: FormData): Promise<{ success?: bool
 
   const student = await requireStudent();
   if (!student.user) {
-    return { error: "Google sign-in required to upload a resume." };
+    return { error: "Sign in to upload a resume." };
   }
 
   try {

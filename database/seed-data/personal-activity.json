@@ -43,7 +43,8 @@
       "startDaysFromNow": 55,
       "durationDays": 60,
       "status": "APPROVED",
-      "message": "Short research engagement over the summer break."
+      "message": "Short research engagement over the summer break.",
+      "adminRemarks": "Approved. Dates fall within the summer break, so no coursework conflict."
     }
   ],
   "feedback": [

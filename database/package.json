@@ -10,13 +10,15 @@
     "deploy": "prisma migrate deploy",
     "seed": "tsx prisma/seed.ts",
     "sync-admins": "tsx scripts/sync-admin-roles.ts",
+    "set-password": "tsx scripts/set-password.ts",
     "pack-demo": "tsx scripts/pack-demo-data.ts",
     "seed-demo": "tsx scripts/seed-demo-data.ts",
     "remove-demo": "tsx scripts/remove-demo-data.ts",
     "studio": "prisma studio"
   },
   "dependencies": {
-    "@prisma/client": "^6.19.0"
+    "@prisma/client": "^6.19.0",
+    "bcryptjs": "^3.0.3"
   },
   "devDependencies": {
     "@types/adm-zip": "^0.5.8",

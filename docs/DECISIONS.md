@@ -170,3 +170,69 @@ Dark mode is now black underneath with teal on everything layered above it.
 - **`--blue` is `--teal-500` in dark, not `--teal-400`.** It must survive two jobs: 10px accent text directly on black, and an icon glyph on a `--teal-900` badge tile. `--teal-600` fails the second (2.8:1) and `--teal-400` reads as cyan rather than as the requested `#20808D` family; `--teal-500` clears both (6.7:1 and 4.1:1).
 - **The login hero is the one surface with a theme-specific rule.** `.login-story` is a solid brand gradient on paper, but in dark mode it drops to the page black with a faint `--brand-rgb` glow and a `--border` divider, so the dark theme has no large teal field. It is the only place a component rule branches on the theme instead of reading a token; a `--hero-*` token pair for a single element was not worth it.
 - Status hues stay untouched, per the parent entry. The light theme is unchanged. Verified in both themes against the admin shell, metrics, funnel, tables, toolbar inputs, form fields, banners, badge chips, and the login page.
+
+## 2026-09-17 — Sign-in is email and password only; Google is removed
+
+Supersedes *2026-09-17 — Password sign-in returns alongside Google* and, with it, the Google half of *2026-08-20*. `ADMIN_EMAILS` remains the only source of the `ADMIN` role, still matched on the exact domain and still recomputed per request.
+
+Two sign-in methods on one page confused people, so there is now one. The Google provider, the Auth.js Prisma adapter, and `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` are gone.
+
+- **Removing Google removed the proof of mailbox ownership**, which several rules from the entry below leaned on. Those rules were rewritten rather than kept: elevation no longer clears a password, because with no second method that is a permanent lockout, and registration may now claim an existing account under the conditions below. What remains is a portal where possession of the password is the whole of identity.
+- **The adapter went with it.** Credentials sign-ins are never persisted by Auth.js and sessions are JWTs, so `PrismaAdapter` had nothing left to do; `events.createUser` went too, since nothing creates a user through Auth.js any more. `Account`, `Session`, and `VerificationToken` stay in the schema but are no longer written. The permissions a placement team member used to receive automatically on first Google sign-in are now granted when an administrator provisions them on `/admin/users`.
+- **Sign-in accepts `STUDENT_EMAIL_DOMAIN` plus the `ADMIN_EMAILS` allowlist; registration accepts the domain only.** The allowlist exception has to exist on the sign-in side, because a bootstrap administrator may hold an external address and Google is no longer there to let them in. It must not exist on the registration side, where it would hand out the `ADMIN` role that the allowlist grants.
+- **Registration may claim an account that has no password, if it is a plain student.** Every student who used Google has a row and would otherwise lose their profile, applications, and resumes. A row that is privileged, that belongs to a listed team member, or that already has a password is never claimable, because claiming it would take over whatever it carries.
+- **Provisioning has two roots of trust.** `npm run db:set-password -- <email>` works from the server shell and is how the first administrator, seeded from `ADMIN_EMAILS` without a password, gets one. After that, `/admin/users` has a set-password control for every account, which is also the recovery path: there is no reset email, so a lost password is an administrator's job.
+- **The residual risk is now larger and should be stated plainly.** With no verified provider and no verification mail, whoever registers an unused institute address owns it. An administrator elevating an account is trusting that the right person holds it. A verification link at registration is still the single change that would fix this, and it matters more now than it did when Google existed.
+
+## 2026-09-17 — Password sign-in returns alongside Google, institute domain only
+
+Superseded the same day by the entry above; kept because the rules it introduced, and the reasons for them, still explain most of the current code.
+
+Supersedes *2026-08-20 — Google-only sign-in* on the provider question only. Everything that entry says about `ADMIN_EMAILS`, exact-domain matching, and per-request role recomputation still holds.
+
+The placement cell asked for both methods, for students and for staff. The Auth.js credentials provider is therefore back, but under rules the removed 2026-07-12 version never had: it authenticates real `User` rows rather than synthetic ids, and it cannot be the first thing that reaches a privileged account.
+
+- **Password sign-in is bounded by `STUDENT_EMAIL_DOMAIN`, with no `ADMIN_EMAILS` exception.** `canUsePasswordAccount` is institute-domain only, so a password can never assert an address the institute does not control. An administrator on an external address keeps signing in with Google. This is narrower than Google sign-in on purpose: the allowlist is the emergency bootstrap, and a guessable password on an external mailbox is not an acceptable second key to it.
+- **Registration refuses an address that already holds an account.** Seeded administrators and everyone who has ever used Google already have a `User` row. Attaching a self-registered password to an existing row would hand that row's role to whoever registered first, which is exactly the takeover the 2026-08-21 entry warned about.
+- **Elevating an unprivileged account clears its password.** Enforced in the `signIn` callback during `ADMIN_EMAILS` reconciliation and in `PATCH /api/v1/users/{id}/role` with a matching Prisma fallback. Without this, someone could register a password on an unused institute address and wait for it to be made staff. Only a `STUDENT` password can have come from self-registration, so an already-privileged row keeps the password it set from inside a session; otherwise a super-administrator listed in `ADMIN_EMAILS` would lose their password on every Google sign-in.
+- **Staff obtain a password from inside a session,** at `/account/password`, which any signed-in user reaches from the account menu in both shells. Changing an existing password requires the current one. This is the only path for an account that already exists, and it means a staff password is always backed by a Google-verified sign-in.
+- **The accepted, deliberate gap: registration does not verify the mailbox.** This was chosen explicitly over verified self-registration and admin provisioning. An unused institute address can therefore be registered by someone who does not own it; if the real owner later signs in with Google, `allowDangerousEmailAccountLinking` links them into that row while the registrant still knows the password. The four rules above contain the blast radius to a single unprivileged student account. Sending a verification link before the account can sign in is the one change that closes it, and it is the first thing to add if this is ever exposed beyond the campus network.
+- **Hashing stays in the Auth.js layer, not in FastAPI.** Sign-in happens before a session exists, so a backend endpoint would need a new unauthenticated surface plus its own service-token scheme. Auth.js and the Prisma adapter already own `User`, `Account`, and `Session`, so credential verification is the same concern. `bcryptjs` at cost 10: it is pure JavaScript, so it needs no native build in the standalone image, and the cost factor is also the request cost. SQLAlchemy mirrors `passwordHash` but the backend never reads it.
+- **Online guessing is braked in-process,** eight failures per address per fifteen minutes, then a fifteen-minute lock. The counter is module state in `frontend/src/lib/login-throttle.ts`, so it resets on deploy and is not shared between replicas. Move it to Postgres or Redis before running the frontend at more than one replica.
+
+## 2026-09-17 — Eligibility evaluates degree and gender; the engines take every criterion
+
+`allowedDegrees` and `allowedGenders` had been collected on the job form and stored on `JobProfile` since the field was added, but neither engine read them, so a job restricted to B.Tech admitted an MBA student at apply time. Both engines now evaluate them, and the shape of the call changed to stop it happening again.
+
+- **Every criterion is a required argument.** `evaluateEligibility` and `evaluate_eligibility` take degree, gender, and their allowed lists as required parameters rather than optional ones. TypeScript then refuses to compile a call site that forgets one, which is how all three frontend callers and all three Python callers were found. An optional argument defaulting to "unrestricted" would have reproduced the original bug for any future criterion.
+- **An empty list means unrestricted, and so does `all` or `any`.** Jobs created before this change have empty lists and must keep behaving as they did; the form's own placeholder tells administrators to leave the gender field blank for all, and some will type a word instead. The `allowedDegrees` field is required on the form, so in practice the open case is gender.
+- **A restriction the profile cannot answer fails.** A student with no `degree` is ineligible for a job that lists degrees. The alternative, passing an unset field, would let an empty profile satisfy a criterion the placement cell set deliberately. Neither field is part of `toEligibilityProfile`'s completeness guard, so a missing degree or gender still leaves a student eligible for every job that does not ask.
+- **Degree and gender compare on letters and digits only** (`B.Tech`, `b tech`, and `BTech` all match), because both sides are free text. Branch keeps its older trim-and-uppercase rule: branch codes carry no punctuation, and loosening that comparison would silently widen eligibility on existing jobs.
+- The job detail page now lists allowed degrees, and lists allowed genders when the job restricts them, so a student who fails a criterion can see the rule that failed.
+
+## 2026-09-17 — NOC decision remarks are their own column
+
+`NocRequest.message` held the student's remarks, and approving or rejecting overwrote it with the placement cell's, destroying the request's own statement of purpose and leaving the admin details modal labelling the cell's text "Student remarks".
+
+`adminRemarks` is a new nullable column. `message` is written only by the student, `adminRemarks` only by a decision. Both are returned on the student-facing response, so `/forms` shows the rejection reason next to what the student originally wrote, and both appear as separate blocks in the admin details modal.
+
+- **The approve and reject request bodies no longer accept `message` at all** — in the Pydantic schemas, the Zod schemas, and the form field names. A stray `message` is dropped rather than quietly treated as a decision remark.
+- **Existing rows are not migrated.** For a request already decided, whatever is in `message` may be the student's text, the cell's, or the cell's written over the student's; there is no way to tell them apart, so no data migration guesses. Those rows keep `message` as-is and have a null `adminRemarks`. Demo seed data carries both fields.
+
+## 2026-09-17 — The admin sidebar is derived from ROUTE_PERMISSIONS
+
+`/admin/interview-experiences` was missing from `ROUTE_PERMISSIONS`, so `canAccessAdminRoute` fell through to its elevated-role check and a coordinator reached a page that `requirePermission(interview_experiences:manage)` then bounced. Separately, the sidebar rendered all twelve links to everyone, so a coordinator was invited to click "NOC requests" and be redirected.
+
+The route is registered, and `ROUTE_PERMISSIONS` is now the single list the middleware, the page guards, and the navigation all read. `AuthenticatedAdminShell` computes the permitted paths on the server and `AdminShell` renders only those.
+
+- **A route missing from `ROUTE_PERMISSIONS` is now hidden from the navigation** instead of being visible and ungated. Failing closed is the safer default, and it makes registering a new admin page part of adding one.
+- Hiding a link is presentation, not authorization. The middleware and each page's `requirePermission` still decide access; nothing here relaxes them.
+
+## 2026-09-17 — The application CSV is produced by the backend
+
+The admin screen rebuilt the export client-side from the rows already in the browser, which dropped the Resume Label column that `GET /api/v1/applications/admin/export` produces and would silently have exported only the current page had the list ever been paginated. The endpoint existed and was never called.
+
+The Export CSV control is now a link to `/api/admin/applications/export`, a route handler that checks `applications:manage` and proxies the backend with the session's bearer token; FastAPI's `require_admin` authorizes it again on the other side. A route handler rather than a server action because a browser download cannot attach the token itself.
+
+- **The endpoint gained a `search` parameter** matching student name, email, roll number, job title, and company name, because the screen's free-text box is client-side only and the export has to cover the same rows the administrator is looking at.
+- **There is no Prisma fallback.** Unlike the surrounding NOC and application actions, if the backend is unreachable the export fails with a 502 rather than falling back to a second implementation in the frontend; rebuilding the query in Next.js is what produced the divergence in the first place.

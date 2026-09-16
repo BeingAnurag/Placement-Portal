@@ -42,7 +42,7 @@ export function StudentsManager({ students }: { students: AdminStudentListItem[]
         <div>
           <span className="eyebrow">Live student records</span>
           <h1>Students</h1>
-          <p>Profiles created through authenticated institute Google accounts.</p>
+          <p>Profiles created from registered institute accounts.</p>
         </div>
       </section>
 
@@ -146,7 +146,7 @@ export function StudentsManager({ students }: { students: AdminStudentListItem[]
             <p>
               {students.length
                 ? "Change the search query or follow-up filter."
-                : "Students appear after their first institute Google sign-in."}
+                : "Students appear once they register with their institute address."}
             </p>
           </div>
         ) : null}

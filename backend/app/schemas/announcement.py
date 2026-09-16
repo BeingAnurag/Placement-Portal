@@ -28,7 +28,9 @@ class AnnouncementBase(BaseModel):
     companyId: Optional[str] = None
 
 class AnnouncementCreate(AnnouncementBase):
-    pass
+    # Saving a draft is the deliberate act; an omitted status publishes, which
+    # keeps every existing caller behaving as it did.
+    status: str = Field(default="PUBLISHED")
 
 class AnnouncementUpdate(BaseModel):
     title: Optional[str] = Field(None, min_length=2, max_length=200)
@@ -36,9 +38,12 @@ class AnnouncementUpdate(BaseModel):
     category: Optional[str] = None
     tags: Optional[list[str]] = None
     companyId: Optional[str] = None
+    status: Optional[str] = None
 
 class AnnouncementResponse(AnnouncementBase):
     id: str
+    status: str
+    publishedAt: Optional[datetime] = None
     createdAt: datetime
     createdById: str
     company: Optional[AnnouncementCompanySummary] = None

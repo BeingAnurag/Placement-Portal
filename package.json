@@ -7,7 +7,7 @@
     "frontend",
     "database"
   ],
-  "overridesRationale": "next-auth and @auth/prisma-adapter resolve different @auth/core patch versions, which makes their Adapter and JWT types structurally incompatible. Pin the version next-auth expects.",
+  "overridesRationale": "Pins @auth/core to the patch version next-auth 5 expects, so the JWT and Session augmentations in frontend/src/types/next-auth.d.ts keep matching the runtime types. The original conflict was with @auth/prisma-adapter, which was removed when sign-in became password-only.",
   "overrides": {
     "@auth/core": "0.41.2"
   },
@@ -25,6 +25,7 @@
     "db:seed:demo": "npm run seed-demo --workspace @tnp/database",
     "db:remove-demo": "npm run remove-demo --workspace @tnp/database",
     "db:sync-admins": "npm run sync-admins --workspace @tnp/database",
+    "db:set-password": "npm run set-password --workspace @tnp/database",
     "db:studio": "npm run studio --workspace @tnp/database"
   }
 }

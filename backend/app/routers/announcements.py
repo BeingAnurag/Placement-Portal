@@ -1,15 +1,27 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime, timezone
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.core.security import PERM_ANNOUNCEMENTS_MANAGE, get_current_user, require_permission
+from app.core.security import (
+    PERM_ANNOUNCEMENTS_MANAGE,
+    get_current_user,
+    has_permission,
+    require_permission,
+)
 from app.dependencies import get_db
-from app.models.db import Announcement, AnnouncementCategory, Company, User
+from app.models.db import (
+    Announcement,
+    AnnouncementCategory,
+    AnnouncementStatus,
+    Company,
+    User,
+)
 from app.schemas.announcement import (
     AnnouncementAuthorSummary,
     AnnouncementCompanySummary,
@@ -35,11 +47,15 @@ def _to_announcement_response(a: Announcement) -> AnnouncementResponse:
     creator_name = a.created_by.name if a.created_by else None
     creator_email = a.created_by.email if a.created_by else None
 
+    status_val = a.status.value if hasattr(a.status, "value") else str(a.status)
+
     return AnnouncementResponse(
         id=a.id,
         title=a.title,
         content=a.content,
         category=category_val,
+        status=status_val,
+        publishedAt=a.publishedAt,
         tags=a.tags or [],
         companyId=a.companyId,
         company=company_summary,
@@ -61,9 +77,28 @@ def _parse_category(category_input: str) -> AnnouncementCategory:
         )
 
 
+def _parse_status(status_input: str) -> AnnouncementStatus:
+    normalized = status_input.strip().upper()
+    try:
+        return AnnouncementStatus(normalized)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid status '{status_input}'. Allowed: {[s.value for s in AnnouncementStatus]}",
+        )
+
+
+def _may_see_drafts(caller: dict) -> bool:
+    """A draft belongs to the placement cell until it is published."""
+    return has_permission(caller, PERM_ANNOUNCEMENTS_MANAGE)
+
+
 @router.get("", response_model=list[AnnouncementResponse])
 async def list_announcements(
     category: Optional[str] = Query(None, description="Filter by category (COMPANY_EVENT, GENERAL)"),
+    status_filter: Optional[str] = Query(
+        None, alias="status", description="Filter by status (DRAFT, PUBLISHED). Managers only."
+    ),
     company_id: Optional[str] = Query(None, description="Filter by associated company ID"),
     search: Optional[str] = Query(None, description="Search across title, content, and tags"),
     limit: int = Query(100, ge=1, le=200),
@@ -72,13 +107,22 @@ async def list_announcements(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    List announcements with optional filters. Accessible to all authenticated users (students & staff).
+    List announcements with optional filters. Accessible to all authenticated
+    users; students only ever receive published rows.
     """
     stmt = (
         select(Announcement)
         .options(selectinload(Announcement.company), selectinload(Announcement.created_by))
         .order_by(Announcement.createdAt.desc())
     )
+
+    if _may_see_drafts(caller):
+        if status_filter:
+            stmt = stmt.where(Announcement.status == _parse_status(status_filter))
+    else:
+        # The filter is ignored rather than rejected: a student asking for
+        # drafts is asking for rows that are not theirs to see.
+        stmt = stmt.where(Announcement.status == AnnouncementStatus.PUBLISHED)
 
     if category:
         cat_enum = _parse_category(category)
@@ -118,6 +162,12 @@ async def get_announcement(
     )
     announcement = await db.scalar(stmt)
     if not announcement:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Announcement not found.",
+        )
+    if announcement.status == AnnouncementStatus.DRAFT and not _may_see_drafts(caller):
+        # Same 404 as a missing row: a draft's existence is not public either.
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Announcement not found.",
@@ -179,11 +229,16 @@ async def create_announcement(
     clean_tags = [t.strip() for t in data.tags if t and t.strip()]
 
     announcement_id = f"cuid_{uuid.uuid4().hex[:20]}"
+    status_enum = _parse_status(data.status)
     new_announcement = Announcement(
         id=announcement_id,
         title=data.title.strip(),
         content=data.content.strip(),
         category=cat_enum,
+        status=status_enum,
+        publishedAt=(
+            datetime.now(timezone.utc) if status_enum == AnnouncementStatus.PUBLISHED else None
+        ),
         tags=clean_tags,
         companyId=clean_company_id,
         createdById=author_id,
@@ -237,6 +292,14 @@ async def update_announcement(
 
     if data.tags is not None:
         announcement.tags = [t.strip() for t in data.tags if t and t.strip()]
+
+    if data.status is not None:
+        new_status = _parse_status(data.status)
+        # `publishedAt` records the first time students could see it, so
+        # re-publishing a withdrawn announcement keeps the original date.
+        if new_status == AnnouncementStatus.PUBLISHED and announcement.publishedAt is None:
+            announcement.publishedAt = datetime.now(timezone.utc)
+        announcement.status = new_status
 
     # If companyId was explicitly supplied in request
     if "companyId" in data.model_fields_set:

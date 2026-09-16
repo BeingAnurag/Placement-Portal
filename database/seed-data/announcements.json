@@ -75,5 +75,24 @@
     "tags": ["noc", "process"],
     "content": "Students holding an off-campus offer must raise an NOC request through the portal before accepting it. Include the offer letter and the exact engagement dates. Requests are processed within three working days.",
     "createdDaysAgo": 18
+  },
+  {
+    "slug": "cisco-results-draft",
+    "title": "Cisco final results — pending sign-off",
+    "companySlug": "cisco",
+    "category": "COMPANY_EVENT",
+    "tags": ["results", "campus-drive"],
+    "content": "Draft of the final result announcement for the Cisco Network Consulting Engineer drive. Hold until the recruiter confirms the selected list in writing.",
+    "createdDaysAgo": 1,
+    "status": "DRAFT"
+  },
+  {
+    "slug": "spring-calendar-draft",
+    "title": "Spring placement calendar — draft",
+    "category": "GENERAL",
+    "tags": ["calendar", "schedule"],
+    "content": "Draft of the spring semester drive calendar. Dates for the February and March slots are still being confirmed with the visiting recruiters.",
+    "createdDaysAgo": 4,
+    "status": "DRAFT"
   }
 ]

@@ -239,7 +239,7 @@ class TestDeleteResumeEndpoint:
             headers=_auth_header(),
         )
         assert res.status_code == 200
-        assert res.json()["message"] == "Resume deleted"
+        assert res.json()["message"] == "Resume deleted successfully."
 
 
 # ---------------------------------------------------------------------------

@@ -15,11 +15,14 @@ import AdmZip from "adm-zip";
 import { PrismaClient } from "@prisma/client";
 import type {
   AnnouncementCategory,
+  AnnouncementStatus,
   ApplicationStatus,
   FeedbackType,
   JobStatus,
   JobType,
   NocStatus,
+  OfferStatus,
+  OfferType,
 } from "@prisma/client";
 import { parseAdminEmails } from "../src/admin-emails";
 import { loadRootEnv } from "../src/load-root-env";
@@ -108,6 +111,26 @@ interface AnnouncementRecord {
   tags: string[];
   content: string;
   createdDaysAgo: number;
+  /** Omitted means PUBLISHED, which is how the dataset behaved before drafts. */
+  status?: AnnouncementStatus;
+}
+
+interface OfferRecord {
+  slug: string;
+  studentSlug: string;
+  companySlug: string;
+  /** The drive the offer came from, when it came from one. */
+  jobSlug?: string;
+  type: OfferType;
+  status: OfferStatus;
+  /** Annual CTC for FTE and PPO offers. */
+  ctc?: number;
+  /** Monthly stipend for internship offers. */
+  stipend?: number;
+  location?: string;
+  offeredDaysAgo: number;
+  joiningInDays?: number;
+  remarks?: string;
 }
 
 interface FeedbackRecord {
@@ -132,7 +155,10 @@ interface NocRecord {
   startDaysFromNow: number;
   durationDays: number;
   status: NocStatus;
+  /** The student's remarks. */
   message?: string;
+  /** The placement cell's remarks on the decision. */
+  adminRemarks?: string;
   documentUrl?: string | null;
 }
 
@@ -342,6 +368,8 @@ async function seedAnnouncements(
 ) {
   for (const record of records) {
     const id = demoId("announcement", record.slug);
+    const status = record.status ?? "PUBLISHED";
+    const createdAt = offsetDays(-record.createdDaysAgo);
     const data = {
       title: record.title,
       companyId: record.companySlug
@@ -350,10 +378,58 @@ async function seedAnnouncements(
       content: record.content,
       tags: record.tags,
       category: record.category,
-      createdAt: offsetDays(-record.createdDaysAgo),
+      status,
+      publishedAt: status === "PUBLISHED" ? createdAt : null,
+      createdAt,
       createdById,
     };
     await db.announcement.upsert({ where: { id }, update: data, create: { id, ...data } });
+  }
+}
+
+/**
+ * Placement records. The dashboard's totals and package statistics come from
+ * these rows, so the demo dataset carries a full season of them: accepted and
+ * open offers, one declined, PPOs, and internships.
+ */
+async function seedOffers(
+  records: OfferRecord[],
+  studentIds: Map<string, string>,
+  companyIds: Map<string, string>,
+  jobIds: Map<string, string>,
+  studentBatches: Map<string, number>,
+  createdById: string,
+) {
+  for (const record of records) {
+    const id = demoId("offer", record.slug);
+    const label = `offer "${record.slug}"`;
+    const userId = lookup(studentIds, record.studentSlug, "student", label);
+    const batch = studentBatches.get(record.studentSlug);
+    if (batch === undefined) {
+      throw new Error(`${label} references a student with no batch.`);
+    }
+
+    const data = {
+      userId,
+      companyId: lookup(companyIds, record.companySlug, "company", label),
+      jobProfileId: record.jobSlug ? lookup(jobIds, record.jobSlug, "job", label) : null,
+      type: record.type,
+      status: record.status,
+      batch,
+      ctc: record.ctc ?? null,
+      stipend: record.stipend ?? null,
+      location: record.location ?? null,
+      offeredAt: offsetDays(-record.offeredDaysAgo),
+      decidedAt:
+        record.status === "ACCEPTED" || record.status === "DECLINED"
+          ? offsetDays(-record.offeredDaysAgo + 1)
+          : null,
+      joiningDate:
+        record.joiningInDays === undefined ? null : offsetDays(record.joiningInDays),
+      remarks: record.remarks ?? null,
+      createdById,
+    };
+    await db.offer.upsert({ where: { id }, update: data, create: { id, ...data } });
   }
 }
 
@@ -389,6 +465,7 @@ async function seedNocRequests(records: NocRecord[], studentIds: Map<string, str
       endDate: offsetDays(record.startDaysFromNow + record.durationDays),
       status: record.status,
       message: record.message ?? null,
+      adminRemarks: record.adminRemarks ?? null,
       documentUrl: record.documentUrl ?? null,
     };
     await db.nocRequest.upsert({ where: { id }, update: data, create: { id, ...data } });
@@ -512,6 +589,7 @@ async function seedPersonalActivity(
         endDate: offsetDays(record.startDaysFromNow + record.durationDays),
         status: record.status,
         message: record.message ?? null,
+        adminRemarks: record.adminRemarks ?? null,
         documentUrl: record.documentUrl ?? null,
       };
       await db.nocRequest.upsert({ where: { id }, update: data, create: { id, ...data } });
@@ -553,6 +631,7 @@ async function main() {
   const jobs = readEntry<JobRecord[]>(zip, "job-profiles.json");
   const applications = readEntry<ApplicationRecord[]>(zip, "applications.json");
   const announcements = readEntry<AnnouncementRecord[]>(zip, "announcements.json");
+  const offers = readEntry<OfferRecord[]>(zip, "offers.json");
   const feedback = readEntry<FeedbackRecord[]>(zip, "feedback.json");
   const nocRequests = readEntry<NocRecord[]>(zip, "noc-requests.json");
   const teamMembers = readEntry<TeamRecord[]>(zip, "team-members.json");
@@ -564,6 +643,14 @@ async function main() {
   const jobIds = await seedJobs(jobs, companyIds, adminId);
   await seedApplications(applications, studentIds, jobIds);
   await seedAnnouncements(announcements, companyIds, adminId);
+  await seedOffers(
+    offers,
+    studentIds,
+    companyIds,
+    jobIds,
+    new Map(students.map((student) => [student.slug, currentYear + student.batchOffset])),
+    adminId,
+  );
   await seedFeedback(feedback, studentIds);
   await seedNocRequests(nocRequests, studentIds);
   await seedTeamMembers(teamMembers);
@@ -574,6 +661,7 @@ async function main() {
   console.log(`  job profiles   ${jobs.length}`);
   console.log(`  applications   ${applications.length}`);
   console.log(`  announcements  ${announcements.length}`);
+  console.log(`  offers         ${offers.length}`);
   console.log(`  feedback       ${feedback.length}`);
   console.log(`  NOC requests   ${nocRequests.length}`);
   console.log(`  team members   ${teamMembers.length}`);

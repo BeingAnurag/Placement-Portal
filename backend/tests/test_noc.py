@@ -116,6 +116,7 @@ def test_to_admin_noc_response_formatting():
         endDate=now + timedelta(days=180),
         status=NocStatus.APPROVED,
         message="Off-campus internship",
+        adminRemarks="Approved. Submit the joining letter to the placement cell.",
         documentUrl="/api/v1/uploads/files/noc_docs/cert_123.pdf",
         createdAt=now,
         updatedAt=now,
@@ -131,3 +132,41 @@ def test_to_admin_noc_response_formatting():
     assert resp.student.rollNumber == "LCS2023001"
     assert resp.student.cgpa == 8.95
     assert resp.documentUrl == "/api/v1/uploads/files/noc_docs/cert_123.pdf"
+    # The two remarks fields stay distinct all the way out to the admin UI.
+    assert resp.message == "Off-campus internship"
+    assert resp.adminRemarks == "Approved. Submit the joining letter to the placement cell."
+
+
+def test_decision_requests_carry_admin_remarks_and_never_the_student_message():
+    approve = NocApproveRequest(adminRemarks="Approved subject to attendance.")
+    assert approve.adminRemarks == "Approved subject to attendance."
+
+    reject = NocRejectRequest(adminRemarks="Overlaps the placement drive window.")
+    assert reject.adminRemarks == "Overlaps the placement drive window."
+
+    # A stray `message` is not a decision remark: it is dropped, so the value a
+    # student submitted can never arrive here and overwrite itself.
+    assert NocApproveRequest(message="student text").adminRemarks is None
+    assert NocRejectRequest(message="student text").adminRemarks is None
+
+
+def test_student_facing_response_exposes_both_remarks_fields():
+    now = datetime.now()
+    response = NocResponse(
+        id="noc_1",
+        userId="usr_1",
+        company="Postman",
+        address="Golf Course Road",
+        city="Bengaluru",
+        state="Karnataka",
+        pincode="560103",
+        startDate=now,
+        endDate=now + timedelta(days=30),
+        status="REJECTED",
+        message="Requesting an NOC for an off-campus role.",
+        adminRemarks="Rejected: the organisation is not registered with the institute.",
+        createdAt=now,
+        updatedAt=now,
+    )
+    assert response.message == "Requesting an NOC for an off-campus role."
+    assert response.adminRemarks == "Rejected: the organisation is not registered with the institute."

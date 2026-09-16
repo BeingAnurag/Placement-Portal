@@ -10,7 +10,9 @@ import {
   PERM_USERS_MANAGE,
   type PermissionKey,
 } from "@/lib/permissions";
-import { isAdminEmail } from "@/lib/auth-access";
+import { canUsePasswordAccount, isAdminEmail } from "@/lib/auth-access";
+import { MIN_PASSWORD_LENGTH } from "@/lib/credentials-schema";
+import { hashPassword } from "@/lib/password";
 import type { Role } from "@prisma/client";
 
 export type UserActionResult = { error?: string; success?: string };
@@ -35,6 +37,23 @@ const updateUserRoleSchema = z.object({
   title: z.string().trim().max(100).optional().nullable(),
 });
 
+const adminSetPasswordSchema = z
+  .object({
+    userId: z.string().min(1, "User ID is required."),
+    password: z
+      .string()
+      .min(MIN_PASSWORD_LENGTH, `Use at least ${MIN_PASSWORD_LENGTH} characters.`)
+      .max(200)
+      .refine((value) => /[a-zA-Z]/.test(value) && /\d/.test(value), {
+        message: "Include at least one letter and one number.",
+      }),
+    confirmPassword: z.string(),
+  })
+  .refine((value) => value.password === value.confirmPassword, {
+    message: "Passwords do not match.",
+    path: ["confirmPassword"],
+  });
+
 const updateUserDetailsSchema = z.object({
   userId: z.string().min(1, "User ID is required."),
   name: z.string().trim().min(2, "Name must be at least 2 characters.").max(120).optional().nullable(),
@@ -43,6 +62,45 @@ const updateUserDetailsSchema = z.object({
   branch: z.string().trim().max(80).optional().nullable(),
   batch: z.coerce.number().int().min(2000).max(2100).optional().nullable(),
 });
+
+/**
+ * Passwords are the only way in, and there is no forgot-password email, so
+ * the placement office needs a way to hand someone a working password: a new
+ * staff account, or a student who has lost theirs. The recipient can change
+ * it afterwards at /account/password.
+ */
+export async function setUserPasswordAction(formData: FormData): Promise<UserActionResult> {
+  await requirePermission(PERM_USERS_MANAGE);
+
+  const parsed = adminSetPasswordSchema.safeParse({
+    userId: formData.get("userId"),
+    password: formData.get("password"),
+    confirmPassword: formData.get("confirmPassword"),
+  });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Please check the password." };
+  }
+
+  const target = await db.user.findUnique({
+    where: { id: parsed.data.userId },
+    select: { email: true, name: true },
+  });
+  if (!target) return { error: "User not found." };
+
+  if (!canUsePasswordAccount(target.email)) {
+    return { error: `${target.email} cannot sign in with a password on this portal.` };
+  }
+
+  await db.user.update({
+    where: { id: parsed.data.userId },
+    data: { passwordHash: await hashPassword(parsed.data.password) },
+  });
+
+  revalidatePath("/admin/users");
+  return {
+    success: `Password set for ${target.name || target.email}. Share it with them over a channel you trust and ask them to change it.`,
+  };
+}
 
 export async function createUserAction(formData: FormData): Promise<UserActionResult> {
   await requirePermission(PERM_USERS_MANAGE);

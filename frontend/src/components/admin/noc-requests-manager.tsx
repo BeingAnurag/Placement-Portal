@@ -43,7 +43,10 @@ export type AdminNocItem = {
   startDate: string;
   endDate: string;
   status: "PENDING" | "APPROVED" | "REJECTED" | string;
+  /** Written by the student when submitting. */
   message: string | null;
+  /** Written by the placement cell when approving or rejecting. */
+  adminRemarks: string | null;
   documentUrl: string | null;
   createdAt: string;
   updatedAt: string;
@@ -79,7 +82,7 @@ export function NocRequestsManager({
   const visible = useMemo(() => {
     return nocRequests.filter((item) => {
       const matchesSearch =
-        `${item.studentName ?? ""} ${item.rollNumber ?? ""} ${item.studentEmail ?? ""} ${item.company} ${item.city} ${item.state} ${item.message ?? ""}`
+        `${item.studentName ?? ""} ${item.rollNumber ?? ""} ${item.studentEmail ?? ""} ${item.company} ${item.city} ${item.state} ${item.message ?? ""} ${item.adminRemarks ?? ""}`
           .toLowerCase()
           .includes(query.toLowerCase());
 
@@ -111,8 +114,8 @@ export function NocRequestsManager({
 
       const approveFormData = new FormData();
       approveFormData.append("nocId", approvingItem!.id);
-      if (formData.get("message")) {
-        approveFormData.append("message", formData.get("message") as string);
+      if (formData.get("adminRemarks")) {
+        approveFormData.append("adminRemarks", formData.get("adminRemarks") as string);
       }
       if (docUrl) {
         approveFormData.append("documentUrl", docUrl);
@@ -547,6 +550,16 @@ export function NocRequestsManager({
                 </div>
               )}
 
+              {/* Placement cell remarks recorded with the decision */}
+              {detailItem.adminRemarks && (
+                <div style={{ background: "var(--surface-alt)", border: "1px solid var(--border)", borderRadius: "12px", padding: "12px" }}>
+                  <span style={{ fontSize: "10px", color: "var(--muted)", textTransform: "uppercase", fontWeight: 700 }}>
+                    Placement Cell Remarks
+                  </span>
+                  <p style={{ margin: "4px 0 0", lineHeight: "1.5" }}>{detailItem.adminRemarks}</p>
+                </div>
+              )}
+
               {/* Certificate preview button if attached */}
               {detailItem.documentUrl && (
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--badge-green-bg)", border: "1px solid var(--green)", padding: "12px 14px", borderRadius: "12px" }}>
@@ -611,7 +624,7 @@ export function NocRequestsManager({
               <label style={{ fontSize: "11px", fontWeight: 700, color: "var(--ink)", display: "grid", gap: "4px" }}>
                 Approval remarks / notes (optional)
                 <textarea
-                  name="message"
+                  name="adminRemarks"
                   rows={3}
                   placeholder="e.g. Approved subject to maintaining minimum academic attendance..."
                   style={{
@@ -679,7 +692,7 @@ export function NocRequestsManager({
               <label style={{ fontSize: "11px", fontWeight: 700, color: "var(--ink)", display: "grid", gap: "4px" }}>
                 Rejection reason (required)
                 <textarea
-                  name="message"
+                  name="adminRemarks"
                   required
                   minLength={2}
                   rows={4}

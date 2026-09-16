@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { calculateProfileCompletion, toEligibilityProfile } from "./student-profile";
 
-test("new OAuth profiles report only fields that actually exist", () => {
+test("a brand new profile reports only fields that actually exist", () => {
   assert.equal(calculateProfileCompletion({
     name: "Student Name",
     rollNumber: null,
@@ -23,6 +23,8 @@ test("eligibility remains unavailable until required academic fields exist", () 
     cgpa: null,
     batch: 2027,
     branch: "CSE",
+    degree: "B.Tech",
+    gender: "Male",
     backlogs: 0,
     bans: 0,
     aadhaarEncrypted: null,
@@ -30,11 +32,30 @@ test("eligibility remains unavailable until required academic fields exist", () 
   }, 0), null);
 });
 
+test("a missing degree or gender does not block eligibility on its own", () => {
+  const profile = toEligibilityProfile({
+    cgpa: 8.2,
+    batch: 2027,
+    branch: "CSE",
+    degree: null,
+    gender: null,
+    backlogs: 0,
+    bans: 0,
+    aadhaarEncrypted: "encrypted-aadhaar",
+    panCardEncrypted: "encrypted-pan",
+  }, 1);
+
+  assert.equal(profile?.degree, null);
+  assert.equal(profile?.gender, null);
+});
+
 test("eligibility document completeness reflects stored documents and resume", () => {
   const profile = toEligibilityProfile({
     cgpa: 8.2,
     batch: 2027,
     branch: "CSE",
+    degree: "B.Tech",
+    gender: "Male",
     backlogs: 0,
     bans: 0,
     aadhaarEncrypted: "encrypted-aadhaar",

@@ -6,6 +6,7 @@ import {
   Check,
   Edit3,
   KeyRound,
+  LockKeyhole,
   Search,
   ShieldAlert,
   ShieldCheck,
@@ -21,6 +22,7 @@ import type { Role } from "@prisma/client";
 import {
   createUserAction,
   deleteUserAction,
+  setUserPasswordAction,
   updateUserDetailsAction,
   updateUserPermissionsAction,
   updateUserRoleAction,
@@ -78,6 +80,8 @@ export function UsersManager({
   const [editingPermissions, setEditingPermissions] = useState<string[]>([]);
 
   const [deletingUser, setDeletingUser] = useState<AdminUserListItem | null>(null);
+
+  const [passwordModalUser, setPasswordModalUser] = useState<AdminUserListItem | null>(null);
 
   // Metrics
   const stats = useMemo(() => {
@@ -190,6 +194,17 @@ export function UsersManager({
     const res = await updateUserStatusAction(user.id, !user.isActive);
     setResult(res);
     if (res.success) {
+      router.refresh();
+    }
+  }
+
+  async function handleSetPassword(formData: FormData) {
+    setSaving(true);
+    const res = await setUserPasswordAction(formData);
+    setResult(res);
+    setSaving(false);
+    if (res.success) {
+      setPasswordModalUser(null);
       router.refresh();
     }
   }
@@ -476,6 +491,17 @@ export function UsersManager({
                 </button>
 
                 <button
+                  title={`Set a sign-in password for ${u.name || u.email}`}
+                  onClick={() => {
+                    setResult({});
+                    setPasswordModalUser(u);
+                  }}
+                  aria-label="Set sign-in password"
+                >
+                  <LockKeyhole size={14} />
+                </button>
+
+                <button
                   title={`Edit details for ${u.name || u.email}`}
                   onClick={() => {
                     setResult({});
@@ -513,7 +539,7 @@ export function UsersManager({
             <p>
               {users.length
                 ? "Try adjusting your search query or role filter."
-                : "Users will automatically register upon their first institute Google sign-in."}
+                : "Students appear once they register; staff accounts are created here."}
             </p>
           </div>
         )}
@@ -897,6 +923,59 @@ export function UsersManager({
       {/* ------------------------------------------------------------- */}
       {/* MODAL: Delete User Confirmation */}
       {/* ------------------------------------------------------------- */}
+      {passwordModalUser && (
+        <div className="modal-backdrop">
+          <form className="modal" action={handleSetPassword}>
+            <header>
+              <div>
+                <span className="eyebrow">Sign-in password</span>
+                <h2>{passwordModalUser.name || passwordModalUser.email}</h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPasswordModalUser(null)}
+                aria-label="Close dialog"
+              >
+                <X size={18} />
+              </button>
+            </header>
+
+            <input type="hidden" name="userId" value={passwordModalUser.id} />
+
+            <p className="text-xs text-[var(--muted)] leading-relaxed my-3">
+              This replaces any password on the account. Share it over a channel you trust and
+              ask them to change it at Account → Password. Use this to give a new staff member
+              their first password, or to recover an account whose password was lost.
+            </p>
+
+            <div className="form-grid">
+              <label>
+                <span>New password</span>
+                <input type="password" name="password" autoComplete="new-password" required />
+              </label>
+              <label>
+                <span>Confirm password</span>
+                <input
+                  type="password"
+                  name="confirmPassword"
+                  autoComplete="new-password"
+                  required
+                />
+              </label>
+            </div>
+
+            <footer>
+              <button type="button" onClick={() => setPasswordModalUser(null)}>
+                Cancel
+              </button>
+              <button type="submit" disabled={saving}>
+                {saving ? "Saving…" : "Set password"}
+              </button>
+            </footer>
+          </form>
+        </div>
+      )}
+
       {deletingUser && (
         <div className="modal-backdrop">
           <form className="modal" action={handleDeleteUser}>

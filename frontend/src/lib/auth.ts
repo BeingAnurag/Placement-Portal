@@ -1,9 +1,11 @@
-import { PrismaAdapter } from "@auth/prisma-adapter";
 import NextAuth from "next-auth";
-import Google from "next-auth/providers/google";
+import Credentials from "next-auth/providers/credentials";
 import { SignJWT } from "jose";
-import { canUseGoogleAccount, isAdminEmail, resolveRole } from "@/lib/auth-access";
-import { computeEffectivePermissions, ALL_PERMISSIONS } from "@/lib/permissions";
+import { canUsePasswordAccount, isAdminEmail, resolveRole } from "@/lib/auth-access";
+import { passwordLoginSchema } from "@/lib/credentials-schema";
+import { clearFailedAttempts, isLockedOut, recordFailedAttempt } from "@/lib/login-throttle";
+import { verifyPassword } from "@/lib/password";
+import { computeEffectivePermissions } from "@/lib/permissions";
 import { db } from "@/lib/db";
 import type { Role } from "@prisma/client";
 
@@ -18,16 +20,6 @@ function authSecret() {
   return process.env.NODE_ENV === "production" ? undefined : DEVELOPMENT_SECRET;
 }
 
-function googleClientId() {
-  const id = (process.env.AUTH_GOOGLE_ID ?? process.env.GOOGLE_CLIENT_ID)?.trim();
-  return id || undefined;
-}
-
-function googleClientSecret() {
-  const secret = (process.env.AUTH_GOOGLE_SECRET ?? process.env.GOOGLE_CLIENT_SECRET)?.trim();
-  return secret || undefined;
-}
-
 function requireAuthSecret() {
   const secret = authSecret();
   if (!secret) throw new Error("AUTH_SECRET must be set in production.");
@@ -37,45 +29,70 @@ function requireAuthSecret() {
 export const { handlers, auth, signIn, signOut } = NextAuth({
   secret: authSecret(),
   trustHost: true,
-  adapter: PrismaAdapter(db),
+  // No adapter: the only provider is Credentials, which Auth.js never
+  // persists, and sessions are JWTs. The Prisma `Account`, `Session`, and
+  // `VerificationToken` tables are left in place but are no longer written.
   session: { strategy: "jwt" },
   pages: { signIn: "/login", error: "/login" },
   providers: [
-    Google({
-      clientId: googleClientId(),
-      clientSecret: googleClientSecret(),
-      // The seed inserts administrator rows from ADMIN_EMAILS before anyone has
-      // signed in, so an administrator's first Google sign-in always meets an
-      // existing user row that has no linked Account. Auth.js refuses to link
-      // those by default and fails with OAuthAccountNotLinked. Linking on email
-      // is safe here because Google is the only provider and the signIn callback
-      // below rejects an address Google has not verified.
-      allowDangerousEmailAccountLinking: true,
-      authorization: { params: { prompt: "select_account" } },
+    Credentials({
+      name: "Institute email",
+      credentials: {
+        email: { label: "Institute email", type: "email" },
+        password: { label: "Password", type: "password" },
+      },
+      // This is the only place a password is checked. Every rule that limits
+      // password sign-in lives here rather than in the signIn callback,
+      // because returning null is what keeps the failure indistinguishable
+      // from a wrong password.
+      async authorize(raw) {
+        const parsed = passwordLoginSchema.safeParse(raw);
+        if (!parsed.success) return null;
+        const { email, password } = parsed.data;
+
+        // Institute domain, or an address the operator put in ADMIN_EMAILS.
+        if (!canUsePasswordAccount(email)) return null;
+        if (isLockedOut(email)) return null;
+
+        const user = await db.user.findUnique({
+          where: { email },
+          select: { id: true, email: true, name: true, role: true, isActive: true, passwordHash: true },
+        });
+
+        // A missing hash means the account exists but has no password yet:
+        // a seeded administrator, or a row left over from the Google era.
+        // Those are given a password by an administrator or by the
+        // set-password script, never by guessing one here.
+        if (!user?.passwordHash || user.isActive === false) {
+          recordFailedAttempt(email);
+          return null;
+        }
+
+        if (!(await verifyPassword(password, user.passwordHash))) {
+          recordFailedAttempt(email);
+          return null;
+        }
+
+        clearFailedAttempts(email);
+        // The jwt callback re-reads the role and permissions from the
+        // database, so this only has to satisfy the augmented User type.
+        return { id: user.id, email: user.email, name: user.name, role: user.role };
+      },
     }),
   ],
   callbacks: {
-    async signIn({ profile, user }) {
-      const email = (profile?.email ?? user.email)?.toLowerCase();
-      if (!canUseGoogleAccount(email)) return false;
-      // Guards the account linking enabled above: without proof that Google
-      // verified the address, linking would let one account claim another's row.
-      if (profile && profile.email_verified === false) return false;
-
-      // Reject suspended/inactive user accounts
-      if (email) {
-        const existing = await db.user.findUnique({
-          where: { email },
-          select: { isActive: true },
-        });
-        if (existing && existing.isActive === false) {
-          return false;
-        }
-      }
-
-      // Reconcile the stored role on every sign-in if listed in ADMIN_EMAILS
+    async signIn({ user }) {
+      // authorize() is the gate: it has already checked the domain, the
+      // stored password, and the active flag. All that is left is keeping
+      // the stored role in step with ADMIN_EMAILS, which is recomputed per
+      // request anyway but is also written back so admin pages that read the
+      // row agree with the session.
+      const email = user.email?.toLowerCase();
       if (isAdminEmail(email)) {
-        await db.user.updateMany({ where: { email }, data: { role: "ADMIN" } });
+        await db.user.updateMany({
+          where: { email, NOT: { role: "ADMIN" } },
+          data: { role: "ADMIN" },
+        });
       }
       return true;
     },
@@ -141,56 +158,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       return session;
     },
   },
-  events: {
-    async createUser({ user }) {
-      const role = resolveRole(user.email);
-      const email = user.email?.toLowerCase().trim();
-      let customPermissions: string[] = [];
-
-      if (email) {
-        // Check if user is an existing team member
-        const teamMember = await db.teamMember.findFirst({
-          where: { email: { equals: email, mode: "insensitive" } },
-        });
-        if (teamMember) {
-          try {
-            const setting = await db.systemSetting.findUnique({
-              where: { key: "placement_team_default_permissions" },
-            });
-            if (setting && setting.value) {
-              const parsed = JSON.parse(setting.value);
-              if (Array.isArray(parsed)) {
-                customPermissions = parsed.filter((p) =>
-                  (ALL_PERMISSIONS as readonly string[]).includes(p)
-                );
-              }
-            } else {
-              customPermissions = [
-                "companies:read",
-                "jobs:read",
-                "jobs:manage",
-                "applications:read",
-                "applications:manage",
-                "students:read",
-                "announcements:manage",
-                "analytics:view",
-              ];
-            }
-          } catch {
-            // fallback
-          }
-        }
-      }
-
-      if (role !== "STUDENT" || customPermissions.length > 0) {
-        await db.user.update({
-          where: { id: user.id },
-          data: {
-            role: role !== "STUDENT" ? role : undefined,
-            customPermissions: customPermissions.length > 0 ? customPermissions : undefined,
-          },
-        });
-      }
-    },
-  },
+  // There is no createUser event: nothing creates a user through Auth.js any
+  // more. Registration creates student rows directly, and staff accounts,
+  // including the permissions a placement team member starts with, are
+  // provisioned from /admin/users.
 });

@@ -41,15 +41,27 @@ export function isStudentEmail(email: string | null | undefined, domain?: string
 }
 
 /**
- * Students must hold an institute address. Administrators listed in
- * ADMIN_EMAILS may sign in from an external provider account.
+ * Who may sign in at all. A password is now the only method, so this is also
+ * the domain rule for the whole portal: an institute address, or an address
+ * the operator listed in ADMIN_EMAILS. The allowlist exception exists because
+ * a bootstrap administrator may hold an external address and would otherwise
+ * have no way in. See docs/DECISIONS.md (2026-09-17, password-only sign-in).
  */
-export function canUseGoogleAccount(
+export function canUsePasswordAccount(
   email: string | null | undefined,
   configured?: string,
   domain?: string,
 ) {
   return isStudentEmail(email, domain) || isAdminEmail(email, configured);
+}
+
+/**
+ * Who may create their own account. Narrower than sign-in on purpose:
+ * registration is unverified, so it is institute-domain only and never
+ * reaches an allowlisted administrator address.
+ */
+export function canSelfRegister(email: string | null | undefined, domain?: string) {
+  return isStudentEmail(email, domain);
 }
 
 export function resolveRole(email: string | null | undefined, configured?: string): Role {

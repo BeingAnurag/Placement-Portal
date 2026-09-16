@@ -17,6 +17,7 @@ interface BackendNocAdminDto {
   endDate: string;
   status: string;
   message?: string | null;
+  adminRemarks?: string | null;
   documentUrl?: string | null;
   createdAt: string;
   updatedAt: string;
@@ -60,6 +61,7 @@ export default async function Page() {
       endDate: typeof noc.endDate === "string" ? noc.endDate : new Date(noc.endDate).toISOString(),
       status: noc.status,
       message: noc.message ?? null,
+      adminRemarks: noc.adminRemarks ?? null,
       documentUrl: noc.documentUrl ?? null,
       createdAt: typeof noc.createdAt === "string" ? noc.createdAt : new Date(noc.createdAt).toISOString(),
       updatedAt: typeof noc.updatedAt === "string" ? noc.updatedAt : new Date(noc.updatedAt).toISOString(),
@@ -102,6 +104,7 @@ export default async function Page() {
       endDate: noc.endDate.toISOString(),
       status: noc.status,
       message: noc.message,
+      adminRemarks: noc.adminRemarks,
       documentUrl: noc.documentUrl,
       createdAt: noc.createdAt.toISOString(),
       updatedAt: noc.updatedAt.toISOString(),

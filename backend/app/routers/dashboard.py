@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from app.dependencies import get_db, require_student
-from app.models.db import Announcement, JobProfile, JobStatus
+from app.models.db import Announcement, AnnouncementStatus, JobProfile, JobStatus
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
@@ -17,7 +17,10 @@ async def get_dashboard(
     )
     
     announcements = await db.scalars(
-        select(Announcement).order_by(Announcement.createdAt.desc()).limit(5)
+        select(Announcement)
+        .where(Announcement.status == AnnouncementStatus.PUBLISHED)
+        .order_by(Announcement.createdAt.desc())
+        .limit(5)
     )
     
     # Ideally, compute next deadline and eligible roles here

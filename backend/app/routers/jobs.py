@@ -44,12 +44,16 @@ async def get_job_detail(
             cgpa=profile["cgpa"],
             batch=profile["batch"],
             branch=profile["branch"],
+            degree=profile["degree"],
+            gender=profile["gender"],
             backlogs=profile["backlogs"],
             bans=profile["bans"],
             documents_complete=profile["documents_complete"],
             min_cgpa=job.minCGPA,
             job_batch=job.batch,
             allowed_branches=job.allowedBranches,
+            allowed_degrees=job.allowedDegrees,
+            allowed_genders=job.allowedGenders,
             max_backlogs=job.maxBacklogs,
             max_bans=job.maxBans
         )

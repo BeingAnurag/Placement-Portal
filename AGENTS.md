@@ -32,7 +32,7 @@ Never silently change an established architectural decision. Record intentional 
 - Data access belongs in the FastAPI backend. Do not add new direct Prisma calls to the frontend; the remaining ones are legacy and listed in `docs/FEATURE_STATUS.md`.
 - Database: PostgreSQL. Prisma owns the schema and migrations; SQLAlchemy mirrors it read/write and must never call `create_all()`. Do not add a third data layer.
 - `frontend` and `database` are npm workspaces sharing the root lockfile. Do not give either its own `package-lock.json`.
-- Authentication: Auth.js with Google as the only provider. Students are restricted to `STUDENT_EMAIL_DOMAIN`; `ADMIN_EMAILS` is the only source of the `ADMIN` role. Never reintroduce a password provider or hardcode an administrator address.
+- Authentication: Auth.js with one provider, email and password. Sign-in requires an address on `STUDENT_EMAIL_DOMAIN` or on the `ADMIN_EMAILS` allowlist, which stays the only source of the `ADMIN` role. Self-registration is institute-domain only, never accepts an allowlisted address, and may claim an existing row only when it is a plain student with no password. Never hardcode an administrator address, never add an OAuth provider without revisiting the 2026-09-17 entries in `docs/DECISIONS.md`, and never move password hashing out of `frontend/src/lib/password.ts`.
 - Sensitive identity values must use the AES-256-GCM helpers in `frontend/src/lib/encryption.ts` and `backend/app/core/encryption.py`; never log or return raw Aadhaar/PAN values.
 - Resume uploads must be PDF-only, size-limited, and authorized by user ownership when persistence is added.
 - Keep secrets in `.env`; never commit, print, or copy real secrets into documentation.

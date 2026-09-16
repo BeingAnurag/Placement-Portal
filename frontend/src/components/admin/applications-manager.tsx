@@ -168,48 +168,18 @@ export function ApplicationsManager({
     });
   };
 
-  // Client-side CSV export download
-  const handleExportCsv = () => {
-    const headers = [
-      "Application ID",
-      "Student Name",
-      "Roll Number",
-      "Email",
-      "Branch",
-      "Batch",
-      "CGPA",
-      "Company",
-      "Job Title",
-      "Status",
-      "Applied Date",
-      "Resume URL",
-    ];
-
-    const rows = filtered.map((a) => [
-      a.id,
-      `"${(a.studentName || "").replace(/"/g, '""')}"`,
-      `"${a.rollNumber || ""}"`,
-      `"${a.studentEmail || ""}"`,
-      `"${a.branch || ""}"`,
-      a.batch || "",
-      a.cgpa || "",
-      `"${(a.companyName || "").replace(/"/g, '""')}"`,
-      `"${(a.jobTitle || "").replace(/"/g, '""')}"`,
-      a.status,
-      a.appliedAt,
-      `"${a.resumeUrl || ""}"`,
-    ]);
-
-    const csvContent = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", `applications_export_${new Date().toISOString().slice(0, 10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
+  // The CSV comes from the backend, which owns the query and includes the
+  // resume label. The filters below are the ones it understands; the rest of
+  // this screen's filtering is client-side only and matches them one to one.
+  const exportHref = useMemo(() => {
+    const query = new URLSearchParams();
+    if (selectedJob !== "ALL") query.set("job_id", selectedJob);
+    if (selectedStatus !== "ALL") query.set("status", selectedStatus);
+    if (selectedBranch !== "ALL") query.set("branch", selectedBranch);
+    if (searchQuery.trim()) query.set("search", searchQuery.trim());
+    const suffix = query.size ? `?${query}` : "";
+    return `/api/admin/applications/export${suffix}`;
+  }, [selectedJob, selectedStatus, selectedBranch, searchQuery]);
 
   const getStatusBadgeClass = (status: ApplicationStatus) => {
     switch (status) {
@@ -237,9 +207,9 @@ export function ApplicationsManager({
           <h1>Applications</h1>
           <p>Review candidate profiles, download resumes, and manage recruitment stage progression.</p>
         </div>
-        <button onClick={handleExportCsv} title="Export CSV of filtered applications">
+        <a href={exportHref} download title="Export CSV of filtered applications">
           <Download /> Export CSV
-        </button>
+        </a>
       </section>
 
       {statusMessage ? (
