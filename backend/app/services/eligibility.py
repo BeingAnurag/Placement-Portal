@@ -42,7 +42,7 @@ def evaluate_eligibility(
         EligibilityCheck(
             key="branch",
             label=f"Branch {branch}",
-            passed=branch in allowed_branches,
+            passed=branch.strip().upper() in {b.strip().upper() for b in allowed_branches},
         ),
         EligibilityCheck(
             key="backlogs",

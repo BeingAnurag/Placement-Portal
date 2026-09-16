@@ -78,3 +78,23 @@ class StudentProfileResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class MissedCompanyFlag(BaseModel):
+    companyId: str
+    companyName: str
+    jobTitle: str
+    registrationDeadline: datetime
+
+
+class StudentApplicationFlag(BaseModel):
+    userId: str
+    name: Optional[str] = None
+    email: Optional[str] = None
+    rollNumber: Optional[str] = None
+    branch: Optional[str] = None
+    batch: Optional[int] = None
+    longestMissedStreak: int
+    totalEligibleCompanies: int
+    totalAppliedCompanies: int
+    missedCompanies: list[MissedCompanyFlag]
+
+

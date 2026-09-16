@@ -121,6 +121,16 @@ Replaces the manual Google Form previously used to collect company-wise intervie
 - Endpoints live under `/api/v1/interview-experiences` (`FastAPI`): student submit/list-mine/browse-approved/company-list, and admin list/approve/reject/delete guarded by the new permission. Approval and rejection notify the author via in-app `Notification` and background email, matching the NOC/Feedback pattern.
 - This is the 17th entry in the RBAC permission catalog; the RBAC user-management matrix picks it up automatically from `PERMISSION_METADATA` / `PERMISSION_DEFINITIONS`, no separate UI change needed.
 
+## 2026-09-16 — Flag students on a missed-eligible-company streak
+
+Added `GET /api/v1/students/admin/flags` (new `students` FastAPI router) and a "needs follow-up" badge/filter on `/admin/students`, so the placement cell can spot students who are eligible but not applying.
+
+- **The rule is a consecutive streak, not a raw count**: a student is flagged when there exist 3 or more companies *in a row*, ordered chronologically by `registrationDeadline`, for which the student was shown eligible (via the existing shared `evaluate_eligibility`/`is_eligible` engine — no third eligibility algorithm) but applied to none of them. A student who skipped companies 1–2 and 6, applied to 3–5, is not flagged even though they skipped 3 total, because the misses aren't consecutive. This was an explicit product clarification, not the more obvious "eligible for 3+, applied to fewer than 3" reading.
+- **Grouped by company, not by job profile**: a company posting two roles the student is eligible for counts once, and an application to either role clears that company's slot. Chronological position uses the earliest eligible job's `registrationDeadline` at that company.
+- **Eligibility scope is "was ever shown", not "currently open"**: both `ACTIVE` and `ENDED` job profiles count; only `DRAFT` is excluded, since a draft was never visible to any student. This intentionally includes past drives so the flag reflects the whole season, not just what's still open.
+- The heavy lifting (`compute_missed_streak`) lives in `app/services/student_flags.py` as a pure, DB-free function over plain dicts, unit tested directly in `backend/tests/test_student_flags.py` — the router only loads rows and shapes them into that function's input.
+- The admin students directory (`/admin/students`) itself is still Prisma-direct (legacy, per the 2026-08-20 decision); this feature was added as a new FastAPI endpoint the page additionally calls via `backendFetch`, rather than porting the whole directory or adding a new Prisma call for it.
+
 
 
 

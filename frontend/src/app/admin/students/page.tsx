@@ -1,10 +1,26 @@
 import { AuthenticatedAdminShell } from "@/components/admin/authenticated-admin-shell";
 import { StudentsManager, type AdminStudentListItem } from "@/components/admin/students-manager";
 import { requireAdmin } from "@/lib/admin-session";
+import { backendFetch } from "@/lib/api-client";
 import { db } from "@/lib/db";
 import { calculateProfileCompletion } from "@/lib/student-profile";
 
 export const dynamic = "force-dynamic";
+
+type MissedCompanyFlagDto = {
+  companyId: string;
+  companyName: string;
+  jobTitle: string;
+  registrationDeadline: string;
+};
+
+type StudentApplicationFlagDto = {
+  userId: string;
+  longestMissedStreak: number;
+  totalEligibleCompanies: number;
+  totalAppliedCompanies: number;
+  missedCompanies: MissedCompanyFlagDto[];
+};
 
 export default async function Page() {
   await requireAdmin();
@@ -13,16 +29,35 @@ export default async function Page() {
     orderBy: { createdAt: "desc" },
     include: { _count: { select: { applications: true } } },
   });
-  const items: AdminStudentListItem[] = students.map((student) => ({
-    id: student.id,
-    name: student.name ?? "Student",
-    email: student.email ?? "No email",
-    rollNumber: student.rollNumber,
-    branch: student.branch,
-    batch: student.batch,
-    cgpa: student.cgpa,
-    completion: calculateProfileCompletion(student),
-    applicationCount: student._count.applications,
-  }));
-  return <AuthenticatedAdminShell><StudentsManager students={items}/></AuthenticatedAdminShell>;
+
+  let flagsByUserId = new Map<string, StudentApplicationFlagDto>();
+  try {
+    const flags = await backendFetch<StudentApplicationFlagDto[]>("/api/v1/students/admin/flags?min_streak=3");
+    flagsByUserId = new Map(flags.map((flag) => [flag.userId, flag]));
+  } catch (err) {
+    console.error("Failed to fetch student application flags", err);
+  }
+
+  const items: AdminStudentListItem[] = students.map((student) => {
+    const flag = flagsByUserId.get(student.id);
+    return {
+      id: student.id,
+      name: student.name ?? "Student",
+      email: student.email ?? "No email",
+      rollNumber: student.rollNumber,
+      branch: student.branch,
+      batch: student.batch,
+      cgpa: student.cgpa,
+      completion: calculateProfileCompletion(student),
+      applicationCount: student._count.applications,
+      missedStreak: flag?.longestMissedStreak ?? 0,
+      missedCompanies: flag?.missedCompanies.map((c) => c.companyName) ?? [],
+    };
+  });
+
+  return (
+    <AuthenticatedAdminShell>
+      <StudentsManager students={items} />
+    </AuthenticatedAdminShell>
+  );
 }
