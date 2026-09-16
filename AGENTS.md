@@ -36,7 +36,7 @@ Never silently change an established architectural decision. Record intentional 
 - Sensitive identity values must use the AES-256-GCM helpers in `frontend/src/lib/encryption.ts` and `backend/app/core/encryption.py`; never log or return raw Aadhaar/PAN values.
 - Resume uploads must be PDF-only, size-limited, and authorized by user ownership when persistence is added.
 - Keep secrets in `.env`; never commit, print, or copy real secrets into documentation.
-- Use the semantic design tokens declared in `frontend/src/app/globals.css` (`--blue`, `--navy`, `--navy-deep`, `--green`, `--orange`, `--brown`, the surface/ink/border set, and the `*-rgb` channel tokens) and the existing responsive shells. The teal ramp in the first `:root` block is the only place a literal brand hex may appear; do not add one anywhere else.
+- Use the semantic design tokens declared in `frontend/src/app/globals.css` (`--blue`, `--navy`, `--navy-deep`, `--green`, `--orange`, `--brown`, the surface/ink/border set, and the `*-rgb` channel tokens) and the existing responsive shells. The teal ramp and the `--black-*` base in the first `:root` block are the only place a literal colour hex may appear; do not add one anywhere else. Dark mode is black underneath (page, cards, input wells) with teal chrome layered on top (borders, headers, hovers, badges, fills).
 - Prefer shared components and `src/lib` business functions over duplicating logic inside pages.
 - Do not describe local component state as database persistence.
 

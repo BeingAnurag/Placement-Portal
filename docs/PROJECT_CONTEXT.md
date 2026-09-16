@@ -76,8 +76,9 @@ values may appear; every rule reads a semantic token. See `docs/DECISIONS.md`
 (2026-09-17) for why it replaced the logo-derived blue/orange.
 
 - Ramp: `--teal-50` `#DEF7F9` → `--teal-950` `#081F22`, plus `--ink-black` `#091717` and `--paper` `#FBFAF4`
-- Primary: `--blue` (`--teal-600` `#20808D` light, `--teal-400` `#35BDC8` dark) — CTAs, eyebrows, active markers, brand icons
-- Deep: `--navy` and `--navy-deep` — sidebars, banners, primary modal buttons
+- Black base: `--black-950` `#000000` (dark page and input wells) and `--black-900` `#0D1112` (dark cards). Everything layered on that black — borders, table headers, hover and pressed states, badges — comes from the deep end of the teal ramp, so dark mode is black with teal chrome
+- Primary: `--blue` (`--teal-600` `#20808D` light, `--teal-500` `#2CA0AB` dark) — CTAs, eyebrows, active markers, brand icons
+- Deep: `--navy` and `--navy-deep` — sidebars, banners, primary modal buttons. These invert by theme: deep teal on paper, mid teal (`#20808D`) on black, because a deep fill is invisible against a black page
 - Sidebars: `--sidebar-from`/`--sidebar-to` with `--on-brand`, `--on-brand-soft`, `--on-brand-muted` for text on those always-dark surfaces
 - Status hues are not teal and carry meaning only: `--green` success, `--orange` warning/pending/interview, red error, purple shortlisted
 - `rgba()` tints must use the channel tokens (`--brand-rgb`, `--deep-rgb`, `--shadow-rgb`, `--warning-rgb`, `--success-rgb`, `--danger-rgb`), because `rgba()` cannot read a hex custom property
