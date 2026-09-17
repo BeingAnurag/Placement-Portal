@@ -90,8 +90,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       const email = user.email?.toLowerCase();
       if (isAdminEmail(email)) {
         await db.user.updateMany({
-          where: { email, NOT: { role: "ADMIN" } },
-          data: { role: "ADMIN" },
+          where: { email, NOT: { role: "SUPER_ADMIN" } },
+          data: { role: "SUPER_ADMIN" },
         });
       }
       return true;
@@ -103,7 +103,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       }
 
       if (token.email && isAdminEmail(token.email)) {
-        token.role = "ADMIN";
+        token.role = "SUPER_ADMIN";
         token.isActive = true;
       } else if (token.id) {
         // Query user's current role, title, active status, and permissions from DB

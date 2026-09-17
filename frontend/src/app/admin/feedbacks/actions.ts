@@ -4,13 +4,13 @@ import { revalidatePath } from "next/cache";
 import { backendFetch } from "@/lib/api-client";
 import { requirePermission } from "@/lib/admin-session";
 import { db } from "@/lib/db";
-import { PERM_FEEDBACKS_MANAGE } from "@/lib/permissions";
+import { PERM_FEEDBACK_RESOLVE, PERM_FEEDBACK_RESPOND } from "@/lib/permissions";
 import { feedbackDeleteSchema, feedbackReplySchema } from "@/lib/feedback-schema";
 
 export type FeedbackActionResult = { error?: string; success?: string };
 
 export async function respondFeedbackAction(formData: FormData): Promise<FeedbackActionResult> {
-  await requirePermission(PERM_FEEDBACKS_MANAGE);
+  await requirePermission(PERM_FEEDBACK_RESPOND);
 
   const rawFeedbackId = formData.get("feedbackId");
   const rawAdminResponse = formData.get("adminResponse");
@@ -59,7 +59,7 @@ export async function respondFeedbackAction(formData: FormData): Promise<Feedbac
 }
 
 export async function deleteFeedbackAction(formData: FormData): Promise<FeedbackActionResult> {
-  await requirePermission(PERM_FEEDBACKS_MANAGE);
+  await requirePermission(PERM_FEEDBACK_RESOLVE);
 
   const parsed = feedbackDeleteSchema.safeParse({
     feedbackId: formData.get("feedbackId"),

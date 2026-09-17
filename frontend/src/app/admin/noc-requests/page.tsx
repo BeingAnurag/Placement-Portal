@@ -3,7 +3,7 @@ import { NocRequestsManager, type AdminNocItem } from "@/components/admin/noc-re
 import { requirePermission } from "@/lib/admin-session";
 import { backendFetch } from "@/lib/api-client";
 import { db } from "@/lib/db";
-import { PERM_NOC_MANAGE } from "@/lib/permissions";
+import { PERM_NOC_VIEW } from "@/lib/permissions";
 
 interface BackendNocAdminDto {
   id: string;
@@ -36,7 +36,7 @@ interface BackendNocAdminDto {
 export const dynamic = "force-dynamic";
 
 export default async function Page() {
-  const { user } = await requirePermission(PERM_NOC_MANAGE);
+  const { user } = await requirePermission(PERM_NOC_VIEW);
 
   let items: AdminNocItem[] = [];
 

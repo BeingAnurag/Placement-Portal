@@ -6,7 +6,7 @@ import pytest
 from pydantic import ValidationError
 
 from app.core.security import (
-    PERM_NOC_MANAGE,
+    PERM_NOC_APPROVE,
     compute_effective_permissions,
     has_permission,
 )
@@ -74,22 +74,19 @@ def test_noc_create_schema_rejects_invalid_pincode():
 
 def test_noc_manage_permission_hierarchy():
     super_admin_perms = compute_effective_permissions("SUPER_ADMIN")
-    assert PERM_NOC_MANAGE in super_admin_perms
+    assert PERM_NOC_APPROVE in super_admin_perms
 
-    admin_perms = compute_effective_permissions("ADMIN")
-    assert PERM_NOC_MANAGE in admin_perms
+    team_perms = compute_effective_permissions("PLACEMENT_TEAM")
+    assert PERM_NOC_APPROVE in team_perms
 
-    officer_perms = compute_effective_permissions("OFFICER")
-    assert PERM_NOC_MANAGE in officer_perms
-
-    coordinator_perms = compute_effective_permissions("COORDINATOR")
-    assert PERM_NOC_MANAGE not in coordinator_perms
+    volunteer_perms = compute_effective_permissions("PLACEMENT_VOLUNTEER")
+    assert PERM_NOC_APPROVE not in volunteer_perms
 
     student_perms = compute_effective_permissions("STUDENT")
-    assert PERM_NOC_MANAGE not in student_perms
+    assert PERM_NOC_APPROVE not in student_perms
 
-    custom_coord = compute_effective_permissions("COORDINATOR", custom_permissions=[PERM_NOC_MANAGE])
-    assert PERM_NOC_MANAGE in custom_coord
+    custom_coord = compute_effective_permissions("PLACEMENT_VOLUNTEER", custom_permissions=[PERM_NOC_APPROVE])
+    assert PERM_NOC_APPROVE in custom_coord
 
 
 def test_to_admin_noc_response_formatting():

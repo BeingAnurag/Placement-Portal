@@ -9,7 +9,8 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
 
-from app.dependencies import get_db, require_admin, require_student
+from app.core.security import PERM_APPLICATIONS_UPDATE, PERM_APPLICATIONS_VIEW
+from app.dependencies import get_db, require_permission, require_student
 from app.models.db import (
     Application,
     ApplicationStatus,
@@ -219,7 +220,7 @@ async def list_admin_applications(
     branch: Optional[str] = Query(None),
     batch: Optional[int] = Query(None),
     search: Optional[str] = Query(None),
-    admin_payload: dict = Depends(require_admin),
+    admin_payload: dict = Depends(require_permission(PERM_APPLICATIONS_VIEW)),
     db: AsyncSession = Depends(get_db),
 ):
     stmt = (
@@ -296,7 +297,7 @@ async def update_application_status(
     app_id: str,
     data: ApplicationStatusUpdate,
     background_tasks: BackgroundTasks,
-    admin_payload: dict = Depends(require_admin),
+    admin_payload: dict = Depends(require_permission(PERM_APPLICATIONS_UPDATE)),
     db: AsyncSession = Depends(get_db),
 ):
     stmt = (
@@ -366,7 +367,7 @@ async def update_application_status(
 async def bulk_update_application_status(
     data: BulkStatusUpdate,
     background_tasks: BackgroundTasks,
-    admin_payload: dict = Depends(require_admin),
+    admin_payload: dict = Depends(require_permission(PERM_APPLICATIONS_UPDATE)),
     db: AsyncSession = Depends(get_db),
 ):
     if not data.applicationIds:
@@ -427,7 +428,7 @@ async def export_applications_csv(
     branch: Optional[str] = Query(None),
     batch: Optional[int] = Query(None),
     search: Optional[str] = Query(None),
-    admin_payload: dict = Depends(require_admin),
+    admin_payload: dict = Depends(require_permission(PERM_APPLICATIONS_VIEW)),
     db: AsyncSession = Depends(get_db),
 ):
     stmt = (

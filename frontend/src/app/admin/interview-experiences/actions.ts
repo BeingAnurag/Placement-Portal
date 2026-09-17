@@ -3,12 +3,15 @@
 import { revalidatePath } from "next/cache";
 import { backendFetch } from "@/lib/api-client";
 import { requirePermission } from "@/lib/admin-session";
-import { PERM_INTERVIEW_EXPERIENCES_MANAGE } from "@/lib/permissions";
+import {
+  PERM_INTERVIEW_EXPERIENCES_APPROVE,
+  PERM_INTERVIEW_EXPERIENCES_DELETE,
+} from "@/lib/permissions";
 
 export type InterviewExperienceActionResult = { error?: string; success?: string };
 
 export async function approveInterviewExperienceAction(formData: FormData): Promise<InterviewExperienceActionResult> {
-  await requirePermission(PERM_INTERVIEW_EXPERIENCES_MANAGE);
+  await requirePermission(PERM_INTERVIEW_EXPERIENCES_APPROVE);
 
   const experienceId = formData.get("experienceId");
   if (typeof experienceId !== "string" || !experienceId) {
@@ -32,7 +35,7 @@ export async function approveInterviewExperienceAction(formData: FormData): Prom
 }
 
 export async function rejectInterviewExperienceAction(formData: FormData): Promise<InterviewExperienceActionResult> {
-  await requirePermission(PERM_INTERVIEW_EXPERIENCES_MANAGE);
+  await requirePermission(PERM_INTERVIEW_EXPERIENCES_APPROVE);
 
   const experienceId = formData.get("experienceId");
   if (typeof experienceId !== "string" || !experienceId) {
@@ -56,7 +59,7 @@ export async function rejectInterviewExperienceAction(formData: FormData): Promi
 }
 
 export async function deleteInterviewExperienceAction(formData: FormData): Promise<InterviewExperienceActionResult> {
-  await requirePermission(PERM_INTERVIEW_EXPERIENCES_MANAGE);
+  await requirePermission(PERM_INTERVIEW_EXPERIENCES_DELETE);
 
   const experienceId = formData.get("experienceId");
   if (typeof experienceId !== "string" || !experienceId) {

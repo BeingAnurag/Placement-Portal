@@ -5,12 +5,12 @@ import {
 } from "@/components/admin/interview-experiences-manager";
 import { requirePermission } from "@/lib/admin-session";
 import { backendFetch } from "@/lib/api-client";
-import { PERM_INTERVIEW_EXPERIENCES_MANAGE } from "@/lib/permissions";
+import { PERM_INTERVIEW_EXPERIENCES_VIEW } from "@/lib/permissions";
 
 export const dynamic = "force-dynamic";
 
 export default async function Page() {
-  await requirePermission(PERM_INTERVIEW_EXPERIENCES_MANAGE);
+  await requirePermission(PERM_INTERVIEW_EXPERIENCES_VIEW);
 
   let items: AdminInterviewExperienceItem[] = [];
   try {

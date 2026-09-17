@@ -6,7 +6,7 @@ from datetime import datetime
 from pydantic import ValidationError
 
 from app.core.security import (
-    PERM_ANNOUNCEMENTS_MANAGE,
+    PERM_ANNOUNCEMENTS_CREATE,
     compute_effective_permissions,
     has_permission,
 )
@@ -100,22 +100,19 @@ def test_to_announcement_response_formatting():
 
 def test_announcement_manage_permission_hierarchy():
     super_admin_perms = compute_effective_permissions("SUPER_ADMIN")
-    assert PERM_ANNOUNCEMENTS_MANAGE in super_admin_perms
+    assert PERM_ANNOUNCEMENTS_CREATE in super_admin_perms
 
-    admin_perms = compute_effective_permissions("ADMIN")
-    assert PERM_ANNOUNCEMENTS_MANAGE in admin_perms
+    team_perms = compute_effective_permissions("PLACEMENT_TEAM")
+    assert PERM_ANNOUNCEMENTS_CREATE in team_perms
 
-    officer_perms = compute_effective_permissions("OFFICER")
-    assert PERM_ANNOUNCEMENTS_MANAGE in officer_perms
-
-    coordinator_perms = compute_effective_permissions("COORDINATOR")
-    assert PERM_ANNOUNCEMENTS_MANAGE in coordinator_perms
+    volunteer_perms = compute_effective_permissions("PLACEMENT_VOLUNTEER")
+    assert PERM_ANNOUNCEMENTS_CREATE not in volunteer_perms
 
     student_perms = compute_effective_permissions("STUDENT")
-    assert PERM_ANNOUNCEMENTS_MANAGE not in student_perms
+    assert PERM_ANNOUNCEMENTS_CREATE not in student_perms
 
-    custom_student = compute_effective_permissions("STUDENT", custom_permissions=[PERM_ANNOUNCEMENTS_MANAGE])
-    assert PERM_ANNOUNCEMENTS_MANAGE in custom_student
+    custom_student = compute_effective_permissions("STUDENT", custom_permissions=[PERM_ANNOUNCEMENTS_CREATE])
+    assert PERM_ANNOUNCEMENTS_CREATE in custom_student
 
 
 def test_announcement_update_fields_set_detection():

@@ -11,9 +11,8 @@ export function SettingsManager({
 }: {
   userCounts: {
     superAdmins: number;
-    admins: number;
-    officers: number;
-    coordinators: number;
+    placementTeam: number;
+    placementVolunteers: number;
     students: number;
     total: number;
   };
@@ -46,9 +45,9 @@ export function SettingsManager({
             <ShieldCheck />
           </div>
           <div>
-            <small>Active Administrators</small>
-            <strong>{userCounts.superAdmins + userCounts.admins}</strong>
-            <b>Root & operation admins</b>
+            <small>Super Admins</small>
+            <strong>{userCounts.superAdmins}</strong>
+            <b>Full access, including RBAC</b>
           </div>
         </article>
 
@@ -57,9 +56,9 @@ export function SettingsManager({
             <UserCheck />
           </div>
           <div>
-            <small>Staff & Coordinators</small>
-            <strong>{userCounts.officers + userCounts.coordinators}</strong>
-            <b>{userCounts.officers} officers · {userCounts.coordinators} coords</b>
+            <small>Placement Cell</small>
+            <strong>{userCounts.placementTeam + userCounts.placementVolunteers}</strong>
+            <b>{userCounts.placementTeam} team · {userCounts.placementVolunteers} volunteers</b>
           </div>
         </article>
 

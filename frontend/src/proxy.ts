@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { canAccessAdminRoute, isElevatedRole } from "@/lib/permissions";
-import { isAdminEmail } from "@/lib/auth-access";
+import {
+  canAccessAdminRoute,
+  firstAccessibleAdminRoute,
+  hasAnyAdminPermission,
+} from "@/lib/permissions";
 
 export default auth((request) => {
   const { pathname } = request.nextUrl;
@@ -9,15 +12,14 @@ export default auth((request) => {
   if (!session) return NextResponse.redirect(new URL("/login", request.url));
 
   if (pathname.startsWith("/admin")) {
-    const isBootstrapAdmin = isAdminEmail(session.user.email);
-    const hasCustomPerms =
-      (session.user.customPermissions?.length ?? 0) > 0 ||
-      (session.user.effectivePermissions?.length ?? 0) > 0;
-    if (!isBootstrapAdmin && !isElevatedRole(session.user.role) && !hasCustomPerms) {
+    if (!hasAnyAdminPermission(session.user)) {
       return NextResponse.redirect(new URL("/dashboard", request.url));
     }
     if (!canAccessAdminRoute(session.user, pathname)) {
-      return NextResponse.redirect(new URL("/admin/dashboard", request.url));
+      // Never redirect to /admin/dashboard unconditionally: an account that
+      // cannot open the dashboard would bounce between the two forever.
+      const fallback = firstAccessibleAdminRoute(session.user) ?? "/dashboard";
+      return NextResponse.redirect(new URL(fallback, request.url));
     }
   }
 

@@ -5,19 +5,18 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { isAdminEmail } from "@/lib/auth-access";
-import { hasPermission, isElevatedRole, type PermissionKey } from "@/lib/permissions";
+import {
+  firstAccessibleAdminRoute,
+  hasAnyAdminPermission,
+  hasPermission,
+  type PermissionKey,
+} from "@/lib/permissions";
 
 export const requireAdmin = cache(async () => {
   const session = await auth();
   if (!session?.user) redirect("/login");
 
-  const email = session.user.email;
-  const isBootstrapAdmin = isAdminEmail(email);
-  const hasCustomPerms =
-    (session.user.customPermissions?.length ?? 0) > 0 ||
-    (session.user.effectivePermissions?.length ?? 0) > 0;
-
-  if (!isBootstrapAdmin && !isElevatedRole(session.user.role) && !hasCustomPerms) {
+  if (!hasAnyAdminPermission(session.user)) {
     redirect("/dashboard");
   }
 
@@ -28,6 +27,14 @@ export const requireAdmin = cache(async () => {
 });
 
 export const requirePermission = cache(async (permission: PermissionKey) => {
+  return requireAnyPermission(permission);
+});
+
+/**
+ * For screens reachable by more than one grant — a read permission or the
+ * manage permission that implies it.
+ */
+export const requireAnyPermission = cache(async (...permissions: PermissionKey[]) => {
   const { session, user } = await requireAdmin();
 
   const isBootstrapAdmin = isAdminEmail(user.email);
@@ -35,8 +42,11 @@ export const requirePermission = cache(async (permission: PermissionKey) => {
     return { session, user };
   }
 
-  if (!hasPermission({ ...user, email: user.email }, permission)) {
-    redirect("/admin/dashboard");
+  const subject = { ...user, email: user.email };
+  if (!permissions.some((permission) => hasPermission(subject, permission))) {
+    // Sending them to /admin/dashboard would loop forever for an account that
+    // cannot open the dashboard either.
+    redirect(firstAccessibleAdminRoute(subject) ?? "/dashboard");
   }
 
   return { session, user };

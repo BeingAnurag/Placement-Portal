@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { backendAuthHeader, backendBaseUrl } from "@/lib/api-client";
 import { db } from "@/lib/db";
 import { requireStudent } from "@/lib/student-session";
-import { requireAdmin } from "@/lib/admin-session";
+import { requirePermission } from "@/lib/admin-session";
+import { PERM_STUDENTS_VIEW } from "@/lib/permissions";
 
 export async function GET(
   request: NextRequest,
@@ -13,13 +14,15 @@ export async function GET(
     return new NextResponse("Resume ID is required", { status: 400 });
   }
 
-  // Authorize: Must be student owner or admin
+  // Authorize: either the owning student, or a staff account that may read the
+  // student register. Reaching the admin portal at all is NOT sufficient —
+  // that check was permission-blind and skipped the ownership branch below.
   let isAuthorized = false;
   let currentUserId: string | undefined;
 
   try {
-    const admin = await requireAdmin();
-    if (admin) isAuthorized = true;
+    await requirePermission(PERM_STUDENTS_VIEW);
+    isAuthorized = true;
   } catch {
     // Not admin, check student session
     try {

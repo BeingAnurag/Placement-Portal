@@ -42,7 +42,7 @@ Important invariants:
 - Job eligibility is evaluated from the student's current profile and job criteria: CGPA, batch, branch, degree, gender, backlogs, placement bans, and document completeness. An empty `allowedDegrees` or `allowedGenders` list, or one holding `all`/`any`, places no restriction; a restriction the profile cannot answer fails.
 - `NocRequest.message` is the student's remarks and `NocRequest.adminRemarks` is the placement cell's decision remarks. A decision never writes over the student's text.
 - An `Offer` is the placement record and the only source of package figures. An application is not an offer; the two are joined by an optional, unique `applicationId`. An FTE or PPO carries `ctc`, an internship carries `stipend`, and the type the offer is not clears the other. A `DECLINED` or `REVOKED` offer stays on file but is excluded from every statistic, a rule stated once in `COUNTED_OFFER_STATUSES`. The season is the batch stored on the offer, not the student's current batch.
-- An `Announcement` is `DRAFT` or `PUBLISHED`, defaulting to `PUBLISHED`; drafts are filtered out server-side for anyone without `announcements:manage`, and the single-announcement route answers 404 for them. `publishedAt` keeps the first publication date through a withdraw and re-publish. A company event may name the drive it is about in `jobProfileId`; a general notice carries neither company nor drive. Attachments are `AnnouncementAttachment` rows; their type is verified against the file's signature rather than its name, and a draft's files are as private as the draft.
+- An `Announcement` is `DRAFT` or `PUBLISHED`, defaulting to `PUBLISHED`; drafts are filtered out server-side for anyone without `announcements.view`, and the single-announcement route answers 404 for them. `publishedAt` keeps the first publication date through a withdraw and re-publish. A company event may name the drive it is about in `jobProfileId`; a general notice carries neither company nor drive. Attachments are `AnnouncementAttachment` rows; their type is verified against the file's signature rather than its name, and a draft's files are as private as the draft.
 - Sensitive Aadhaar/PAN fields contain encrypted payloads, not plaintext.
 - Destructive administrative operations require server-side admin authorization.
 
@@ -55,9 +55,11 @@ Sign-in is an institute email address and a password. There is no OAuth provider
 - `/account/password` is where any signed-in user changes their own password, confirming the current one.
 - Accounts seeded from `ADMIN_EMAILS` start with no password. `npm run db:set-password -- <email>` sets the first one from the server shell; after that the set-password control on `/admin/users` provisions staff and recovers lost student passwords.
 - Failed sign-ins are throttled per address in the frontend process, not in a shared store.
-- `ADMIN_EMAILS` serves as the emergency bootstrap superadmin allowlist: addresses listed here receive `SUPER_ADMIN` / `ADMIN` rights automatically and may sign in from outside the institute domain.
-- The portal enforces a 5-tier role hierarchy: `STUDENT` (Tier 1), `COORDINATOR` (Tier 2), `OFFICER` (Tier 3), `ADMIN` (Tier 4), `SUPER_ADMIN` (Tier 5), backed by a 17-permission RBAC catalog.
-- In addition to role defaults, any user account supports granular per-user custom permission overrides (`customPermissions String[]` on `User`).
+- `ADMIN_EMAILS` serves as the emergency bootstrap allowlist: addresses listed here receive the whole permission catalog automatically and may sign in from outside the institute domain.
+- There are four roles: `STUDENT` (Tier 1), `PLACEMENT_VOLUNTEER` (Tier 2), `PLACEMENT_TEAM` (Tier 3), `SUPER_ADMIN` (Tier 4), backed by a 49-entry `module.action` permission catalog. A `_own` suffix (`applications.view_own`) means the holder reaches only rows they own; the route still applies the ownership filter.
+- Only `SUPER_ADMIN` holds `rbac.manage`. Assigning a role, editing the custom permission matrix, and creating a user with a non-student role or a permission grant all require it, so `users.manage` alone can provision an account but never escalate one.
+- Students hold `_own` permissions by default. Admin-portal access is therefore decided by `hasAnyAdminPermission`, which tests permissions against `STUDENT_SCOPED_PERMISSIONS`; never infer administrative access from a non-empty permission list.
+- In addition to role defaults, any user account supports granular per-user custom permission overrides (`customPermissions String[]` on `User`), where a leading `-` revokes.
 - Full user lifecycle and RBAC management is available on `/admin/users`, including account provisioning, role elevation & de-elevation, custom permission matrix editing, suspension/activation, and guarded deletion.
 - Guardrails protect against self-demotion, self-deactivation, self-deletion, and removal of the last active super-administrator.
 - `/admin/*` routes enforce granular permissions via `frontend/src/proxy.ts` and `requirePermission()` server-side guards.
@@ -77,18 +79,39 @@ The reusable eligibility rules live in `frontend/src/lib/eligibility.ts` and `ba
 
 ## UI system
 
-The palette is a teal ramp declared once in the first `:root` block of
-`frontend/src/app/globals.css`. That ramp is the only place literal brand hex
-values may appear; every rule reads a semantic token. See `docs/DECISIONS.md`
-(2026-09-17) for why it replaced the logo-derived blue/orange.
+Every rule reads a semantic token declared in `frontend/src/app/globals.css`;
+literal brand hex values only belong in the `:root` token blocks. Light and
+dark mode are now two genuinely different palettes on the same token names —
+see `docs/DECISIONS.md` (2026-09-17, "Light mode moves to a neutral
+orange/teal palette; dark mode is untouched") for why, and the two entries
+above it for how the dark-mode palette came to be black-with-teal.
 
-- Ramp: `--teal-50` `#DEF7F9` → `--teal-950` `#081F22`, plus `--ink-black` `#091717` and `--paper` `#FBFAF4`
-- Black base: `--black-950` `#000000` (dark page and input wells) and `--black-900` `#0D1112` (dark cards). Everything layered on that black — borders, table headers, hover and pressed states, badges — comes from the deep end of the teal ramp, so dark mode is black with teal chrome
-- Primary: `--blue` (`--teal-600` `#20808D` light, `--teal-500` `#2CA0AB` dark) — CTAs, eyebrows, active markers, brand icons
-- Deep: `--navy` and `--navy-deep` — sidebars, banners, primary modal buttons. These invert by theme: deep teal on paper, mid teal (`#20808D`) on black, because a deep fill is invisible against a black page
-- Sidebars: `--sidebar-from`/`--sidebar-to` with `--on-brand`, `--on-brand-soft`, `--on-brand-muted` for text on those always-dark surfaces
-- Status hues are not teal and carry meaning only: `--green` success, `--orange` warning/pending/interview, red error, purple shortlisted
-- `rgba()` tints must use the channel tokens (`--brand-rgb`, `--deep-rgb`, `--shadow-rgb`, `--warning-rgb`, `--success-rgb`, `--danger-rgb`), because `rgba()` cannot read a hex custom property
+**Light mode** (the default): Zinc neutrals — `--surface` `#FAFAFA`, `--card-bg`
+`#FFFFFF`, `--ink` `#18181B`, `--border` `#E4E4E7` — with `#F64900` orange-red
+as the primary brand accent (`--navy`/`--navy-deep`: buttons, CTAs, active nav,
+a chart's primary series) and `#009689` teal as the secondary/analytics accent
+(`--blue`/`--blue-light`: links, focus rings, icon chips, a chart's secondary
+series). Status hues are separate from both: `--green` success, `--orange`
+warning/pending/interview (a true amber, `#D97706`, deliberately distinct from
+the brand orange), red error, purple shortlisted. Sidebars read the ordinary
+`--ink`/`--ink-secondary`/`--border` tokens and render as a white panel with a
+right border. Gradients are not used in light mode; every fill is solid.
+
+**Dark mode**: unchanged from the 2026-09-17 entries — a teal ramp
+(`--teal-50` `#DEF7F9` → `--teal-950` `#081F22`, plus `--ink-black` `#091717`
+and `--paper` `#FBFAF4`) declared alongside the light tokens, black surfaces
+(`--black-950`/`--black-900`), and `--on-brand`/`--on-brand-soft`/
+`--on-brand-muted` for text on the few surfaces that stay a solid brand fill
+regardless of theme (the login hero, welcome/profile banners) — not the
+sidebars, which are dark only in dark mode.
+
+- `--navy`/`--navy-deep`/`--blue`/`--blue-light`/`--brown` keep the same names
+  in both themes but resolve to a different family per theme (new orange/teal
+  in light, the teal ramp in dark) — do not assume a token's hue from its name.
+- `rgba()` tints must use the channel tokens (`--brand-rgb`, `--deep-rgb`,
+  `--shadow-rgb`, `--warning-rgb`, `--success-rgb`, `--danger-rgb`), because
+  `rgba()` cannot read a hex custom property. `--brand-rgb`/`--deep-rgb` anchor
+  to the primary accent in both themes (orange in light, teal in dark).
 - Rounded cards, restrained shadows, high information density, and mobile-first responsive layouts
 - Student pages use `PortalShell`; admin pages use `AdminShell`.
 - Every admin list is the shared `DataTable` (`frontend/src/components/common/data-table.tsx`) configured with columns; its pipeline lives in `frontend/src/lib/data-table.ts`. Do not hand-write another admin table, and give a column its raw `sortValue` rather than letting it sort the formatted cell.

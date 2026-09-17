@@ -10,11 +10,10 @@ export const dynamic = "force-dynamic";
 export default async function Page() {
   const { user: currentAdmin } = await requirePermission(PERM_SETTINGS_MANAGE);
 
-  const [superAdmins, admins, officers, coordinators, students, total] = await Promise.all([
+  const [superAdmins, placementTeam, placementVolunteers, students, total] = await Promise.all([
     db.user.count({ where: { role: "SUPER_ADMIN" } }),
-    db.user.count({ where: { role: "ADMIN" } }),
-    db.user.count({ where: { role: "OFFICER" } }),
-    db.user.count({ where: { role: "COORDINATOR" } }),
+    db.user.count({ where: { role: "PLACEMENT_TEAM" } }),
+    db.user.count({ where: { role: "PLACEMENT_VOLUNTEER" } }),
     db.user.count({ where: { role: "STUDENT" } }),
     db.user.count(),
   ]);
@@ -26,9 +25,8 @@ export default async function Page() {
       <SettingsManager
         userCounts={{
           superAdmins,
-          admins,
-          officers,
-          coordinators,
+          placementTeam,
+          placementVolunteers,
           students,
           total,
         }}

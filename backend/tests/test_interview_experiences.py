@@ -6,7 +6,7 @@ import pytest
 from pydantic import ValidationError
 
 from app.core.security import (
-    PERM_INTERVIEW_EXPERIENCES_MANAGE,
+    PERM_INTERVIEW_EXPERIENCES_APPROVE,
     compute_effective_permissions,
 )
 from app.models.db import InterviewExperience, InterviewExperienceStatus, User
@@ -60,24 +60,21 @@ def test_interview_experience_create_schema_rejects_short_company_name():
 
 def test_interview_experience_manage_permission_hierarchy():
     super_admin_perms = compute_effective_permissions("SUPER_ADMIN")
-    assert PERM_INTERVIEW_EXPERIENCES_MANAGE in super_admin_perms
+    assert PERM_INTERVIEW_EXPERIENCES_APPROVE in super_admin_perms
 
-    admin_perms = compute_effective_permissions("ADMIN")
-    assert PERM_INTERVIEW_EXPERIENCES_MANAGE in admin_perms
+    team_perms = compute_effective_permissions("PLACEMENT_TEAM")
+    assert PERM_INTERVIEW_EXPERIENCES_APPROVE in team_perms
 
-    officer_perms = compute_effective_permissions("OFFICER")
-    assert PERM_INTERVIEW_EXPERIENCES_MANAGE in officer_perms
-
-    coordinator_perms = compute_effective_permissions("COORDINATOR")
-    assert PERM_INTERVIEW_EXPERIENCES_MANAGE not in coordinator_perms
+    volunteer_perms = compute_effective_permissions("PLACEMENT_VOLUNTEER")
+    assert PERM_INTERVIEW_EXPERIENCES_APPROVE not in volunteer_perms
 
     student_perms = compute_effective_permissions("STUDENT")
-    assert PERM_INTERVIEW_EXPERIENCES_MANAGE not in student_perms
+    assert PERM_INTERVIEW_EXPERIENCES_APPROVE not in student_perms
 
     custom_coord = compute_effective_permissions(
-        "COORDINATOR", custom_permissions=[PERM_INTERVIEW_EXPERIENCES_MANAGE]
+        "PLACEMENT_VOLUNTEER", custom_permissions=[PERM_INTERVIEW_EXPERIENCES_APPROVE]
     )
-    assert PERM_INTERVIEW_EXPERIENCES_MANAGE in custom_coord
+    assert PERM_INTERVIEW_EXPERIENCES_APPROVE in custom_coord
 
 
 def test_to_admin_response_formatting():

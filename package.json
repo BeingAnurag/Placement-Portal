@@ -21,6 +21,7 @@
     "db:migrate": "npm run migrate --workspace @tnp/database",
     "db:deploy": "npm run deploy --workspace @tnp/database",
     "db:seed": "npm run seed --workspace @tnp/database",
+    "db:import-students": "npm run import-students --workspace @tnp/database",
     "db:pack:demo": "npm run pack-demo --workspace @tnp/database",
     "db:seed:demo": "npm run seed-demo --workspace @tnp/database",
     "db:remove-demo": "npm run remove-demo --workspace @tnp/database",

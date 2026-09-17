@@ -4,7 +4,12 @@ import { revalidatePath } from "next/cache";
 import { backendAuthHeader, backendBaseUrl, backendFetch } from "@/lib/api-client";
 import { requirePermission } from "@/lib/admin-session";
 import { db } from "@/lib/db";
-import { PERM_ANNOUNCEMENTS_MANAGE } from "@/lib/permissions";
+import {
+  PERM_ANNOUNCEMENTS_CREATE,
+  PERM_ANNOUNCEMENTS_DELETE,
+  PERM_ANNOUNCEMENTS_PUBLISH,
+  PERM_ANNOUNCEMENTS_UPDATE,
+} from "@/lib/permissions";
 import {
   announcementDeleteSchema,
   announcementFormSchema,
@@ -19,7 +24,15 @@ export type AnnouncementActionResult = { error?: string; success?: string };
 export async function saveAnnouncementAction(
   formData: FormData,
 ): Promise<AnnouncementActionResult> {
-  const { user } = await requirePermission(PERM_ANNOUNCEMENTS_MANAGE);
+  // Composing a new notice and editing an existing one are separate grants,
+  // and pushing either one live additionally takes the publish grant.
+  const isEdit = Boolean(formData.get("id"));
+  const { user } = await requirePermission(
+    isEdit ? PERM_ANNOUNCEMENTS_UPDATE : PERM_ANNOUNCEMENTS_CREATE,
+  );
+  if (formData.get("status") === "PUBLISHED") {
+    await requirePermission(PERM_ANNOUNCEMENTS_PUBLISH);
+  }
 
   const rawTags = formData.get("tags");
   let tags: string[] = [];
@@ -155,7 +168,7 @@ export type AttachmentUploadResult = {
 export async function uploadAnnouncementAttachmentAction(
   formData: FormData,
 ): Promise<AttachmentUploadResult> {
-  await requirePermission(PERM_ANNOUNCEMENTS_MANAGE);
+  await requirePermission(PERM_ANNOUNCEMENTS_CREATE);
 
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) {
@@ -210,7 +223,7 @@ export async function uploadAnnouncementAttachmentAction(
 export async function setAnnouncementStatusAction(
   formData: FormData,
 ): Promise<AnnouncementActionResult> {
-  await requirePermission(PERM_ANNOUNCEMENTS_MANAGE);
+  await requirePermission(PERM_ANNOUNCEMENTS_PUBLISH);
 
   const parsed = announcementStatusSchema.safeParse({
     announcementId: formData.get("announcementId"),
@@ -265,7 +278,7 @@ export async function setAnnouncementStatusAction(
 export async function deleteAnnouncementAction(
   formData: FormData,
 ): Promise<AnnouncementActionResult> {
-  await requirePermission(PERM_ANNOUNCEMENTS_MANAGE);
+  await requirePermission(PERM_ANNOUNCEMENTS_DELETE);
 
   const parsed = announcementDeleteSchema.safeParse({
     announcementId: formData.get("announcementId"),

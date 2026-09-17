@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { backendAuthHeader, backendBaseUrl } from "@/lib/api-client";
 import { db } from "@/lib/db";
 import { requireStudent } from "@/lib/student-session";
-import { requireAdmin } from "@/lib/admin-session";
+import { requirePermission } from "@/lib/admin-session";
+import { PERM_NOC_VIEW } from "@/lib/permissions";
 
 // NOC certificates are stored via the same local/Cloudinary storage as
 // resumes. When Cloudinary isn't configured, NocRequest.documentUrl holds a
@@ -18,13 +19,15 @@ export async function GET(
     return new NextResponse("NOC request ID is required", { status: 400 });
   }
 
-  // Authorize: must be an admin, or the student who owns the request.
+  // Authorize: either the owning student, or a staff account that may read NOC
+  // requests. Reaching the admin portal at all is NOT sufficient — that check
+  // was permission-blind and skipped the ownership branch below.
   let isAuthorized = false;
   let currentUserId: string | undefined;
 
   try {
-    const admin = await requireAdmin();
-    if (admin) isAuthorized = true;
+    await requirePermission(PERM_NOC_VIEW);
+    isAuthorized = true;
   } catch {
     try {
       const student = await requireStudent();

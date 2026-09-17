@@ -8,7 +8,13 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.core.security import PERM_NOC_MANAGE, get_current_user, require_permission
+from app.core.security import (
+    PERM_NOC_APPROVE,
+    PERM_NOC_REJECT,
+    PERM_NOC_VIEW,
+    get_current_user,
+    require_permission,
+)
 from app.core.storage import upload_pdf, validate_pdf
 from app.dependencies import get_db, require_student
 from app.models.db import NocRequest, NocStatus, Notification, User
@@ -134,12 +140,12 @@ async def cancel_noc(
 
 
 # ===========================================================================
-# Administrative Endpoints (Protected by PERM_NOC_MANAGE)
+# Administrative Endpoints (noc.view / .approve / .reject)
 # ===========================================================================
 
 @router.get("/admin/metrics", response_model=NocMetricsResponse)
 async def get_noc_metrics(
-    admin_payload: dict = Depends(require_permission(PERM_NOC_MANAGE)),
+    admin_payload: dict = Depends(require_permission(PERM_NOC_VIEW)),
     db: AsyncSession = Depends(get_db),
 ):
     """Retrieve NOC summary metrics for admin dashboard."""
@@ -168,7 +174,7 @@ async def list_admin_nocs(
     search: Optional[str] = Query(None, description="Search across student name, roll number, company, city"),
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
-    admin_payload: dict = Depends(require_permission(PERM_NOC_MANAGE)),
+    admin_payload: dict = Depends(require_permission(PERM_NOC_VIEW)),
     db: AsyncSession = Depends(get_db),
 ):
     """List all student NOC requests with filters, search, and student profile info."""
@@ -212,7 +218,7 @@ async def list_admin_nocs(
 @router.get("/admin/{noc_id}", response_model=AdminNocResponse)
 async def get_admin_noc_detail(
     noc_id: str,
-    admin_payload: dict = Depends(require_permission(PERM_NOC_MANAGE)),
+    admin_payload: dict = Depends(require_permission(PERM_NOC_VIEW)),
     db: AsyncSession = Depends(get_db),
 ):
     """Retrieve detailed information about a single NOC request."""
@@ -229,7 +235,7 @@ async def approve_noc(
     noc_id: str,
     data: NocApproveRequest,
     background_tasks: BackgroundTasks,
-    admin_payload: dict = Depends(require_permission(PERM_NOC_MANAGE)),
+    admin_payload: dict = Depends(require_permission(PERM_NOC_APPROVE)),
     db: AsyncSession = Depends(get_db),
 ):
     """Approve a student NOC request, attach document URL or remarks, and notify student."""
@@ -280,7 +286,7 @@ async def reject_noc(
     noc_id: str,
     data: NocRejectRequest,
     background_tasks: BackgroundTasks,
-    admin_payload: dict = Depends(require_permission(PERM_NOC_MANAGE)),
+    admin_payload: dict = Depends(require_permission(PERM_NOC_REJECT)),
     db: AsyncSession = Depends(get_db),
 ):
     """Reject a student NOC request with a reason and notify student."""
@@ -330,7 +336,7 @@ async def reject_noc(
 async def upload_signed_noc_document(
     noc_id: str,
     file: UploadFile = File(...),
-    admin_payload: dict = Depends(require_permission(PERM_NOC_MANAGE)),
+    admin_payload: dict = Depends(require_permission(PERM_NOC_APPROVE)),
     db: AsyncSession = Depends(get_db),
 ):
     """Upload signed NOC certificate PDF and attach directly to request."""

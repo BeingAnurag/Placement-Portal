@@ -7,13 +7,13 @@ import {
 } from "@/components/admin/announcement-composer";
 import { RecentAnnouncements } from "@/components/admin/recent-announcements";
 import { requirePermission } from "@/lib/admin-session";
-import { PERM_ANNOUNCEMENTS_MANAGE } from "@/lib/permissions";
+import { PERM_ANNOUNCEMENTS_CREATE } from "@/lib/permissions";
 import { db } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
 export default async function Page() {
-  await requirePermission(PERM_ANNOUNCEMENTS_MANAGE);
+  await requirePermission(PERM_ANNOUNCEMENTS_CREATE);
 
   const [companies, jobs, recent] = await Promise.all([
     db.company.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),

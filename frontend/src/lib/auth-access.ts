@@ -65,5 +65,5 @@ export function canSelfRegister(email: string | null | undefined, domain?: strin
 }
 
 export function resolveRole(email: string | null | undefined, configured?: string): Role {
-  return isAdminEmail(email, configured) ? "ADMIN" : "STUDENT";
+  return isAdminEmail(email, configured) ? "SUPER_ADMIN" : "STUDENT";
 }

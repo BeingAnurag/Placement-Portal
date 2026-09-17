@@ -9,7 +9,13 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.core.security import PERM_FEEDBACKS_MANAGE, get_current_user, require_permission
+from app.core.security import (
+    PERM_FEEDBACK_RESOLVE,
+    PERM_FEEDBACK_RESPOND,
+    PERM_FEEDBACK_VIEW,
+    get_current_user,
+    require_permission,
+)
 from app.dependencies import get_db, require_student
 from app.models.db import Feedback, FeedbackType, Notification, User
 from app.schemas.feedback import (
@@ -135,12 +141,12 @@ async def submit_feedback(
 
 
 # ===========================================================================
-# Administrative Endpoints (Protected by PERM_FEEDBACKS_MANAGE)
+# Administrative Endpoints (feedback.view / .respond / .resolve)
 # ===========================================================================
 
 @router.get("/admin/metrics", response_model=FeedbackMetricsResponse)
 async def get_feedback_metrics(
-    admin_payload: dict = Depends(require_permission(PERM_FEEDBACKS_MANAGE)),
+    admin_payload: dict = Depends(require_permission(PERM_FEEDBACK_VIEW)),
     db: AsyncSession = Depends(get_db),
 ):
     """Retrieve feedback summary metrics for admin dashboard."""
@@ -178,7 +184,7 @@ async def list_admin_feedbacks(
     search: Optional[str] = Query(None, description="Search across student name, email, roll number, or message"),
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
-    admin_payload: dict = Depends(require_permission(PERM_FEEDBACKS_MANAGE)),
+    admin_payload: dict = Depends(require_permission(PERM_FEEDBACK_VIEW)),
     db: AsyncSession = Depends(get_db),
 ):
     """List all student feedback submissions with filtering, search, and student profile info."""
@@ -228,7 +234,7 @@ async def list_admin_feedbacks(
 @router.get("/admin/{feedback_id}", response_model=AdminFeedbackResponse)
 async def get_admin_feedback_detail(
     feedback_id: str,
-    admin_payload: dict = Depends(require_permission(PERM_FEEDBACKS_MANAGE)),
+    admin_payload: dict = Depends(require_permission(PERM_FEEDBACK_VIEW)),
     db: AsyncSession = Depends(get_db),
 ):
     """Retrieve detailed information about a single feedback item."""
@@ -245,7 +251,7 @@ async def respond_to_feedback(
     feedback_id: str,
     data: FeedbackReplyRequest,
     background_tasks: BackgroundTasks,
-    admin_payload: dict = Depends(require_permission(PERM_FEEDBACKS_MANAGE)),
+    admin_payload: dict = Depends(require_permission(PERM_FEEDBACK_RESPOND)),
     db: AsyncSession = Depends(get_db),
 ):
     """Respond to a student query or feedback and optionally mark it resolved."""
@@ -292,7 +298,7 @@ async def respond_to_feedback(
 @router.delete("/admin/{feedback_id}")
 async def delete_feedback(
     feedback_id: str,
-    admin_payload: dict = Depends(require_permission(PERM_FEEDBACKS_MANAGE)),
+    admin_payload: dict = Depends(require_permission(PERM_FEEDBACK_RESOLVE)),
     db: AsyncSession = Depends(get_db),
 ):
     """Delete a feedback item."""

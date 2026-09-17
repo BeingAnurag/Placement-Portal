@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.security import (
     ALL_PERMISSIONS,
     PERM_TEAM_MANAGE,
+    PERM_TEAM_VIEW,
     require_permission,
 )
 from app.dependencies import get_db
@@ -29,14 +30,19 @@ router = APIRouter(prefix="/team", tags=["team"])
 PLACEMENT_TEAM_DEFAULT_PERMISSIONS_KEY = "placement_team_default_permissions"
 
 DEFAULT_PLACEMENT_TEAM_PERMISSIONS = [
-    "companies:read",
-    "jobs:read",
-    "jobs:manage",
-    "applications:read",
-    "applications:manage",
-    "students:read",
-    "announcements:manage",
-    "analytics:view",
+    "companies.view",
+    "jobs.view",
+    "jobs.create",
+    "jobs.update",
+    "jobs.publish",
+    "applications.view",
+    "applications.update",
+    "students.view",
+    "announcements.view",
+    "announcements.create",
+    "announcements.update",
+    "announcements.publish",
+    "analytics.view",
 ]
 
 
@@ -106,7 +112,7 @@ async def list_team(db: AsyncSession = Depends(get_db)):
 
 @router.get("/admin", response_model=list[TeamAdminMemberResponse])
 async def list_team_admin(
-    caller: dict = Depends(require_permission(PERM_TEAM_MANAGE)),
+    caller: dict = Depends(require_permission(PERM_TEAM_VIEW)),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -158,7 +164,7 @@ async def list_team_admin(
 
 @router.get("/permissions/defaults", response_model=DefaultPermissionsResponse)
 async def get_default_permissions(
-    caller: dict = Depends(require_permission(PERM_TEAM_MANAGE)),
+    caller: dict = Depends(require_permission(PERM_TEAM_VIEW)),
     db: AsyncSession = Depends(get_db),
 ):
     """

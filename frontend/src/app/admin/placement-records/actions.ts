@@ -4,7 +4,11 @@ import { revalidatePath } from "next/cache";
 import { backendFetch } from "@/lib/api-client";
 import { requirePermission } from "@/lib/admin-session";
 import { offerDeleteSchema, offerFormSchema } from "@/lib/offer-schema";
-import { PERM_APPLICATIONS_MANAGE } from "@/lib/permissions";
+import {
+  PERM_PLACEMENT_RECORDS_CREATE,
+  PERM_PLACEMENT_RECORDS_DELETE,
+  PERM_PLACEMENT_RECORDS_UPDATE,
+} from "@/lib/permissions";
 
 export type OfferActionResult = { error?: string; success?: string };
 
@@ -28,7 +32,9 @@ function backendMessage(error: unknown, fallback: string): string {
 }
 
 export async function saveOfferAction(formData: FormData): Promise<OfferActionResult> {
-  await requirePermission(PERM_APPLICATIONS_MANAGE);
+  await requirePermission(
+    formData.get("id") ? PERM_PLACEMENT_RECORDS_UPDATE : PERM_PLACEMENT_RECORDS_CREATE,
+  );
 
   const parsed = offerFormSchema.safeParse({
     id: formData.get("id") ?? undefined,
@@ -87,7 +93,7 @@ export async function saveOfferAction(formData: FormData): Promise<OfferActionRe
 }
 
 export async function deleteOfferAction(formData: FormData): Promise<OfferActionResult> {
-  await requirePermission(PERM_APPLICATIONS_MANAGE);
+  await requirePermission(PERM_PLACEMENT_RECORDS_DELETE);
 
   const parsed = offerDeleteSchema.safeParse({ offerId: formData.get("offerId") });
   if (!parsed.success) return { error: "Invalid placement record." };

@@ -7,11 +7,11 @@ from pydantic import ValidationError
 
 from app.core.security import (
     ALL_PERMISSIONS,
-    PERM_ANNOUNCEMENTS_MANAGE,
-    PERM_APPLICATIONS_MANAGE,
-    PERM_COMPANIES_READ,
-    PERM_JOBS_MANAGE,
-    PERM_JOBS_READ,
+    PERM_ANNOUNCEMENTS_CREATE,
+    PERM_APPLICATIONS_UPDATE,
+    PERM_COMPANIES_VIEW,
+    PERM_JOBS_CREATE,
+    PERM_JOBS_VIEW,
     PERM_TEAM_MANAGE,
     PERM_USERS_MANAGE,
 )
@@ -61,7 +61,7 @@ def test_team_member_update_schema_optional_fields():
 
 def test_default_permissions_update_schema_valid():
     update = DefaultPermissionsUpdate(
-        defaultPermissions=[PERM_JOBS_READ, PERM_JOBS_MANAGE, PERM_APPLICATIONS_MANAGE],
+        defaultPermissions=[PERM_JOBS_VIEW, PERM_JOBS_CREATE, PERM_APPLICATIONS_UPDATE],
         syncExistingMembers=True,
     )
     assert len(update.defaultPermissions) == 3
@@ -86,10 +86,10 @@ async def test_grant_and_revoke_team_permissions_logic():
     user = User(
         id="user-1",
         email="coordinator@iiitl.ac.in",
-        customPermissions=["students:read"],
+        customPermissions=["students.view"],
     )
 
-    default_perms = [PERM_JOBS_READ, PERM_JOBS_MANAGE, PERM_APPLICATIONS_MANAGE]
+    default_perms = [PERM_JOBS_VIEW, PERM_JOBS_CREATE, PERM_APPLICATIONS_UPDATE]
 
     # Mock DB session
     class MockDbSession:
@@ -107,16 +107,16 @@ async def test_grant_and_revoke_team_permissions_logic():
 
     # 1. Grant team permissions
     await grant_team_permissions_to_user(db_mock, user.email, default_perms)
-    assert PERM_JOBS_READ in user.customPermissions
-    assert PERM_JOBS_MANAGE in user.customPermissions
-    assert PERM_APPLICATIONS_MANAGE in user.customPermissions
-    assert "students:read" in user.customPermissions  # Preserved previous custom permission
+    assert PERM_JOBS_VIEW in user.customPermissions
+    assert PERM_JOBS_CREATE in user.customPermissions
+    assert PERM_APPLICATIONS_UPDATE in user.customPermissions
+    assert "students.view" in user.customPermissions  # Preserved previous custom permission
 
     # 2. Revoke team permissions
     await revoke_team_permissions_from_user(db_mock, user.email, default_perms)
-    assert PERM_JOBS_READ not in user.customPermissions
-    assert PERM_JOBS_MANAGE not in user.customPermissions
-    assert "students:read" in user.customPermissions  # Prior manual custom permission still preserved!
+    assert PERM_JOBS_VIEW not in user.customPermissions
+    assert PERM_JOBS_CREATE not in user.customPermissions
+    assert "students.view" in user.customPermissions  # Prior manual custom permission still preserved!
 
 
 @pytest.mark.asyncio

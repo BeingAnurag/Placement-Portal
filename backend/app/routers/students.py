@@ -5,7 +5,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.core.security import PERM_STUDENTS_READ, require_permission
+from app.core.security import PERM_STUDENTS_VIEW, require_permission
 from app.dependencies import get_db
 from app.models.db import Application, JobProfile, JobStatus, Resume, Role, User
 from app.schemas.student import MissedCompanyFlag, StudentApplicationFlag
@@ -20,7 +20,7 @@ async def list_students_with_missed_streaks(
     min_streak: int = Query(
         3, ge=2, le=20, description="Minimum consecutive missed-but-eligible companies to flag a student"
     ),
-    admin_payload: dict = Depends(require_permission(PERM_STUDENTS_READ)),
+    admin_payload: dict = Depends(require_permission(PERM_STUDENTS_VIEW)),
     db: AsyncSession = Depends(get_db),
 ):
     """

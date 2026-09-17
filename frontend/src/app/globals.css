@@ -31,48 +31,53 @@
   --on-brand-muted: #8fbcc0;
 
   /* rgba() cannot read a hex token, so tints need the channels separately. */
-  --warning-rgb: 222, 108, 26;
-  --success-rgb: 0, 131, 37;
+  --warning-rgb: 217, 119, 6;
+  --success-rgb: 22, 163, 74;
   --danger-rgb: 239, 68, 68;
 }
 
+/* Light palette: white/#FAFAFA neutrals, near-black type, #F64900 orange-red as
+   the primary brand accent, #009689 teal as the secondary/analytics accent.
+   See docs/DECISIONS.md (2026-09-17, neutral orange/teal palette). Dark mode
+   (below) is intentionally untouched and keeps reading the teal ramp above. */
 :root {
-  --navy: var(--teal-800);
-  --navy-deep: var(--teal-900);
-  --blue: var(--teal-600);
-  --blue-light: var(--teal-500);
-  --green: #008325;
-  --orange: #de6c1a;
-  --brown: var(--teal-700);
+  --navy: #f64900;
+  --navy-deep: #d93e00;
+  --navy-soft-bg: #fff0e8;
+  --blue: #009689;
+  --blue-light: #2dbdb0;
+  --green: #16a34a;
+  --orange: #d97706;
+  --brown: #d93e00;
 
-  --brand-rgb: 32, 128, 141;
-  --deep-rgb: 11, 54, 60;
-  --shadow-rgb: 8, 31, 34;
+  --brand-rgb: 246, 73, 0;
+  --deep-rgb: 217, 62, 0;
+  --shadow-rgb: 24, 24, 27;
 
-  --surface: var(--paper);
-  --surface-alt: #f2f6f6;
-  --surface-highlight: #e3efef;
+  --surface: #fafafa;
+  --surface-alt: #f4f4f5;
+  --surface-highlight: #ececee;
   --card-bg: #ffffff;
-  --ink: var(--teal-950);
-  --ink-secondary: var(--teal-800);
-  --muted: #5f7f83;
-  --border: #d5e5e5;
-  --border-subtle: #eaf2f2;
+  --ink: #18181b;
+  --ink-secondary: #3f3f46;
+  --muted: #71717a;
+  --border: #e4e4e7;
+  --border-subtle: #f0f0f1;
   --input-bg: #ffffff;
 
-  --card-shadow: 0 1px 3px 0 rgba(var(--shadow-rgb), 0.05), 0 4px 14px -2px rgba(var(--shadow-rgb), 0.06);
-  --card-hover-shadow: 0 10px 25px -4px rgba(var(--shadow-rgb), 0.1), 0 4px 10px -2px rgba(var(--shadow-rgb), 0.05);
-  --topbar-bg: rgba(251, 250, 244, 0.85);
+  --card-shadow: 0 1px 2px 0 rgba(var(--shadow-rgb), 0.04), 0 1px 3px 0 rgba(var(--shadow-rgb), 0.06);
+  --card-hover-shadow: 0 4px 12px -2px rgba(var(--shadow-rgb), 0.08), 0 2px 6px -1px rgba(var(--shadow-rgb), 0.05);
+  --topbar-bg: rgba(255, 255, 255, 0.85);
 
-  --sidebar-from: var(--teal-800);
-  --sidebar-to: var(--teal-950);
+  --sidebar-from: #ffffff;
+  --sidebar-to: #ffffff;
 
-  --badge-blue-bg: var(--teal-50);
-  --badge-blue-text: var(--teal-700);
+  --badge-blue-bg: #e6f5f3;
+  --badge-blue-text: #00786e;
   --badge-green-bg: #dcfce7;
   --badge-green-text: #15803d;
-  --badge-orange-bg: #ffedd5;
-  --badge-orange-text: #c2410c;
+  --badge-orange-bg: #fef3c7;
+  --badge-orange-text: #b45309;
   --badge-red-bg: #fee2e2;
   --badge-red-text: #b91c1c;
   --badge-purple-bg: #f3e8ff;
@@ -87,6 +92,7 @@
 .dark {
   --navy: var(--teal-600);
   --navy-deep: var(--teal-700);
+  --navy-soft-bg: rgba(255, 255, 255, 0.14);
   --blue: var(--teal-500);
   --blue-light: var(--teal-400);
   --green: #4ade80;
@@ -132,9 +138,6 @@ html, body {
   margin: 0;
   min-height: 100%;
   background: var(--surface);
-  background-image:
-    radial-gradient(ellipse 70% 40% at 50% -10%, rgba(var(--brand-rgb), 0.07), transparent 70%),
-    radial-gradient(ellipse 50% 30% at 100% 100%, rgba(var(--brand-rgb), 0.04), transparent 60%);
   color: var(--ink);
   font-family: var(--font-inter), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
@@ -215,26 +218,26 @@ button { cursor: pointer; }
   inset: 0 auto 0 0;
   width: 260px;
   padding: 24px 16px;
-  background: linear-gradient(180deg, var(--sidebar-from) 0%, var(--sidebar-to) 100%);
-  color: var(--on-brand);
+  background: var(--sidebar-from);
+  color: var(--ink);
   z-index: 30;
   display: flex;
   flex-direction: column;
-  border-right: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 4px 0 24px rgba(0, 0, 0, 0.15);
+  border-right: 1px solid var(--border);
+  box-shadow: none;
 }
-.brand { display: flex; align-items: center; gap: 12px; padding: 4px 8px 24px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); margin-bottom: 16px; }
-.brand-mark { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 12px; background: #ffffff; padding: 6px; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2); border: 1px solid rgba(255, 255, 255, 0.2); }
+.brand { display: flex; align-items: center; gap: 12px; padding: 4px 8px 24px; border-bottom: 1px solid var(--border); margin-bottom: 16px; }
+.brand-mark { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 12px; background: #ffffff; padding: 6px; box-shadow: none; border: 1px solid var(--border); }
 .brand-mark img { width: 100%; height: 100%; object-fit: contain; }
 .brand strong, .brand span, .student strong, .student span, .sidebar-help strong, .sidebar-help span { display: block; }
-.brand strong { font: 800 15px var(--font-jakarta); letter-spacing: -0.01em; color: var(--on-brand); }
-.brand span { color: var(--on-brand-muted); font-size: 11px; margin-top: 2px; font-weight: 500; }
+.brand strong { font: 800 15px var(--font-jakarta); letter-spacing: -0.01em; color: var(--ink); }
+.brand span { color: var(--muted); font-size: 11px; margin-top: 2px; font-weight: 500; }
 .sidebar nav { display: grid; gap: 4px; }
 .sidebar nav a {
   display: flex;
   align-items: center;
   gap: 12px;
-  color: var(--on-brand-muted);
+  color: var(--ink-secondary);
   text-decoration: none;
   padding: 10px 12px;
   border-radius: 10px;
@@ -244,14 +247,13 @@ button { cursor: pointer; }
   position: relative;
 }
 .sidebar nav a:hover {
-  color: var(--on-brand);
-  background: rgba(255, 255, 255, 0.08);
-  transform: translateX(2px);
+  color: var(--ink);
+  background: var(--surface-alt);
 }
 .sidebar nav a.active {
-  color: var(--on-brand);
-  background: rgba(255, 255, 255, 0.14);
-  box-shadow: inset 3px 0 var(--teal-400), 0 2px 8px rgba(0, 0, 0, 0.15);
+  color: var(--navy);
+  background: var(--navy-soft-bg);
+  box-shadow: inset 3px 0 var(--navy);
 }
 .sidebar-help {
   margin-top: auto;
@@ -259,13 +261,12 @@ button { cursor: pointer; }
   display: flex;
   align-items: center;
   gap: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.05);
-  backdrop-filter: blur(8px);
+  border: 1px solid var(--border);
+  background: var(--surface-alt);
   border-radius: 12px;
 }
-.sidebar-help strong { font-size: 11px; font-weight: 700; color: var(--on-brand); }
-.sidebar-help span { color: var(--on-brand-muted); font-size: 10px; margin-top: 1px; }
+.sidebar-help strong { font-size: 11px; font-weight: 700; color: var(--ink); }
+.sidebar-help span { color: var(--muted); font-size: 10px; margin-top: 1px; }
 
 .portal-shell main { grid-column: 2; min-width: 0; }
 .topbar {
@@ -315,7 +316,7 @@ button { cursor: pointer; }
   display: grid;
   place-items: center;
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--navy), var(--blue));
+  background: var(--navy);
   color: #ffffff;
   font-weight: 800;
   font-size: 13px;
@@ -380,7 +381,7 @@ button { cursor: pointer; }
   border-color: var(--blue);
 }
 .metrics article:hover::after {
-  background: linear-gradient(90deg, var(--teal-400), var(--teal-700));
+  background: var(--blue);
 }
 .metric-icon { width: 48px; height: 48px; display: grid; place-items: center; border-radius: 13px; }
 .metric-icon svg { width: 22px; }
@@ -563,7 +564,7 @@ button { cursor: pointer; }
   flex-direction: column;
   justify-content: space-between;
   color: #fff;
-  background: radial-gradient(circle at 10% 90%, rgba(var(--brand-rgb), 0.45), transparent 30%), linear-gradient(145deg, var(--teal-900), var(--teal-700));
+  background: var(--navy-deep);
 }
 /* On paper the hero is a solid brand surface. On black it drops to the page
    black with a faint brand glow, so the dark theme stays black-first; the
@@ -575,6 +576,7 @@ button { cursor: pointer; }
 }
 .login-brand { display: flex; align-items: center; gap: 12px; font: 800 15px var(--font-jakarta); }
 .login-brand img { width: 44px; height: 44px; object-fit: contain; padding: 7px; background: #fff; border-radius: 12px; }
+.login-story .eyebrow { color: var(--on-brand); }
 .login-story h1 { font: 800 clamp(36px, 5vw, 64px)/1.05 var(--font-jakarta); letter-spacing: -0.05em; margin: 16px 0 20px; }
 .login-story p { color: var(--on-brand-soft); max-width: 520px; line-height: 1.7; font-size: 15px; }
 .login-story small { color: var(--on-brand-muted); }
@@ -684,13 +686,13 @@ button { cursor: pointer; }
    button uses, so the password form reads as the primary action. */
 .login-card form button.login-submit {
   margin-top: 4px;
-  background: var(--blue);
-  border-color: var(--blue);
+  background: var(--navy);
+  border-color: var(--navy);
   color: var(--on-brand);
 }
 .login-card form button.login-submit:hover {
-  background: var(--navy);
-  border-color: var(--navy);
+  background: var(--navy-deep);
+  border-color: var(--navy-deep);
   color: var(--on-brand);
 }
 .login-switch { margin-top: 16px; text-align: center; font-size: 12px; color: var(--muted); }
@@ -838,7 +840,7 @@ button { cursor: pointer; }
   border: 0;
   border-radius: 12px;
   padding: 13px;
-  background: linear-gradient(90deg, var(--teal-600), var(--teal-700));
+  background: var(--navy);
   color: #fff;
   font-weight: 800;
   font-size: 13px;
@@ -857,7 +859,7 @@ button { cursor: pointer; }
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  background: var(--blue);
+  background: var(--navy);
   color: #fff;
   text-decoration: none;
   padding: 11px 18px;
@@ -950,7 +952,7 @@ button { cursor: pointer; }
   display: flex;
   align-items: center;
   gap: 20px;
-  background: linear-gradient(135deg, var(--teal-900) 0%, var(--teal-600) 100%);
+  background: var(--navy);
   color: #fff;
   border-radius: 20px;
   padding: 28px;
@@ -964,7 +966,7 @@ button { cursor: pointer; }
 .completion strong { font: 800 20px var(--font-jakarta); }
 .completion span { font-size: 9px; color: var(--on-brand-soft); }
 .completion i { display: block; width: 100px; height: 6px; background: rgba(255, 255, 255, 0.2); border-radius: 9999px; margin-top: 6px; overflow: hidden; }
-.completion b { display: block; width: 84%; height: 100%; background: var(--teal-400); border-radius: 9999px; box-shadow: 0 0 8px rgba(var(--brand-rgb), 0.5); }
+.completion b { display: block; width: 84%; height: 100%; background: #ffffff; border-radius: 9999px; }
 .profile-banner > button { display: flex; align-items: center; gap: 6px; border: 0; background: #fff; color: var(--navy-deep); border-radius: 12px; padding: 10px 16px; font-size: 12px; font-weight: 800; box-shadow: 0 2px 8px rgba(0,0,0,0.15); transition: all 0.2s ease; }
 .profile-banner > button:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(0,0,0,0.2); }
 .profile-banner button svg { width: 15px; }
@@ -1006,7 +1008,7 @@ button { cursor: pointer; }
 .feedback-form header p { color: var(--muted); font-size: 12px; margin: 2px 0 0; }
 .feedback-form footer { display: flex; justify-content: space-between; align-items: center; margin-top: 24px; padding-top: 18px; border-top: 1px solid var(--border); }
 .feedback-form footer span { font-size: 11px; color: var(--muted); }
-.feedback-form footer button, .section-action button { display: flex; align-items: center; gap: 6px; border: 0; background: var(--blue); color: #fff; padding: 11px 18px; border-radius: 12px; font-size: 12px; font-weight: 800; box-shadow: 0 4px 12px rgba(var(--brand-rgb), 0.25); transition: all 0.2s ease; }
+.feedback-form footer button, .section-action button { display: flex; align-items: center; gap: 6px; border: 0; background: var(--navy); color: #fff; padding: 11px 18px; border-radius: 12px; font-size: 12px; font-weight: 800; box-shadow: 0 4px 12px rgba(var(--brand-rgb), 0.25); transition: all 0.2s ease; }
 .feedback-form footer button:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(var(--brand-rgb), 0.35); }
 .feedback-form footer svg, .section-action button svg { width: 15px; }
 
@@ -1059,10 +1061,10 @@ button { cursor: pointer; }
 
 .team-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-top: 24px; }
 .team-grid article { text-align: center; }
-.member-avatar { width: 76px; height: 76px; display: grid; place-items: center; margin: auto; border-radius: 20px; color: #fff; font: 800 20px var(--font-jakarta); background: var(--teal-600); box-shadow: 0 4px 14px rgba(0,0,0,0.15); }
-.member-avatar.tone-1 { background: var(--teal-400); }
-.member-avatar.tone-2 { background: var(--teal-700); }
-.member-avatar.tone-3 { background: var(--teal-900); }
+.member-avatar { width: 76px; height: 76px; display: grid; place-items: center; margin: auto; border-radius: 20px; color: #fff; font: 800 20px var(--font-jakarta); background: var(--navy); box-shadow: 0 4px 14px rgba(0,0,0,0.15); }
+.member-avatar.tone-1 { background: var(--blue); }
+.member-avatar.tone-2 { background: #9333ea; }
+.member-avatar.tone-3 { background: var(--navy-deep); }
 .team-grid h2 { font: 800 14px var(--font-jakarta); margin: 14px 0 4px; color: var(--ink); }
 .team-grid > article > span { font-size: 10px; color: var(--muted); font-weight: 600; }
 .team-grid article > div:last-child { display: flex; justify-content: center; gap: 8px; margin-top: 14px; }

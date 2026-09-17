@@ -10,8 +10,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.security import (
     ALL_PERMISSIONS,
     PERMISSION_METADATA,
+    PERM_RBAC_MANAGE,
     PERM_USERS_MANAGE,
-    PERM_USERS_READ,
+    PERM_USERS_VIEW,
     ROLE_DEFAULT_PERMISSIONS,
     compute_effective_permissions,
     is_admin_email,
@@ -59,7 +60,7 @@ def _to_user_summary(user: User, application_count: int = 0) -> UserSummary:
 
 @router.get("/permissions/catalog", response_model=PermissionCatalogResponse)
 async def get_permissions_catalog(
-    caller: dict = Depends(require_permission(PERM_USERS_READ)),
+    caller: dict = Depends(require_permission(PERM_USERS_VIEW)),
 ):
     """
     Returns the comprehensive catalog of all system permissions, categories,
@@ -96,7 +97,7 @@ async def list_users(
     status: Optional[str] = Query(None, description="Filter by active status: 'active', 'inactive', or 'all'"),
     page: int = Query(1, ge=1),
     limit: int = Query(50, ge=1, le=200),
-    caller: dict = Depends(require_permission(PERM_USERS_READ)),
+    caller: dict = Depends(require_permission(PERM_USERS_VIEW)),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -154,9 +155,8 @@ async def list_users(
 
     # Global counts for stats
     super_admins_count = (await db.scalar(select(func.count(User.id)).where(User.role == Role.SUPER_ADMIN))) or 0
-    admins_count = (await db.scalar(select(func.count(User.id)).where(User.role == Role.ADMIN))) or 0
-    officers_count = (await db.scalar(select(func.count(User.id)).where(User.role == Role.OFFICER))) or 0
-    coordinators_count = (await db.scalar(select(func.count(User.id)).where(User.role == Role.COORDINATOR))) or 0
+    placement_team_count = (await db.scalar(select(func.count(User.id)).where(User.role == Role.PLACEMENT_TEAM))) or 0
+    placement_volunteers_count = (await db.scalar(select(func.count(User.id)).where(User.role == Role.PLACEMENT_VOLUNTEER))) or 0
     students_count = (await db.scalar(select(func.count(User.id)).where(User.role == Role.STUDENT))) or 0
     inactive_count = (await db.scalar(select(func.count(User.id)).where(User.isActive.is_(False)))) or 0
     total_users_count = (await db.scalar(select(func.count(User.id)))) or 0
@@ -164,9 +164,8 @@ async def list_users(
     stats = UserStats(
         totalUsers=total_users_count,
         superAdmins=super_admins_count,
-        admins=admins_count,
-        officers=officers_count,
-        coordinators=coordinators_count,
+        placementTeam=placement_team_count,
+        placementVolunteers=placement_volunteers_count,
         students=students_count,
         inactive=inactive_count,
     )
@@ -177,7 +176,7 @@ async def list_users(
 @router.get("/{user_id}", response_model=UserSummary)
 async def get_user(
     user_id: str,
-    caller: dict = Depends(require_permission(PERM_USERS_READ)),
+    caller: dict = Depends(require_permission(PERM_USERS_VIEW)),
     db: AsyncSession = Depends(get_db),
 ):
     user = await db.scalar(select(User).where(User.id == user_id))
@@ -288,7 +287,7 @@ async def update_user_details(
 async def update_user_role(
     user_id: str,
     data: UserRoleUpdate,
-    caller: dict = Depends(require_permission(PERM_USERS_MANAGE)),
+    caller: dict = Depends(require_permission(PERM_RBAC_MANAGE)),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -311,7 +310,7 @@ async def update_user_role(
     caller_email = (caller.get("email") or "").strip().lower()
 
     # Self-demotion guard
-    if (user.id == caller_id or user.email == caller_email) and new_role in (Role.STUDENT, Role.COORDINATOR):
+    if (user.id == caller_id or user.email == caller_email) and new_role in (Role.STUDENT, Role.PLACEMENT_VOLUNTEER):
         if not is_admin_email(caller_email):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -354,7 +353,7 @@ async def update_user_role(
 async def update_user_permissions(
     user_id: str,
     data: UserPermissionsUpdate,
-    caller: dict = Depends(require_permission(PERM_USERS_MANAGE)),
+    caller: dict = Depends(require_permission(PERM_RBAC_MANAGE)),
     db: AsyncSession = Depends(get_db),
 ):
     """

@@ -18,14 +18,9 @@ export async function updateStudentProfile(
   formData: FormData,
 ): Promise<ProfileUpdateResult> {
   const parsed = studentProfileSchema.safeParse({
-    name: formData.get("name"),
-    rollNumber: formData.get("rollNumber"),
     personalEmail: formData.get("personalEmail"),
     contactNumber: formData.get("contactNumber"),
     altContactNumber: formData.get("altContactNumber"),
-    branch: formData.get("branch"),
-    degree: formData.get("degree"),
-    batch: formData.get("batch"),
     gender: formData.get("gender"),
     bloodGroup: formData.get("bloodGroup"),
     dateOfBirth: formData.get("dateOfBirth"),

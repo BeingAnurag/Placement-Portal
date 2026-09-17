@@ -1,13 +1,13 @@
 import { AuthenticatedAdminShell } from "@/components/admin/authenticated-admin-shell";
 import { UsersManager, type AdminUserListItem } from "@/components/admin/users-manager";
 import { requirePermission } from "@/lib/admin-session";
-import { PERM_USERS_READ, computeEffectivePermissions } from "@/lib/permissions";
+import { PERM_USERS_VIEW, computeEffectivePermissions } from "@/lib/permissions";
 import { db } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
 export default async function Page() {
-  const { user: currentAdmin } = await requirePermission(PERM_USERS_READ);
+  const { user: currentAdmin } = await requirePermission(PERM_USERS_VIEW);
 
   const users = await db.user.findMany({
     orderBy: { createdAt: "desc" },

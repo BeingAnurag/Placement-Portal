@@ -17,13 +17,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.security import (
-    PERM_ANNOUNCEMENTS_MANAGE,
-    PERM_APPLICATIONS_READ,
-    PERM_STUDENTS_READ,
+    PERM_ANNOUNCEMENTS_CREATE,
+    PERM_APPLICATIONS_VIEW,
+    PERM_NOC_APPROVE,
+    PERM_STUDENTS_VIEW,
     has_permission,
     is_admin_email,
     is_elevated_role,
-    require_permission,
 )
 from app.core.storage import (
     ATTACHMENT_TYPES,
@@ -35,7 +35,7 @@ from app.core.storage import (
     validate_attachment,
     validate_pdf,
 )
-from app.dependencies import get_current_user, get_db, require_admin, require_student
+from app.dependencies import get_current_user, get_db, require_permission, require_student
 from app.models.db import Announcement, AnnouncementAttachment, AnnouncementStatus, NocRequest, Resume
 from app.schemas.student import ResumeResponse
 
@@ -101,7 +101,7 @@ async def upload_resume(
 @router.post("/admin/noc-document")
 async def upload_noc_document(
     file: UploadFile = File(...),
-    admin_payload: dict = Depends(require_admin),
+    admin_payload: dict = Depends(require_permission(PERM_NOC_APPROVE)),
 ):
     content = await file.read()
     if len(content) == 0:
@@ -119,7 +119,7 @@ async def upload_noc_document(
 @router.post("/admin/announcement-attachment")
 async def upload_announcement_attachment(
     file: UploadFile = File(...),
-    token_payload: dict = Depends(require_permission(PERM_ANNOUNCEMENTS_MANAGE)),
+    token_payload: dict = Depends(require_permission(PERM_ANNOUNCEMENTS_CREATE)),
 ):
     """
     Stage one file for an announcement that may not exist yet.
@@ -165,8 +165,8 @@ async def get_uploaded_file(
     is_admin = (
         is_elevated_role(user_role)
         or is_admin_email(user_email)
-        or has_permission(token_payload, PERM_STUDENTS_READ)
-        or has_permission(token_payload, PERM_APPLICATIONS_READ)
+        or has_permission(token_payload, PERM_STUDENTS_VIEW)
+        or has_permission(token_payload, PERM_APPLICATIONS_VIEW)
     )
 
     clean_path = file_path.lstrip("/")
@@ -185,14 +185,19 @@ async def get_uploaded_file(
             is_own_resume = resolved_rel.startswith(f"resumes/{user_id}/")
             is_noc_doc = False
             if resolved_rel.startswith("noc_docs/"):
-                doc_record = await db.scalar(
-                    select(NocRequest).where(
-                        NocRequest.userId == user_id,
-                        NocRequest.documentUrl.is_not(None),
+                # Ask whether *any* of the caller's NOC documents is this file.
+                # Loading a single arbitrary row and comparing against it 403'd
+                # a student who had more than one NOC document.
+                is_noc_doc = bool(
+                    await db.scalar(
+                        select(NocRequest.id)
+                        .where(
+                            NocRequest.userId == user_id,
+                            NocRequest.documentUrl.like(f"%{resolved_rel}"),
+                        )
+                        .limit(1)
                     )
                 )
-                if doc_record and doc_record.documentUrl and resolved_rel in doc_record.documentUrl:
-                    is_noc_doc = True
 
             # An attachment is readable by any signed-in user once the
             # announcement carrying it is published, and by nobody while it is

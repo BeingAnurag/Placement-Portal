@@ -40,6 +40,18 @@ import {
   type PermissionKey,
 } from "@/lib/permissions";
 
+/**
+ * Role choices, highest tier first, derived from ROLE_METADATA so a role added
+ * there cannot go missing from these dropdowns.
+ */
+const ROLE_OPTIONS = (Object.entries(ROLE_METADATA) as [Role, (typeof ROLE_METADATA)[Role]][])
+  .sort(([, a], [, b]) => b.tier - a.tier)
+  .map(([value, meta]) => ({
+    value,
+    label: meta.label,
+    description: meta.description,
+  }));
+
 export type AdminUserListItem = {
   id: string;
   name: string | null;
@@ -87,26 +99,24 @@ export function UsersManager({
   // Metrics
   const stats = useMemo(() => {
     let superAdmins = 0;
-    let admins = 0;
-    let officers = 0;
-    let coordinators = 0;
+    let placementTeam = 0;
+    let placementVolunteers = 0;
     let students = 0;
     let inactive = 0;
 
     for (const u of users) {
       if (!u.isActive) inactive++;
       if (u.role === "SUPER_ADMIN") superAdmins++;
-      else if (u.role === "ADMIN") admins++;
-      else if (u.role === "OFFICER") officers++;
-      else if (u.role === "COORDINATOR") coordinators++;
+      else if (u.role === "PLACEMENT_TEAM") placementTeam++;
+      else if (u.role === "PLACEMENT_VOLUNTEER") placementVolunteers++;
       else students++;
     }
 
     return {
       total: users.length,
-      admins: superAdmins + admins,
-      officers,
-      coordinators,
+      superAdmins,
+      placementTeam,
+      placementVolunteers,
       students,
       inactive,
     };
@@ -442,13 +452,7 @@ export function UsersManager({
       {
         id: "role",
         label: "Role",
-        options: [
-          { value: "SUPER_ADMIN", label: "Super Admins" },
-          { value: "ADMIN", label: "Administrators" },
-          { value: "OFFICER", label: "Placement Officers" },
-          { value: "COORDINATOR", label: "Student Coordinators" },
-          { value: "STUDENT", label: "Students" },
-        ],
+        options: ROLE_OPTIONS.map(({ value, label }) => ({ value, label })),
         value: (u) => u.role,
       },
       {
@@ -514,9 +518,9 @@ export function UsersManager({
             <ShieldCheck />
           </div>
           <div>
-            <small>Administrators</small>
-            <strong>{stats.admins}</strong>
-            <b>Super & domain admins</b>
+            <small>Super Admins</small>
+            <strong>{stats.superAdmins}</strong>
+            <b>Full access, including RBAC</b>
           </div>
         </article>
 
@@ -525,9 +529,9 @@ export function UsersManager({
             <UserCheck />
           </div>
           <div>
-            <small>Officers & Coordinators</small>
-            <strong>{stats.officers + stats.coordinators}</strong>
-            <b>{stats.officers} staff · {stats.coordinators} coordinators</b>
+            <small>Placement Cell</small>
+            <strong>{stats.placementTeam + stats.placementVolunteers}</strong>
+            <b>{stats.placementTeam} team · {stats.placementVolunteers} volunteers</b>
           </div>
         </article>
 
@@ -602,11 +606,11 @@ export function UsersManager({
               <label>
                 Assigned Role *
                 <select name="role" defaultValue="STUDENT">
-                  <option value="STUDENT">Student (Standard Applicant)</option>
-                  <option value="COORDINATOR">Student Coordinator</option>
-                  <option value="OFFICER">Placement Officer</option>
-                  <option value="ADMIN">Administrator</option>
-                  <option value="SUPER_ADMIN">Super Administrator</option>
+                  {ROLE_OPTIONS.map(({ value, label }) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
                 </select>
               </label>
 
@@ -690,11 +694,11 @@ export function UsersManager({
                   value={selectedRole}
                   onChange={(e) => setSelectedRole(e.target.value as Role)}
                 >
-                  <option value="SUPER_ADMIN">Super Administrator (Tier 5 - Unrestricted)</option>
-                  <option value="ADMIN">Administrator (Tier 4 - Full Operations)</option>
-                  <option value="OFFICER">Placement Officer (Tier 3 - Staff Operations)</option>
-                  <option value="COORDINATOR">Student Coordinator (Tier 2 - Drives & Events)</option>
-                  <option value="STUDENT">Student (Tier 1 - Standard Portal)</option>
+                  {ROLE_OPTIONS.map(({ value, label, description }) => (
+                    <option key={value} value={value}>
+                      {label} — {description}
+                    </option>
+                  ))}
                 </select>
               </label>
 
@@ -727,7 +731,7 @@ export function UsersManager({
             </div>
 
             {roleModalUser.id === currentUserId &&
-              (selectedRole === "STUDENT" || selectedRole === "COORDINATOR") && (
+              (selectedRole === "STUDENT" || selectedRole === "PLACEMENT_VOLUNTEER") && (
                 <div className="admin-error mt-3">
                   <ShieldAlert size={16} />
                   Warning: You are demoting your own account. You may lose access to this admin panel.

@@ -5,13 +5,13 @@ import {
   type CompanyOption,
 } from "@/components/admin/announcements-manager";
 import { requirePermission } from "@/lib/admin-session";
-import { PERM_ANNOUNCEMENTS_MANAGE } from "@/lib/permissions";
+import { PERM_ANNOUNCEMENTS_VIEW } from "@/lib/permissions";
 import { db } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
 export default async function Page() {
-  const { user } = await requirePermission(PERM_ANNOUNCEMENTS_MANAGE);
+  const { user } = await requirePermission(PERM_ANNOUNCEMENTS_VIEW);
 
   const [announcements, companies] = await Promise.all([
     db.announcement.findMany({

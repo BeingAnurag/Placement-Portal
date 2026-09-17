@@ -8,7 +8,12 @@ from sqlalchemy import distinct, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.core.security import PERM_INTERVIEW_EXPERIENCES_MANAGE, require_permission
+from app.core.security import (
+    PERM_INTERVIEW_EXPERIENCES_APPROVE,
+    PERM_INTERVIEW_EXPERIENCES_DELETE,
+    PERM_INTERVIEW_EXPERIENCES_VIEW,
+    require_permission,
+)
 from app.dependencies import get_db, require_student
 from app.models.db import InterviewExperience, InterviewExperienceStatus, Notification, User
 from app.schemas.interview_experience import (
@@ -184,7 +189,7 @@ async def submit_interview_experience(
 
 
 # ===========================================================================
-# Administrative endpoints (Protected by PERM_INTERVIEW_EXPERIENCES_MANAGE)
+# Administrative endpoints (interview_experiences.view / .approve / .delete)
 #
 # Registered before the generic "/{experience_id}" student route below so
 # that literal paths like "/admin" are not swallowed by the single-segment
@@ -193,7 +198,7 @@ async def submit_interview_experience(
 
 @router.get("/admin/metrics", response_model=InterviewExperienceMetricsResponse)
 async def get_experience_metrics(
-    admin_payload: dict = Depends(require_permission(PERM_INTERVIEW_EXPERIENCES_MANAGE)),
+    admin_payload: dict = Depends(require_permission(PERM_INTERVIEW_EXPERIENCES_VIEW)),
     db: AsyncSession = Depends(get_db),
 ):
     """Retrieve interview experience moderation metrics for the admin dashboard."""
@@ -217,7 +222,7 @@ async def list_admin_experiences(
     search: Optional[str] = Query(None, description="Search across student name, roll number, company, and role"),
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
-    admin_payload: dict = Depends(require_permission(PERM_INTERVIEW_EXPERIENCES_MANAGE)),
+    admin_payload: dict = Depends(require_permission(PERM_INTERVIEW_EXPERIENCES_VIEW)),
     db: AsyncSession = Depends(get_db),
 ):
     """List all submitted interview experiences with filters, search, and author profile info."""
@@ -260,7 +265,7 @@ async def list_admin_experiences(
 @router.get("/admin/{experience_id}", response_model=AdminInterviewExperienceResponse)
 async def get_admin_experience_detail(
     experience_id: str,
-    admin_payload: dict = Depends(require_permission(PERM_INTERVIEW_EXPERIENCES_MANAGE)),
+    admin_payload: dict = Depends(require_permission(PERM_INTERVIEW_EXPERIENCES_VIEW)),
     db: AsyncSession = Depends(get_db),
 ):
     """Retrieve detailed information, including author profile, for a single submission."""
@@ -281,7 +286,7 @@ async def approve_experience(
     experience_id: str,
     data: InterviewExperienceReviewRequest,
     background_tasks: BackgroundTasks,
-    admin_payload: dict = Depends(require_permission(PERM_INTERVIEW_EXPERIENCES_MANAGE)),
+    admin_payload: dict = Depends(require_permission(PERM_INTERVIEW_EXPERIENCES_APPROVE)),
     db: AsyncSession = Depends(get_db),
 ):
     """Approve a submission so it becomes visible to all students, and notify the author."""
@@ -332,7 +337,7 @@ async def reject_experience(
     experience_id: str,
     data: InterviewExperienceReviewRequest,
     background_tasks: BackgroundTasks,
-    admin_payload: dict = Depends(require_permission(PERM_INTERVIEW_EXPERIENCES_MANAGE)),
+    admin_payload: dict = Depends(require_permission(PERM_INTERVIEW_EXPERIENCES_APPROVE)),
     db: AsyncSession = Depends(get_db),
 ):
     """Reject a submission with an optional note, and notify the author."""
@@ -384,7 +389,7 @@ async def reject_experience(
 @router.delete("/admin/{experience_id}")
 async def delete_experience(
     experience_id: str,
-    admin_payload: dict = Depends(require_permission(PERM_INTERVIEW_EXPERIENCES_MANAGE)),
+    admin_payload: dict = Depends(require_permission(PERM_INTERVIEW_EXPERIENCES_DELETE)),
     db: AsyncSession = Depends(get_db),
 ):
     """Permanently remove an interview experience submission."""

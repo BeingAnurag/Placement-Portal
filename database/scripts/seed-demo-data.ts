@@ -231,7 +231,7 @@ async function resolveAdministratorId() {
   }
 
   const anyAdmin = await db.user.findFirst({
-    where: { role: "ADMIN" },
+    where: { role: { in: ["SUPER_ADMIN", "PLACEMENT_TEAM"] } },
     select: { id: true },
   });
   if (anyAdmin) return anyAdmin.id;

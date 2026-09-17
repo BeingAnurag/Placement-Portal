@@ -9,6 +9,7 @@
     "migrate": "prisma migrate dev",
     "deploy": "prisma migrate deploy",
     "seed": "tsx prisma/seed.ts",
+    "import-students": "tsx scripts/import-students.ts",
     "sync-admins": "tsx scripts/sync-admin-roles.ts",
     "set-password": "tsx scripts/set-password.ts",
     "pack-demo": "tsx scripts/pack-demo-data.ts",

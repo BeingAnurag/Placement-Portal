@@ -7,7 +7,8 @@ import pytest
 from pydantic import ValidationError
 
 from app.core.security import (
-    PERM_FEEDBACKS_MANAGE,
+    PERM_FEEDBACK_RESOLVE,
+    PERM_FEEDBACK_RESPOND,
     compute_effective_permissions,
     has_permission,
 )
@@ -66,22 +67,21 @@ def test_feedback_reply_schema_rejects_empty():
 
 def test_feedback_manage_permission_hierarchy():
     super_admin_perms = compute_effective_permissions("SUPER_ADMIN")
-    assert PERM_FEEDBACKS_MANAGE in super_admin_perms
+    assert PERM_FEEDBACK_RESPOND in super_admin_perms
 
-    admin_perms = compute_effective_permissions("ADMIN")
-    assert PERM_FEEDBACKS_MANAGE in admin_perms
+    team_perms = compute_effective_permissions("PLACEMENT_TEAM")
+    assert PERM_FEEDBACK_RESPOND in team_perms
 
-    officer_perms = compute_effective_permissions("OFFICER")
-    assert PERM_FEEDBACKS_MANAGE in officer_perms
-
-    coordinator_perms = compute_effective_permissions("COORDINATOR")
-    assert PERM_FEEDBACKS_MANAGE not in coordinator_perms
+    # Volunteers answer student queries, but cannot close them out.
+    volunteer_perms = compute_effective_permissions("PLACEMENT_VOLUNTEER")
+    assert PERM_FEEDBACK_RESPOND in volunteer_perms
+    assert PERM_FEEDBACK_RESOLVE not in volunteer_perms
 
     student_perms = compute_effective_permissions("STUDENT")
-    assert PERM_FEEDBACKS_MANAGE not in student_perms
+    assert PERM_FEEDBACK_RESPOND not in student_perms
 
-    custom_student = compute_effective_permissions("STUDENT", custom_permissions=[PERM_FEEDBACKS_MANAGE])
-    assert PERM_FEEDBACKS_MANAGE in custom_student
+    custom_student = compute_effective_permissions("STUDENT", custom_permissions=[PERM_FEEDBACK_RESPOND])
+    assert PERM_FEEDBACK_RESPOND in custom_student
 
 
 def test_to_admin_feedback_response_formatting():

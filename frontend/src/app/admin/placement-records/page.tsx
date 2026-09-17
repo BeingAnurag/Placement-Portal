@@ -8,7 +8,7 @@ import {
 } from "@/components/admin/placement-records-manager";
 import { backendFetch } from "@/lib/api-client";
 import { requirePermission } from "@/lib/admin-session";
-import { PERM_APPLICATIONS_MANAGE } from "@/lib/permissions";
+import { PERM_PLACEMENT_RECORDS_VIEW } from "@/lib/permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +19,7 @@ type OptionsResponse = {
 };
 
 export default async function Page() {
-  await requirePermission(PERM_APPLICATIONS_MANAGE);
+  await requirePermission(PERM_PLACEMENT_RECORDS_VIEW);
 
   // Offers live only in the backend, so an unreachable API is an empty screen
   // with an explanation rather than a half-populated one.

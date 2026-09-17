@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { backendAuthHeader, backendBaseUrl } from "@/lib/api-client";
 import { auth } from "@/lib/auth";
-import { hasPermission, PERM_APPLICATIONS_MANAGE } from "@/lib/permissions";
+import { hasPermission, PERM_APPLICATIONS_UPDATE } from "@/lib/permissions";
 
 // The CSV is produced by GET /api/v1/applications/admin/export, which owns the
 // query and adds the Resume Label column. This handler exists because a browser
@@ -10,7 +10,7 @@ import { hasPermission, PERM_APPLICATIONS_MANAGE } from "@/lib/permissions";
 export async function GET(request: NextRequest) {
   const session = await auth();
   if (!session?.user) return new NextResponse("Unauthorized", { status: 401 });
-  if (!hasPermission(session.user, PERM_APPLICATIONS_MANAGE)) {
+  if (!hasPermission(session.user, PERM_APPLICATIONS_UPDATE)) {
     return new NextResponse("Forbidden", { status: 403 });
   }
 

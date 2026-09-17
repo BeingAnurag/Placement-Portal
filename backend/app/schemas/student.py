@@ -4,14 +4,13 @@ from typing import Optional
 from pydantic import BaseModel, ConfigDict, Field
 
 class StudentProfileUpdate(BaseModel):
-    name: Optional[str] = None
-    rollNumber: Optional[str] = None
+    # name, rollNumber, branch, degree, and batch come from the placement
+    # office's roster import and are deliberately absent here: this schema is
+    # the boundary the student-facing PATCH /profile route validates against,
+    # so a field that doesn't exist on it can never be set by a student.
     personalEmail: Optional[str] = None
     contactNumber: Optional[str] = None
     altContactNumber: Optional[str] = None
-    branch: Optional[str] = None
-    degree: Optional[str] = None
-    batch: Optional[int] = None
     gender: Optional[str] = None
     bloodGroup: Optional[str] = None
     dateOfBirth: Optional[datetime] = None

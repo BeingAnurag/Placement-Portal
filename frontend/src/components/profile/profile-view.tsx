@@ -80,6 +80,16 @@ export type StudentProfileViewData = {
   }>;
 };
 
+// Set by the placement office from the official roster, not by the student.
+// Kept in ProfileValues for display, but renderFields never lets them unlock.
+const LOCKED_FIELDS = new Set<keyof ProfileValues>([
+  "name",
+  "rollNumber",
+  "branch",
+  "degree",
+  "batch",
+]);
+
 const personalFields: Array<[keyof ProfileValues, string, string]> = [
   ["name", "Full name", "text"],
   ["dateOfBirth", "Date of birth", "date"],
@@ -338,23 +348,27 @@ export function ProfileView({ profile }: { profile: StudentProfileViewData }) {
   }
 
   function renderFields(fields: Array<[keyof ProfileValues, string, string]>) {
-    return fields.map(([key, label, type]) => (
-      <label className={key === "currentAddress" ? "wide" : ""} key={key}>
-        {label}
-        <input
-          name={key}
-          type={type}
-          disabled={!editing}
-          value={form[key]}
-          step={type === "number" ? "any" : undefined}
-          placeholder="Not provided"
-          onChange={(event) => update(key, event.target.value)}
-        />
-        {result.fieldErrors?.[key]?.[0] ? (
-          <small className="field-error">{result.fieldErrors[key][0]}</small>
-        ) : null}
-      </label>
-    ));
+    return fields.map(([key, label, type]) => {
+      const locked = LOCKED_FIELDS.has(key);
+      return (
+        <label className={key === "currentAddress" ? "wide" : ""} key={key}>
+          {label}
+          <input
+            name={key}
+            type={type}
+            disabled={locked || !editing}
+            value={form[key]}
+            step={type === "number" ? "any" : undefined}
+            placeholder="Not provided"
+            title={locked ? "Set by the placement office from the official roster" : undefined}
+            onChange={(event) => update(key, event.target.value)}
+          />
+          {result.fieldErrors?.[key]?.[0] ? (
+            <small className="field-error">{result.fieldErrors[key][0]}</small>
+          ) : null}
+        </label>
+      );
+    });
   }
 
   return (

@@ -3,7 +3,7 @@ import { FeedbacksManager, type AdminFeedbackItem } from "@/components/admin/fee
 import { requirePermission } from "@/lib/admin-session";
 import { backendFetch } from "@/lib/api-client";
 import { db } from "@/lib/db";
-import { PERM_FEEDBACKS_MANAGE } from "@/lib/permissions";
+import { PERM_FEEDBACK_VIEW } from "@/lib/permissions";
 
 function readContent(content: string): { subject: string; message: string } {
   try {
@@ -40,7 +40,7 @@ interface BackendFeedbackAdminDto {
 export const dynamic = "force-dynamic";
 
 export default async function Page() {
-  const { user } = await requirePermission(PERM_FEEDBACKS_MANAGE);
+  const { user } = await requirePermission(PERM_FEEDBACK_VIEW);
 
   let items: AdminFeedbackItem[] = [];
 

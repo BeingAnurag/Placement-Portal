@@ -19,7 +19,7 @@ test("institute accounts sign in as students", () => {
 test("configured external administrators are allowed and receive admin access", () => {
   assert.equal(canUsePasswordAccount("EXTERNAL@GMAIL.COM", "external@gmail.com"), true);
   assert.equal(isAdminEmail("  External@Gmail.com  ", "external@gmail.com"), true);
-  assert.equal(resolveRole("external@gmail.com", "external@gmail.com"), "ADMIN");
+  assert.equal(resolveRole("external@gmail.com", "external@gmail.com"), "SUPER_ADMIN");
 });
 
 test("unlisted external accounts are rejected", () => {
@@ -35,7 +35,7 @@ test("there is no built-in administrator when ADMIN_EMAILS is empty", () => {
 });
 
 test("an institute administrator keeps admin only while listed", () => {
-  assert.equal(resolveRole("head@iiitl.ac.in", "head@iiitl.ac.in"), "ADMIN");
+  assert.equal(resolveRole("head@iiitl.ac.in", "head@iiitl.ac.in"), "SUPER_ADMIN");
   assert.equal(resolveRole("head@iiitl.ac.in", ""), "STUDENT");
 });
 

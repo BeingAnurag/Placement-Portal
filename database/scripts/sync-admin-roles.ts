@@ -10,8 +10,8 @@ async function main() {
   const adminEmails = parseAdminEmails();
 
   const promoted = await db.user.updateMany({
-    where: { email: { in: adminEmails }, role: { notIn: [Role.ADMIN, Role.SUPER_ADMIN] } },
-    data: { role: Role.ADMIN },
+    where: { email: { in: adminEmails }, role: { not: Role.SUPER_ADMIN } },
+    data: { role: Role.SUPER_ADMIN },
   });
 
   console.log(`Promoted ${promoted.count} account(s) matching ADMIN_EMAILS.`);

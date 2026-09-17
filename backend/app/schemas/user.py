@@ -26,9 +26,8 @@ class UserSummary(BaseModel):
 class UserStats(BaseModel):
     totalUsers: int = 0
     superAdmins: int = 0
-    admins: int = 0
-    officers: int = 0
-    coordinators: int = 0
+    placementTeam: int = 0
+    placementVolunteers: int = 0
     students: int = 0
     inactive: int = 0
 

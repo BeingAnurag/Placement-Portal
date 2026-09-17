@@ -7,6 +7,7 @@ import { requirePermission } from "@/lib/admin-session";
 import { db } from "@/lib/db";
 import {
   ALL_PERMISSIONS,
+  PERM_RBAC_MANAGE,
   PERM_USERS_MANAGE,
   type PermissionKey,
 } from "@/lib/permissions";
@@ -17,7 +18,7 @@ import type { Role } from "@prisma/client";
 
 export type UserActionResult = { error?: string; success?: string };
 
-const roles = ["STUDENT", "COORDINATOR", "OFFICER", "ADMIN", "SUPER_ADMIN"] as const;
+const roles = ["STUDENT", "PLACEMENT_VOLUNTEER", "PLACEMENT_TEAM", "SUPER_ADMIN"] as const;
 
 const createUserSchema = z.object({
   email: z.string().trim().email("Please enter a valid email address."),
@@ -131,6 +132,14 @@ export async function createUserAction(formData: FormData): Promise<UserActionRe
     return { error: parsed.error.issues[0]?.message ?? "Invalid user input." };
   }
 
+  // users.manage provisions accounts; handing one a role or a permission grant
+  // on creation is an RBAC change and takes rbac.manage as well. Without this,
+  // creating a SUPER_ADMIN would be an escalation route around
+  // updateUserRoleAction.
+  if (parsed.data.role !== "STUDENT" || parsed.data.customPermissions.length > 0) {
+    await requirePermission(PERM_RBAC_MANAGE);
+  }
+
   const cleanEmail = parsed.data.email.toLowerCase();
 
   // Try backend first
@@ -176,7 +185,10 @@ export async function createUserAction(formData: FormData): Promise<UserActionRe
 }
 
 export async function updateUserRoleAction(formData: FormData): Promise<UserActionResult> {
-  const { user: caller } = await requirePermission(PERM_USERS_MANAGE);
+  // Assigning roles is rbac.manage, not users.manage: a Placement Team member
+  // holding users.manage must not be able to promote anyone — including
+  // themselves — into a role they do not hold.
+  const { user: caller } = await requirePermission(PERM_RBAC_MANAGE);
 
   const parsed = updateUserRoleSchema.safeParse({
     userId: formData.get("userId"),
@@ -192,17 +204,17 @@ export async function updateUserRoleAction(formData: FormData): Promise<UserActi
   if (!target) return { error: "User not found." };
 
   // Guard against self-demotion
-  if (target.id === caller.id && (parsed.data.role === "STUDENT" || parsed.data.role === "COORDINATOR")) {
+  if (target.id === caller.id && (parsed.data.role === "STUDENT" || parsed.data.role === "PLACEMENT_VOLUNTEER")) {
     if (!isAdminEmail(caller.email)) {
       return { error: "You cannot demote your own administrator account." };
     }
   }
 
   // Guard against demoting the last active administrator
-  if ((target.role === "SUPER_ADMIN" || target.role === "ADMIN") && parsed.data.role !== "SUPER_ADMIN" && parsed.data.role !== "ADMIN") {
+  if (target.role === "SUPER_ADMIN" && parsed.data.role !== "SUPER_ADMIN") {
     const adminCount = await db.user.count({
       where: {
-        role: { in: ["SUPER_ADMIN", "ADMIN"] },
+        role: "SUPER_ADMIN",
         isActive: true,
         NOT: { id: target.id },
       },
@@ -237,7 +249,9 @@ export async function updateUserPermissionsAction(
   userId: string,
   customPermissions: string[],
 ): Promise<UserActionResult> {
-  await requirePermission(PERM_USERS_MANAGE);
+  // Editing the permission matrix is rbac.manage: granting a permission you
+  // hold to someone else is the same escalation as assigning a role.
+  await requirePermission(PERM_RBAC_MANAGE);
 
   for (const perm of customPermissions) {
     const basePerm = perm.startsWith("-") ? perm.slice(1) : perm;
@@ -278,10 +292,10 @@ export async function updateUserStatusAction(
     return { error: "You cannot deactivate your own account." };
   }
 
-  if (!isActive && (target.role === "SUPER_ADMIN" || target.role === "ADMIN")) {
+  if (!isActive && target.role === "SUPER_ADMIN") {
     const adminCount = await db.user.count({
       where: {
-        role: { in: ["SUPER_ADMIN", "ADMIN"] },
+        role: "SUPER_ADMIN",
         isActive: true,
         NOT: { id: target.id },
       },
@@ -373,10 +387,10 @@ export async function deleteUserAction(formData: FormData): Promise<UserActionRe
     return { error: "You cannot delete your own user account." };
   }
 
-  if (target.role === "SUPER_ADMIN" || target.role === "ADMIN") {
+  if (target.role === "SUPER_ADMIN") {
     const adminCount = await db.user.count({
       where: {
-        role: { in: ["SUPER_ADMIN", "ADMIN"] },
+        role: "SUPER_ADMIN",
         isActive: true,
         NOT: { id: target.id },
       },

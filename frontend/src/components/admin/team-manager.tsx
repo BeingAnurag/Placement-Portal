@@ -33,6 +33,7 @@ import {
   type TeamActionResult,
 } from "@/app/admin/team/actions";
 import {
+  DEFAULT_PLACEMENT_TEAM_PERMISSIONS,
   PERMISSION_DEFINITIONS,
   ROLE_METADATA,
 } from "@/lib/permissions";
@@ -723,16 +724,7 @@ export function TeamManager({
                   <button
                     type="button"
                     onClick={() =>
-                      setSelectedDefaultPerms([
-                        "companies:read",
-                        "jobs:read",
-                        "jobs:manage",
-                        "applications:read",
-                        "applications:manage",
-                        "students:read",
-                        "announcements:manage",
-                        "analytics:view",
-                      ])
+                      setSelectedDefaultPerms([...DEFAULT_PLACEMENT_TEAM_PERMISSIONS])
                     }
                     className="px-2.5 py-1 text-[11px] font-semibold rounded-lg bg-[var(--surface-alt)] hover:bg-[var(--surface)] text-[var(--ink)] border border-[var(--border)]"
                   >

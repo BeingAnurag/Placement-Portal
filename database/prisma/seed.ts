@@ -19,8 +19,8 @@ async function main() {
   for (const email of adminEmails) {
     await prisma.user.upsert({
       where: { email },
-      update: { role: Role.ADMIN },
-      create: { email, name: "Placement Office", role: Role.ADMIN, semGPAs: [] },
+      update: { role: Role.SUPER_ADMIN },
+      create: { email, name: "Placement Office", role: Role.SUPER_ADMIN, semGPAs: [] },
     });
   }
 

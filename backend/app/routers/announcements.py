@@ -9,7 +9,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.security import (
-    PERM_ANNOUNCEMENTS_MANAGE,
+    PERM_ANNOUNCEMENTS_CREATE,
+    PERM_ANNOUNCEMENTS_DELETE,
+    PERM_ANNOUNCEMENTS_UPDATE,
+    PERM_ANNOUNCEMENTS_VIEW,
     get_current_user,
     has_permission,
     require_permission,
@@ -113,7 +116,7 @@ def _attachment_row(announcement_id: str, data: AnnouncementAttachmentInput) -> 
 
 def _may_see_drafts(caller: dict) -> bool:
     """A draft belongs to the placement cell until it is published."""
-    return has_permission(caller, PERM_ANNOUNCEMENTS_MANAGE)
+    return has_permission(caller, PERM_ANNOUNCEMENTS_VIEW)
 
 
 @router.get("", response_model=list[AnnouncementResponse])
@@ -211,7 +214,7 @@ async def get_announcement(
 @router.post("", response_model=AnnouncementResponse, status_code=status.HTTP_201_CREATED)
 async def create_announcement(
     data: AnnouncementCreate,
-    caller: dict = Depends(require_permission(PERM_ANNOUNCEMENTS_MANAGE)),
+    caller: dict = Depends(require_permission(PERM_ANNOUNCEMENTS_CREATE)),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -251,7 +254,7 @@ async def create_announcement(
             id=author_id,
             email=caller_email,
             name=caller.get("name"),
-            role=caller.get("role", "ADMIN"),
+            role=caller.get("role", "PLACEMENT_TEAM"),
         )
         db.add(author)
         await db.flush()
@@ -312,7 +315,7 @@ async def create_announcement(
 async def update_announcement(
     announcement_id: str,
     data: AnnouncementUpdate,
-    caller: dict = Depends(require_permission(PERM_ANNOUNCEMENTS_MANAGE)),
+    caller: dict = Depends(require_permission(PERM_ANNOUNCEMENTS_UPDATE)),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -419,7 +422,7 @@ async def update_announcement(
 @router.delete("/{announcement_id}")
 async def delete_announcement(
     announcement_id: str,
-    caller: dict = Depends(require_permission(PERM_ANNOUNCEMENTS_MANAGE)),
+    caller: dict = Depends(require_permission(PERM_ANNOUNCEMENTS_DELETE)),
     db: AsyncSession = Depends(get_db),
 ):
     """

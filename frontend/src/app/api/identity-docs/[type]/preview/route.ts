@@ -5,7 +5,8 @@ import { backendAuthHeader, backendBaseUrl } from "@/lib/api-client";
 import { db } from "@/lib/db";
 import { decryptBuffer, decryptSensitiveValue } from "@/lib/encryption";
 import { requireStudent } from "@/lib/student-session";
-import { requireAdmin } from "@/lib/admin-session";
+import { requirePermission } from "@/lib/admin-session";
+import { PERM_STUDENTS_VIEW } from "@/lib/permissions";
 
 export async function POST(
   request: NextRequest,
@@ -72,13 +73,15 @@ export async function POST(
   let isAdmin = false;
 
   try {
-    const admin = await requireAdmin();
-    if (admin) {
-      isAdmin = true;
-      targetUserId = body.studentId;
-    }
+    // Unlocking another student's encrypted Aadhaar/PAN takes the student
+    // register permission specifically. Merely reaching the admin portal is
+    // not enough: that check was permission-blind and `studentId` is caller
+    // supplied, so it decrypted any student's documents on request.
+    await requirePermission(PERM_STUDENTS_VIEW);
+    isAdmin = true;
+    targetUserId = body.studentId;
   } catch {
-    // Not admin
+    // Not a staff account with the student register permission.
   }
 
   if (!isAdmin) {

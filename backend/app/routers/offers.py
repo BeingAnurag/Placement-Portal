@@ -23,7 +23,10 @@ from sqlalchemy.orm import selectinload
 
 from app.core.security import (
     PERM_ANALYTICS_VIEW,
-    PERM_APPLICATIONS_MANAGE,
+    PERM_PLACEMENT_RECORDS_CREATE,
+    PERM_PLACEMENT_RECORDS_DELETE,
+    PERM_PLACEMENT_RECORDS_UPDATE,
+    PERM_PLACEMENT_RECORDS_VIEW,
     get_current_user,
     has_permission,
     require_permission,
@@ -55,7 +58,7 @@ _CTC_TYPES = {OfferType.FTE, OfferType.PPO}
 def require_offer_read(caller: dict = Depends(get_current_user)) -> dict:
     """Anyone who can read the dashboard, or manage applications, may read offers."""
     if has_permission(caller, PERM_ANALYTICS_VIEW) or has_permission(
-        caller, PERM_APPLICATIONS_MANAGE
+        caller, PERM_PLACEMENT_RECORDS_VIEW
     ):
         return caller
     raise HTTPException(
@@ -257,7 +260,7 @@ async def offer_form_options(
 @router.post("", response_model=OfferResponse, status_code=status.HTTP_201_CREATED)
 async def create_offer(
     data: OfferCreate,
-    caller: dict = Depends(require_permission(PERM_APPLICATIONS_MANAGE)),
+    caller: dict = Depends(require_permission(PERM_PLACEMENT_RECORDS_CREATE)),
     db: AsyncSession = Depends(get_db),
 ):
     offer_type = _parse_type(data.type)
@@ -335,7 +338,7 @@ async def create_offer(
 async def update_offer(
     offer_id: str,
     data: OfferUpdate,
-    caller: dict = Depends(require_permission(PERM_APPLICATIONS_MANAGE)),
+    caller: dict = Depends(require_permission(PERM_PLACEMENT_RECORDS_UPDATE)),
     db: AsyncSession = Depends(get_db),
 ):
     offer = await db.scalar(_loaded(select(Offer)).where(Offer.id == offer_id))
@@ -393,7 +396,7 @@ async def update_offer(
 @router.delete("/{offer_id}")
 async def delete_offer(
     offer_id: str,
-    caller: dict = Depends(require_permission(PERM_APPLICATIONS_MANAGE)),
+    caller: dict = Depends(require_permission(PERM_PLACEMENT_RECORDS_DELETE)),
     db: AsyncSession = Depends(get_db),
 ):
     offer = await db.scalar(select(Offer).where(Offer.id == offer_id))

@@ -5,23 +5,18 @@ import {
   type AdminUserLookup,
 } from "@/components/admin/team-manager";
 import { requirePermission } from "@/lib/admin-session";
-import { ALL_PERMISSIONS, PERM_TEAM_MANAGE } from "@/lib/permissions";
+import {
+  ALL_PERMISSIONS,
+  DEFAULT_PLACEMENT_TEAM_PERMISSIONS,
+  PERM_TEAM_MANAGE,
+} from "@/lib/permissions";
 import { db } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
 const PLACEMENT_TEAM_DEFAULT_PERMISSIONS_KEY = "placement_team_default_permissions";
 
-const FALLBACK_DEFAULT_PERMISSIONS = [
-  "companies:read",
-  "jobs:read",
-  "jobs:manage",
-  "applications:read",
-  "applications:manage",
-  "students:read",
-  "announcements:manage",
-  "analytics:view",
-];
+const FALLBACK_DEFAULT_PERMISSIONS = DEFAULT_PLACEMENT_TEAM_PERMISSIONS;
 
 export default async function Page() {
   await requirePermission(PERM_TEAM_MANAGE);

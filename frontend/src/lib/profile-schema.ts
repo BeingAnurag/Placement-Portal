@@ -15,15 +15,14 @@ const optionalDate = z.preprocess(
   z.date().max(new Date()).nullable(),
 );
 
+// Full name, roll number, branch, degree, and graduation year (batch) are set
+// by the placement office from the official roster and are deliberately not
+// part of this schema: a student cannot write them through this action, no
+// matter what a crafted request includes, because the field is never parsed.
 export const studentProfileSchema = z.object({
-  name: z.string().trim().min(2).max(100),
-  rollNumber: optionalText(30),
   personalEmail: optionalEmail,
   contactNumber: optionalText(20),
   altContactNumber: optionalText(20),
-  branch: optionalText(50),
-  degree: optionalText(50),
-  batch: optionalNumber(2000, 2100, true),
   gender: optionalText(30),
   bloodGroup: optionalText(10),
   dateOfBirth: optionalDate,

@@ -4,13 +4,13 @@ import { revalidatePath } from "next/cache";
 import { backendAuthHeader, backendBaseUrl, backendFetch } from "@/lib/api-client";
 import { requirePermission } from "@/lib/admin-session";
 import { db } from "@/lib/db";
-import { PERM_NOC_MANAGE } from "@/lib/permissions";
+import { PERM_NOC_APPROVE, PERM_NOC_REJECT } from "@/lib/permissions";
 import { nocApproveSchema, nocRejectSchema } from "@/lib/noc-schema";
 
 export type NocActionResult = { error?: string; success?: string };
 
 export async function approveNocAction(formData: FormData): Promise<NocActionResult> {
-  await requirePermission(PERM_NOC_MANAGE);
+  await requirePermission(PERM_NOC_APPROVE);
 
   const rawNocId = formData.get("nocId");
   const rawRemarks = formData.get("adminRemarks");
@@ -59,7 +59,7 @@ export async function approveNocAction(formData: FormData): Promise<NocActionRes
 }
 
 export async function rejectNocAction(formData: FormData): Promise<NocActionResult> {
-  await requirePermission(PERM_NOC_MANAGE);
+  await requirePermission(PERM_NOC_REJECT);
 
   const rawNocId = formData.get("nocId");
   const rawRemarks = formData.get("adminRemarks");
@@ -104,7 +104,7 @@ export async function rejectNocAction(formData: FormData): Promise<NocActionResu
 }
 
 export async function uploadNocDocumentAction(formData: FormData): Promise<{ error?: string; url?: string }> {
-  await requirePermission(PERM_NOC_MANAGE);
+  await requirePermission(PERM_NOC_APPROVE);
 
   const file = formData.get("file") as File | null;
   const nocId = formData.get("nocId") as string | null;

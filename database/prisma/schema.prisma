@@ -9,9 +9,8 @@ datasource db {
 
 enum Role {
   STUDENT
-  COORDINATOR
-  OFFICER
-  ADMIN
+  PLACEMENT_VOLUNTEER
+  PLACEMENT_TEAM
   SUPER_ADMIN
 }
 

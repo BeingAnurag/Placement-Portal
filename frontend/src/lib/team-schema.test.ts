@@ -6,7 +6,7 @@ import {
   updateDefaultPermissionsSchema,
   reorderTeamSchema,
 } from "./team-schema";
-import { PERM_JOBS_READ, PERM_JOBS_MANAGE, PERM_APPLICATIONS_MANAGE } from "./permissions";
+import { PERM_JOBS_VIEW, PERM_JOBS_CREATE, PERM_APPLICATIONS_UPDATE } from "./permissions";
 
 test("createTeamMemberSchema accepts valid input", () => {
   const result = createTeamMemberSchema.safeParse({
@@ -80,7 +80,7 @@ test("updateTeamMemberSchema accepts valid updates and trims strings", () => {
 
 test("updateDefaultPermissionsSchema validates allowed permissions and rejects invalid ones", () => {
   const valid = updateDefaultPermissionsSchema.safeParse({
-    defaultPermissions: [PERM_JOBS_READ, PERM_JOBS_MANAGE, PERM_APPLICATIONS_MANAGE],
+    defaultPermissions: [PERM_JOBS_VIEW, PERM_JOBS_CREATE, PERM_APPLICATIONS_UPDATE],
     syncExistingMembers: true,
   });
   assert.equal(valid.success, true);
