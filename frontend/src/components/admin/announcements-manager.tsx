@@ -8,14 +8,15 @@ import {
   Eye,
   FileClock,
   Megaphone,
+  Paperclip,
   Plus,
-  Search,
   Send,
   Trash2,
   Undo2,
   User,
   X,
 } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState } from "react";
 import {
@@ -24,6 +25,11 @@ import {
   setAnnouncementStatusAction,
   type AnnouncementActionResult,
 } from "@/app/admin/announcements/actions";
+import {
+  DataTable,
+  type DataTableColumn,
+  type DataTableFilter,
+} from "@/components/common/data-table";
 import type { AnnouncementStatus } from "@/lib/announcement-schema";
 
 export type AdminAnnouncementItem = {
@@ -41,20 +47,15 @@ export type AdminAnnouncementItem = {
   createdAt: string;
   createdByName: string | null;
   createdByEmail: string | null;
+  attachments: AnnouncementAttachment[];
 };
 
-/**
- * The screen is three sections, not one filtered list: composing a company
- * drive notice, composing a general notice, and managing what is live against
- * what is still a draft.
- */
-type Section = "COMPANY_EVENT" | "GENERAL" | "MANAGE";
-
-const SECTIONS: Array<{ key: Section; label: string; icon: typeof Building2 }> = [
-  { key: "COMPANY_EVENT", label: "Company event announcements", icon: Building2 },
-  { key: "GENERAL", label: "General announcements", icon: Megaphone },
-  { key: "MANAGE", label: "Active & drafts", icon: FileClock },
-];
+export type AnnouncementAttachment = {
+  fileName: string;
+  fileUrl: string;
+  mimeType: string;
+  sizeBytes: number;
+};
 
 export type CompanyOption = {
   id: string;
@@ -79,6 +80,11 @@ const PRESET_TAGS = [
   "Urgent",
 ];
 
+/**
+ * Announcements are written on their own pages — company event and general —
+ * and managed here: what is live, what is still a draft, and moving one to
+ * the other.
+ */
 export function AnnouncementsManager({
   announcements,
   companies,
@@ -89,10 +95,6 @@ export function AnnouncementsManager({
   canPersist: boolean;
 }) {
   const router = useRouter();
-  const [section, setSection] = useState<Section>("COMPANY_EVENT");
-  const [query, setQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"ALL" | AnnouncementStatus>("ALL");
-  const [companyFilter, setCompanyFilter] = useState<string>("ALL");
   const [editing, setEditing] = useState<AdminAnnouncementItem | null | undefined>(undefined);
   const [previewing, setPreviewing] = useState<AdminAnnouncementItem | null>(null);
   const [deleting, setDeleting] = useState<AdminAnnouncementItem | null>(null);
@@ -107,20 +109,6 @@ export function AnnouncementsManager({
   // to be readable inside the submit handler of the same click.
   const submitStatus = useRef<AnnouncementStatus>("PUBLISHED");
 
-  const visible = useMemo(() => {
-    return announcements.filter((item) => {
-      const matchesSearch =
-        `${item.title} ${item.content} ${item.companyName ?? ""} ${item.tags.join(" ")} ${item.createdByName ?? ""}`
-          .toLowerCase()
-          .includes(query.toLowerCase());
-      const matchesSection = section === "MANAGE" || item.category === section;
-      const matchesStatus = statusFilter === "ALL" || item.status === statusFilter;
-      const matchesComp =
-        companyFilter === "ALL" || item.companyId === companyFilter;
-      return matchesSearch && matchesSection && matchesStatus && matchesComp;
-    });
-  }, [announcements, query, section, statusFilter, companyFilter]);
-
   const metrics = useMemo(() => {
     const companyEvents = announcements.filter((a) => a.category === "COMPANY_EVENT").length;
     const general = announcements.filter((a) => a.category === "GENERAL").length;
@@ -128,16 +116,6 @@ export function AnnouncementsManager({
     const drafts = announcements.filter((a) => a.status === "DRAFT").length;
     return { companyEvents, general, active, drafts };
   }, [announcements]);
-
-  function openCreateModal() {
-    setResult({});
-    // The section decides what is being written, so the form opens on it.
-    setFormCategory(section === "COMPANY_EVENT" ? "COMPANY_EVENT" : "GENERAL");
-    setFormTags([]);
-    setCustomTagInput("");
-    submitStatus.current = "PUBLISHED";
-    setEditing(null);
-  }
 
   async function changeStatus(formData: FormData) {
     setSaving(true);
@@ -201,53 +179,298 @@ export function AnnouncementsManager({
     }
   }
 
+  const columns = useMemo<DataTableColumn<AdminAnnouncementItem>[]>(
+    () => [
+      {
+        id: "title",
+        header: "Title & Overview",
+        width: "minmax(260px, 1.6fr)",
+        hideable: false,
+        sortValue: (item) => item.title,
+        cell: (item) => (
+          <span style={{ display: "flex", alignItems: "flex-start", gap: 10, minWidth: 0 }}>
+            <span
+              style={{
+                width: 34,
+                height: 34,
+                borderRadius: 9,
+                background:
+                  item.category === "COMPANY_EVENT"
+                    ? "var(--badge-blue-bg)"
+                    : "var(--badge-purple-bg)",
+                color:
+                  item.category === "COMPANY_EVENT"
+                    ? "var(--blue)"
+                    : "var(--badge-purple-text)",
+                display: "grid",
+                placeItems: "center",
+                flexShrink: 0,
+                marginTop: 2,
+              }}
+            >
+              {item.category === "COMPANY_EVENT" ? <Building2 size={16} /> : <Megaphone size={16} />}
+            </span>
+            <span style={{ minWidth: 0 }}>
+              <strong
+                style={{
+                  color: "var(--ink)",
+                  fontSize: 12,
+                  fontWeight: 700,
+                  display: "block",
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                }}
+                title={item.title}
+              >
+                {item.title}
+              </strong>
+              <span
+                style={{
+                  color: "var(--muted)",
+                  fontSize: 11,
+                  display: "block",
+                  margin: "2px 0 0",
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  maxWidth: 320,
+                }}
+              >
+                {item.content}
+              </span>
+            </span>
+          </span>
+        ),
+      },
+      {
+        id: "status",
+        header: "Status & Target",
+        width: "minmax(140px, 1fr)",
+        sortValue: (item) => item.status,
+        cell: (item) => (
+          <>
+            <span
+              className={`cell-status ${item.status === "DRAFT" ? "draft" : ""}`}
+              style={{ fontSize: 9.5, padding: "3px 8px", borderRadius: 6, fontWeight: 700 }}
+            >
+              {item.status === "DRAFT" ? "Draft" : "Active"}
+            </span>
+            <small style={{ display: "block", color: "var(--muted)", marginTop: 4 }}>
+              {item.category === "COMPANY_EVENT" ? "Company event" : "General update"}
+            </small>
+            {item.companyName ? (
+              <small
+                style={{
+                  display: "block",
+                  color: "var(--ink)",
+                  fontWeight: 600,
+                  marginTop: 4,
+                }}
+              >
+                {item.companyName}
+              </small>
+            ) : null}
+          </>
+        ),
+      },
+      {
+        id: "tags",
+        header: "Tags",
+        width: "minmax(140px, 1fr)",
+        sortValue: (item) => item.tags.length,
+        cell: (item) => (
+          <span style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+            {item.tags.length > 0 ? (
+              item.tags.slice(0, 3).map((tag) => (
+                <span
+                  key={tag}
+                  style={{
+                    fontSize: 9,
+                    padding: "2px 6px",
+                    borderRadius: 4,
+                    background: "var(--surface-alt)",
+                    border: "1px solid var(--border)",
+                    color: "var(--ink)",
+                    fontWeight: 600,
+                  }}
+                >
+                  {tag}
+                </span>
+              ))
+            ) : (
+              <small style={{ color: "var(--muted)" }}>No tags</small>
+            )}
+            {item.tags.length > 3 ? (
+              <span
+                style={{
+                  fontSize: 9,
+                  padding: "2px 5px",
+                  borderRadius: 4,
+                  background: "var(--surface-highlight)",
+                  color: "var(--muted)",
+                  fontWeight: 700,
+                }}
+              >
+                +{item.tags.length - 3}
+              </span>
+            ) : null}
+          </span>
+        ),
+      },
+      {
+        id: "published",
+        header: "Author & Published",
+        width: "minmax(150px, 1fr)",
+        // Sorts by the date the cell shows, which is the publication date once
+        // an announcement is live and the writing date while it is a draft.
+        sortValue: (item) =>
+          new Date(item.status === "PUBLISHED" && item.publishedAt ? item.publishedAt : item.createdAt),
+        cell: (item) => (
+          <>
+            <span style={{ fontWeight: 600, color: "var(--ink)", display: "block" }}>
+              {item.createdByName || item.createdByEmail || "Placement Cell"}
+            </span>
+            <small style={{ color: "var(--muted)", fontSize: 10 }}>
+              {item.status === "PUBLISHED" && item.publishedAt
+                ? `Published ${dateOnly.format(new Date(item.publishedAt))}`
+                : `Written ${dateOnly.format(new Date(item.createdAt))}`}
+            </small>
+          </>
+        ),
+      },
+      {
+        id: "actions",
+        header: "Actions",
+        width: "132px",
+        align: "right",
+        hideable: false,
+        cell: (item) => (
+          <span className="row-actions" style={{ justifyContent: "flex-end" }}>
+            <form action={changeStatus}>
+              <input type="hidden" name="announcementId" value={item.id} />
+              <input
+                type="hidden"
+                name="status"
+                value={item.status === "PUBLISHED" ? "DRAFT" : "PUBLISHED"}
+              />
+              <button
+                title={
+                  item.status === "PUBLISHED"
+                    ? "Withdraw to drafts — students stop seeing it"
+                    : "Publish — students see it immediately"
+                }
+                aria-label={
+                  item.status === "PUBLISHED"
+                    ? `Withdraw ${item.title} to drafts`
+                    : `Publish ${item.title}`
+                }
+                disabled={!canPersist || saving}
+                type="submit"
+              >
+                {item.status === "PUBLISHED" ? <Undo2 /> : <Send />}
+              </button>
+            </form>
+            <button
+              title="Preview announcement"
+              aria-label={`Preview ${item.title}`}
+              onClick={() => setPreviewing(item)}
+              type="button"
+            >
+              <Eye />
+            </button>
+            <button
+              title="Edit announcement"
+              aria-label={`Edit ${item.title}`}
+              onClick={() => openEditModal(item)}
+              type="button"
+            >
+              <Edit3 />
+            </button>
+            <button
+              title="Delete announcement"
+              aria-label={`Delete ${item.title}`}
+              onClick={() => setDeleting(item)}
+              type="button"
+            >
+              <Trash2 />
+            </button>
+          </span>
+        ),
+      },
+    ],
+    // `changeStatus` and `openEditModal` are redefined per render but close
+    // over nothing beyond the values listed here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [canPersist, saving],
+  );
+
+  const filters = useMemo<DataTableFilter<AdminAnnouncementItem>[]>(
+    () => [
+      {
+        id: "status",
+        label: "Status",
+        options: [
+          { value: "PUBLISHED", label: "Active" },
+          { value: "DRAFT", label: "Drafts" },
+        ],
+        value: (item) => item.status,
+      },
+      {
+        id: "category",
+        label: "Category",
+        options: [
+          { value: "COMPANY_EVENT", label: "Company events" },
+          { value: "GENERAL", label: "General notices" },
+        ],
+        value: (item) => item.category,
+      },
+      ...(companies.length
+        ? [
+            {
+              id: "company",
+              label: "Company",
+              options: companies.map((comp) => ({ value: comp.id, label: comp.name })),
+              value: (item: AdminAnnouncementItem) => item.companyId,
+            },
+          ]
+        : []),
+    ],
+    [companies],
+  );
+
   return (
     <div className="admin-page">
       <section className="admin-heading">
         <div>
           <span className="eyebrow">Communications & Drives</span>
-          <h1>Announcements</h1>
+          <h1>Active &amp; drafts</h1>
           <p>
-            {section === "COMPANY_EVENT"
-              ? "Drive updates tied to a recruiting company: shortlists, test schedules, and results."
-              : section === "GENERAL"
-                ? "Institute-wide notices: policy, deadlines, and campus placement guidelines."
-                : "Everything published or held as a draft, and the control to move one to the other."}
+            Everything published or held as a draft, and the control to move one to the other.
           </p>
         </div>
-        {section === "MANAGE" ? null : (
-          <button
-            onClick={openCreateModal}
-            disabled={!canPersist}
-            title={!canPersist ? "Administrator permission required" : "Write a new announcement"}
-          >
-            <Plus />
-            {section === "COMPANY_EVENT" ? "New company event" : "New general notice"}
-          </button>
-        )}
+        <Link href="/admin/announcements/company-event">
+          <Plus />
+          Write an announcement
+        </Link>
       </section>
 
-      <nav className="admin-tabs" aria-label="Announcement sections">
-        {SECTIONS.map(({ key, label, icon: Icon }) => (
-          <button
-            key={key}
-            type="button"
-            className={section === key ? "active" : ""}
-            aria-current={section === key ? "page" : undefined}
-            onClick={() => {
-              setSection(key);
-              setStatusFilter("ALL");
-            }}
-          >
-            <Icon />
-            {label}
-            <b>
-              {key === "MANAGE"
-                ? announcements.length
-                : announcements.filter((item) => item.category === key).length}
-            </b>
-          </button>
-        ))}
+      <nav className="admin-tabs" aria-label="Announcement pages">
+        <Link href="/admin/announcements/company-event">
+          <Building2 />
+          Company event announcement
+          <b>{metrics.companyEvents}</b>
+        </Link>
+        <Link href="/admin/announcements/general">
+          <Megaphone />
+          General announcement
+          <b>{metrics.general}</b>
+        </Link>
+        <span className="active" aria-current="page">
+          <FileClock />
+          Active &amp; drafts
+          <b>{announcements.length}</b>
+        </span>
       </nav>
 
       {result.success ? <div className="admin-success">{result.success}</div> : null}
@@ -300,255 +523,29 @@ export function AnnouncementsManager({
         </article>
       </section>
 
-      {/* Toolbar & Filters */}
-      <section className="admin-toolbar" style={{ marginTop: 20 }}>
-        <label>
-          <Search />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search by title, content, company, or tags…"
-          />
-        </label>
-
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value as "ALL" | AnnouncementStatus)}
-          aria-label="Filter by status"
-        >
-          <option value="ALL">Active &amp; drafts</option>
-          <option value="PUBLISHED">Active only</option>
-          <option value="DRAFT">Drafts only</option>
-        </select>
-
-        {companies.length > 0 ? (
-          <select
-            value={companyFilter}
-            onChange={(e) => setCompanyFilter(e.target.value)}
-            aria-label="Filter by company"
-          >
-            <option value="ALL">All Companies</option>
-            {companies.map((comp) => (
-              <option value={comp.id} key={comp.id}>
-                {comp.name}
-              </option>
-            ))}
-          </select>
-        ) : null}
-      </section>
-
-      {/* Announcements Table */}
-      <section className="admin-table" style={{ marginTop: 14 }}>
-        <div
-          className="admin-row admin-row-head"
-          style={{ gridTemplateColumns: "1.6fr 1fr 1fr 1fr 132px" }}
-        >
-          <span>Title & Overview</span>
-          <span>Status & Target</span>
-          <span>Tags</span>
-          <span>Author & Published</span>
-          <span style={{ textAlign: "right" }}>Actions</span>
-        </div>
-
-        {visible.map((item) => (
-          <div
-            className="admin-row"
-            key={item.id}
-            style={{ gridTemplateColumns: "1.6fr 1fr 1fr 1fr 132px" }}
-          >
-            {/* Title & Preview */}
-            <div style={{ display: "flex", alignItems: "flex-start", gap: 10, minWidth: 0 }}>
-              <div
-                style={{
-                  width: 34,
-                  height: 34,
-                  borderRadius: 9,
-                  background:
-                    item.category === "COMPANY_EVENT"
-                      ? "var(--badge-blue-bg)"
-                      : "var(--badge-purple-bg)",
-                  color:
-                    item.category === "COMPANY_EVENT"
-                      ? "var(--blue)"
-                      : "var(--badge-purple-text)",
-                  display: "grid",
-                  placeItems: "center",
-                  flexShrink: 0,
-                  marginTop: 2,
-                }}
-              >
-                {item.category === "COMPANY_EVENT" ? <Building2 size={16} /> : <Megaphone size={16} />}
-              </div>
-              <div style={{ minWidth: 0 }}>
-                <strong
-                  style={{
-                    color: "var(--ink)",
-                    fontSize: 12,
-                    fontWeight: 700,
-                    display: "block",
-                    whiteSpace: "nowrap",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                  }}
-                  title={item.title}
-                >
-                  {item.title}
-                </strong>
-                <p
-                  style={{
-                    color: "var(--muted)",
-                    fontSize: 11,
-                    margin: "2px 0 0",
-                    whiteSpace: "nowrap",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    maxWidth: 320,
-                  }}
-                >
-                  {item.content}
-                </p>
-              </div>
-            </div>
-
-            {/* Status, category, and company */}
-            <div>
-              <span
-                className={`cell-status ${item.status === "DRAFT" ? "draft" : ""}`}
-                style={{ fontSize: 9.5, padding: "3px 8px", borderRadius: 6, fontWeight: 700 }}
-              >
-                {item.status === "DRAFT" ? "Draft" : "Active"}
-              </span>
-              <small style={{ display: "block", color: "var(--muted)", marginTop: 4 }}>
-                {item.category === "COMPANY_EVENT" ? "Company event" : "General update"}
-              </small>
-              {item.companyName ? (
-                <small
-                  style={{
-                    display: "block",
-                    color: "var(--ink)",
-                    fontWeight: 600,
-                    marginTop: 4,
-                  }}
-                >
-                  {item.companyName}
-                </small>
-              ) : null}
-            </div>
-
-            {/* Tags */}
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-              {item.tags.length > 0 ? (
-                item.tags.slice(0, 3).map((tag) => (
-                  <span
-                    key={tag}
-                    style={{
-                      fontSize: 9,
-                      padding: "2px 6px",
-                      borderRadius: 4,
-                      background: "var(--surface-alt)",
-                      border: "1px solid var(--border)",
-                      color: "var(--ink)",
-                      fontWeight: 600,
-                    }}
-                  >
-                    {tag}
-                  </span>
-                ))
-              ) : (
-                <small style={{ color: "var(--muted)" }}>No tags</small>
-              )}
-              {item.tags.length > 3 ? (
-                <span
-                  style={{
-                    fontSize: 9,
-                    padding: "2px 5px",
-                    borderRadius: 4,
-                    background: "var(--surface-highlight)",
-                    color: "var(--muted)",
-                    fontWeight: 700,
-                  }}
-                >
-                  +{item.tags.length - 3}
-                </span>
-              ) : null}
-            </div>
-
-            {/* Author & Date */}
-            <div>
-              <span style={{ fontWeight: 600, color: "var(--ink)", display: "block" }}>
-                {item.createdByName || item.createdByEmail || "Placement Cell"}
-              </span>
-              <small style={{ color: "var(--muted)", fontSize: 10 }}>
-                {item.status === "PUBLISHED" && item.publishedAt
-                  ? `Published ${dateOnly.format(new Date(item.publishedAt))}`
-                  : `Written ${dateOnly.format(new Date(item.createdAt))}`}
-              </small>
-            </div>
-
-            {/* Actions */}
-            <div className="row-actions" style={{ justifyContent: "flex-end" }}>
-              <form action={changeStatus}>
-                <input type="hidden" name="announcementId" value={item.id} />
-                <input
-                  type="hidden"
-                  name="status"
-                  value={item.status === "PUBLISHED" ? "DRAFT" : "PUBLISHED"}
-                />
-                <button
-                  title={
-                    item.status === "PUBLISHED"
-                      ? "Withdraw to drafts — students stop seeing it"
-                      : "Publish — students see it immediately"
-                  }
-                  disabled={!canPersist || saving}
-                  type="submit"
-                >
-                  {item.status === "PUBLISHED" ? <Undo2 /> : <Send />}
-                </button>
-              </form>
-              <button
-                title="Preview announcement"
-                onClick={() => setPreviewing(item)}
-                type="button"
-              >
-                <Eye />
-              </button>
-              <button
-                title="Edit announcement"
-                onClick={() => openEditModal(item)}
-                type="button"
-              >
-                <Edit3 />
-              </button>
-              <button
-                title="Delete announcement"
-                onClick={() => setDeleting(item)}
-                type="button"
-              >
-                <Trash2 />
-              </button>
-            </div>
-          </div>
-        ))}
-
-        {!visible.length ? (
-          <div className="admin-empty">
-            <Megaphone />
-            <h2>
-              {announcements.length
-                ? "No announcements in this view"
-                : "No announcements written yet"}
-            </h2>
-            <p>
-              {announcements.length
-                ? "Clear the search or the status filter, or switch to another section."
-                : section === "MANAGE"
-                  ? "Write a company event or general announcement; it appears here once saved."
-                  : "Use the button above to write the first one. You can publish it or keep it as a draft."}
-            </p>
-          </div>
-        ) : null}
-      </section>
+      <DataTable
+        data={announcements}
+        columns={columns}
+        getRowId={(item) => item.id}
+        searchText={(item) =>
+          `${item.title} ${item.content} ${item.companyName ?? ""} ${item.tags.join(" ")} ${item.createdByName ?? ""}`
+        }
+        searchPlaceholder="Search by title, content, company, or tags…"
+        filters={filters}
+        columnStorageKey="announcements"
+        minWidth={900}
+        emptyIcon={<Megaphone />}
+        emptyTitle={
+          announcements.length
+            ? "No announcements in this view"
+            : "No announcements written yet"
+        }
+        emptyDescription={
+          announcements.length
+            ? "Clear the search or the status and category filters."
+            : "Write a company event or general announcement; every one appears here, live or draft."
+        }
+      />
 
       {/* CREATE / EDIT MODAL */}
       {editing !== undefined ? (
@@ -948,6 +945,27 @@ export function AnnouncementsManager({
               >
                 {previewing.content}
               </div>
+
+              {previewing.attachments.length ? (
+                <div style={{ display: "grid", gap: 8 }}>
+                  <span className="attachments-label">
+                    Attachments ({previewing.attachments.length})
+                  </span>
+                  <div className="attachment-links">
+                    {previewing.attachments.map((file) => (
+                      <a
+                        key={file.fileUrl}
+                        href={file.fileUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        <Paperclip />
+                        {file.fileName}
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
             </div>
 
             <footer>

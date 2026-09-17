@@ -7,7 +7,6 @@ import {
   Edit3,
   KeyRound,
   LockKeyhole,
-  Search,
   ShieldAlert,
   ShieldCheck,
   Trash2,
@@ -19,6 +18,11 @@ import {
   X,
 } from "lucide-react";
 import type { Role } from "@prisma/client";
+import {
+  DataTable,
+  type DataTableColumn,
+  type DataTableFilter,
+} from "@/components/common/data-table";
 import {
   createUserAction,
   deleteUserAction,
@@ -62,9 +66,6 @@ export function UsersManager({
 }) {
   const router = useRouter();
 
-  const [query, setQuery] = useState("");
-  const [roleFilter, setRoleFilter] = useState<string>("ALL");
-  const [statusFilter, setStatusFilter] = useState<string>("ALL");
 
   const [result, setResult] = useState<UserActionResult>({});
   const [saving, setSaving] = useState(false);
@@ -112,25 +113,10 @@ export function UsersManager({
   }, [users]);
 
   // Filtered visible list
-  const visible = useMemo(() => {
-    return users.filter((u) => {
-      const matchQuery =
-        !query ||
-        `${u.name ?? ""} ${u.email ?? ""} ${u.rollNumber ?? ""} ${u.title ?? ""} ${u.branch ?? ""}`
-          .toLowerCase()
-          .includes(query.toLowerCase());
-
-      const matchRole =
-        roleFilter === "ALL" || u.role === (roleFilter as Role);
-
-      const matchStatus =
-        statusFilter === "ALL" ||
-        (statusFilter === "ACTIVE" && u.isActive) ||
-        (statusFilter === "INACTIVE" && !u.isActive);
-
-      return matchQuery && matchRole && matchStatus;
-    });
-  }, [users, query, roleFilter, statusFilter]);
+  const branchOptions = useMemo(
+    () => [...new Set(users.map((u) => u.branch).filter((b): b is string => Boolean(b)))].sort(),
+    [users],
+  );
 
   // Permission Categories
   const categories = useMemo(() => {
@@ -266,6 +252,224 @@ export function UsersManager({
     return "U";
   }
 
+  const columns = useMemo<DataTableColumn<AdminUserListItem>[]>(
+    () => [
+      {
+        id: "user",
+        header: "User & title",
+        width: "minmax(230px, 1.8fr)",
+        hideable: false,
+        sortValue: (u) => u.name ?? u.email,
+        cell: (u) => {
+          const roleMeta = ROLE_METADATA[u.role] ?? ROLE_METADATA.STUDENT;
+          return (
+            <div className="company-admin-name">
+              <span
+                className={`user-avatar-initials ${roleMeta.badgeClass}`}
+                title={`${roleMeta.label} · Tier ${roleMeta.tier}`}
+              >
+                {getAvatarInitials(u.name, u.email)}
+              </span>
+              <span>
+                <strong>
+                  {u.name || "No name registered"}
+                  {u.id === currentUserId && (
+                    <small className="inline ml-1 text-blue-600 font-bold">(You)</small>
+                  )}
+                </strong>
+                <small>{u.email || "No email"}</small>
+                {u.title && (
+                  <span className="text-[10px] font-semibold text-[var(--navy)] block mt-0.5">
+                    {u.title}
+                  </span>
+                )}
+              </span>
+            </div>
+          );
+        },
+      },
+      {
+        id: "role",
+        header: "Role & tier",
+        width: "minmax(150px, 1fr)",
+        // Ordered by tier so a sort walks the hierarchy rather than the
+        // alphabet: a super administrator is not "before" a coordinator.
+        sortValue: (u) => (ROLE_METADATA[u.role] ?? ROLE_METADATA.STUDENT).tier,
+        cell: (u) => {
+          const roleMeta = ROLE_METADATA[u.role] ?? ROLE_METADATA.STUDENT;
+          return (
+            <div>
+              <span className={`cell-status ${roleMeta.badgeClass}`}>{roleMeta.label}</span>
+              <small className="block text-[9.5px] text-[var(--muted)] mt-1">
+                Tier {roleMeta.tier} access
+              </small>
+            </div>
+          );
+        },
+      },
+      {
+        id: "academic",
+        header: "Academic profile",
+        width: "minmax(160px, 1.2fr)",
+        sortValue: (u) => u.rollNumber,
+        cell: (u) => (
+          <div>
+            <span>{u.rollNumber || "Roll not assigned"}</span>
+            <small className="block text-[9.5px] text-[var(--muted)]">
+              {u.branch || "General"}
+              {u.batch ? ` · Batch of ${u.batch}` : ""}
+              {u.applicationCount > 0 ? ` · ${u.applicationCount} apps` : ""}
+            </small>
+          </div>
+        ),
+      },
+      {
+        id: "permissions",
+        header: "Permissions",
+        width: "minmax(170px, 1.1fr)",
+        sortValue: (u) => u.customPermissions.length,
+        cell: (u) => (
+          <button
+            type="button"
+            onClick={() => openPermModal(u)}
+            className="permission-pill hover:border-[var(--blue)] cursor-pointer"
+            title="Click to view & edit granular permissions"
+          >
+            <KeyRound size={11} />
+            {u.customPermissions.length > 0 ? (
+              <span className="text-[var(--blue)] font-bold">
+                {u.customPermissions.length} custom override(s)
+              </span>
+            ) : (
+              <span>Role defaults ({u.effectivePermissions.length})</span>
+            )}
+          </button>
+        ),
+      },
+      {
+        id: "status",
+        header: "Status",
+        width: "120px",
+        sortValue: (u) => u.isActive,
+        cell: (u) => {
+          const isSelf = u.id === currentUserId;
+          return (
+            <button
+              type="button"
+              onClick={() => handleToggleStatus(u)}
+              disabled={isSelf && u.isActive}
+              className={`cell-status cursor-pointer ${u.isActive ? "" : "pending"}`}
+              title={
+                isSelf
+                  ? "Cannot deactivate your own account"
+                  : `Click to ${u.isActive ? "suspend" : "activate"} user`
+              }
+            >
+              {u.isActive ? "Active" : "Suspended"}
+            </button>
+          );
+        },
+      },
+      {
+        id: "actions",
+        header: "Actions",
+        width: "190px",
+        hideable: false,
+        cell: (u) => {
+          const isSelf = u.id === currentUserId;
+          return (
+            <div className="row-actions">
+              <button
+                title={`Change role / Elevate ${u.name || u.email}`}
+                onClick={() => openRoleModal(u)}
+                aria-label="Elevate or change role"
+              >
+                <UserCog size={14} />
+              </button>
+
+              <button
+                title={`Configure permissions for ${u.name || u.email}`}
+                onClick={() => openPermModal(u)}
+                aria-label="Configure permissions"
+              >
+                <KeyRound size={14} />
+              </button>
+
+              <button
+                title={`Set a sign-in password for ${u.name || u.email}`}
+                onClick={() => {
+                  setResult({});
+                  setPasswordModalUser(u);
+                }}
+                aria-label="Set sign-in password"
+              >
+                <LockKeyhole size={14} />
+              </button>
+
+              <button
+                title={`Edit details for ${u.name || u.email}`}
+                onClick={() => {
+                  setResult({});
+                  setEditingUser(u);
+                }}
+                aria-label="Edit user details"
+              >
+                <Edit3 size={14} />
+              </button>
+
+              <button
+                title={isSelf ? "Cannot delete your own account" : `Delete user ${u.name || u.email}`}
+                disabled={isSelf}
+                onClick={() => {
+                  setResult({});
+                  setDeletingUser(u);
+                }}
+                aria-label="Delete user"
+              >
+                <Trash2 size={14} />
+              </button>
+            </div>
+          );
+        },
+      },
+    ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [currentUserId],
+  );
+
+  const filters = useMemo<DataTableFilter<AdminUserListItem>[]>(
+    () => [
+      {
+        id: "role",
+        label: "Role",
+        options: [
+          { value: "SUPER_ADMIN", label: "Super Admins" },
+          { value: "ADMIN", label: "Administrators" },
+          { value: "OFFICER", label: "Placement Officers" },
+          { value: "COORDINATOR", label: "Student Coordinators" },
+          { value: "STUDENT", label: "Students" },
+        ],
+        value: (u) => u.role,
+      },
+      {
+        id: "status",
+        label: "Status",
+        options: [
+          { value: "ACTIVE", label: "Active only" },
+          { value: "INACTIVE", label: "Suspended only" },
+        ],
+        value: (u) => (u.isActive ? "ACTIVE" : "INACTIVE"),
+      },
+      {
+        id: "branch",
+        label: "Branch",
+        options: branchOptions.map((branch) => ({ value: branch, label: branch })),
+        value: (u) => u.branch,
+      },
+    ],
+    [branchOptions],
+  );
+
   return (
     <div className="admin-page">
       {/* Heading */}
@@ -339,211 +543,25 @@ export function UsersManager({
         </article>
       </section>
 
-      {/* Search & Filter Toolbar */}
-      <section className="admin-toolbar">
-        <label>
-          <Search size={16} />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search name, email, roll number, title, or branch"
-          />
-        </label>
-
-        <select
-          value={roleFilter}
-          onChange={(e) => setRoleFilter(e.target.value)}
-          aria-label="Filter by role"
-        >
-          <option value="ALL">All Roles ({users.length})</option>
-          <option value="SUPER_ADMIN">Super Admins</option>
-          <option value="ADMIN">Administrators</option>
-          <option value="OFFICER">Placement Officers</option>
-          <option value="COORDINATOR">Student Coordinators</option>
-          <option value="STUDENT">Students</option>
-        </select>
-
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          aria-label="Filter by status"
-        >
-          <option value="ALL">All Statuses</option>
-          <option value="ACTIVE">Active Only</option>
-          <option value="INACTIVE">Suspended Only</option>
-        </select>
-      </section>
-
-      {/* Users Table */}
-      <section className="admin-table">
-        <div className="admin-row admin-row-head user-row-grid">
-          <span>User & Title</span>
-          <span>Role & Tier</span>
-          <span>Academic Profile</span>
-          <span>Permissions</span>
-          <span>Status</span>
-          <span>Actions</span>
-        </div>
-
-        {visible.map((u) => {
-          const roleMeta = ROLE_METADATA[u.role] ?? ROLE_METADATA.STUDENT;
-          const isSelf = u.id === currentUserId;
-          const customCount = u.customPermissions.length;
-
-          return (
-            <div className="admin-row user-row-grid" key={u.id}>
-              {/* User Name & Email */}
-              <div className="company-admin-name">
-                <span
-                  className={`user-avatar-initials ${roleMeta.badgeClass}`}
-                  title={`${roleMeta.label} · Tier ${roleMeta.tier}`}
-                >
-                  {getAvatarInitials(u.name, u.email)}
-                </span>
-                <span>
-                  <strong>
-                    {u.name || "No name registered"}
-                    {isSelf && <small className="inline ml-1 text-blue-600 font-bold">(You)</small>}
-                  </strong>
-                  <small>{u.email || "No email"}</small>
-                  {u.title && (
-                    <span className="text-[10px] font-semibold text-[var(--navy)] block mt-0.5">
-                      {u.title}
-                    </span>
-                  )}
-                </span>
-              </div>
-
-              {/* Role Badge */}
-              <div>
-                <span className={`cell-status ${roleMeta.badgeClass}`}>
-                  {roleMeta.label}
-                </span>
-                <small className="block text-[9.5px] text-[var(--muted)] mt-1">
-                  Tier {roleMeta.tier} access
-                </small>
-              </div>
-
-              {/* Academic Profile */}
-              <div>
-                <span>{u.rollNumber || "Roll not assigned"}</span>
-                <small className="block text-[9.5px] text-[var(--muted)]">
-                  {u.branch || "General"}
-                  {u.batch ? ` · Batch of ${u.batch}` : ""}
-                  {u.applicationCount > 0 ? ` · ${u.applicationCount} apps` : ""}
-                </small>
-              </div>
-
-              {/* Permissions */}
-              <div>
-                <button
-                  type="button"
-                  onClick={() => openPermModal(u)}
-                  className="permission-pill hover:border-[var(--blue)] cursor-pointer"
-                  title="Click to view & edit granular permissions"
-                >
-                  <KeyRound size={11} />
-                  {customCount > 0 ? (
-                    <span className="text-[var(--blue)] font-bold">
-                      {customCount} custom override(s)
-                    </span>
-                  ) : (
-                    <span>Role defaults ({u.effectivePermissions.length})</span>
-                  )}
-                </button>
-              </div>
-
-              {/* Status */}
-              <div>
-                <button
-                  type="button"
-                  onClick={() => handleToggleStatus(u)}
-                  disabled={isSelf && u.isActive}
-                  className={`cell-status cursor-pointer ${
-                    u.isActive ? "" : "pending"
-                  }`}
-                  title={
-                    isSelf
-                      ? "Cannot deactivate your own account"
-                      : `Click to ${u.isActive ? "suspend" : "activate"} user`
-                  }
-                >
-                  {u.isActive ? "Active" : "Suspended"}
-                </button>
-              </div>
-
-              {/* Row Actions */}
-              <div className="row-actions">
-                <button
-                  title={`Change role / Elevate ${u.name || u.email}`}
-                  onClick={() => openRoleModal(u)}
-                  aria-label="Elevate or change role"
-                >
-                  <UserCog size={14} />
-                </button>
-
-                <button
-                  title={`Configure permissions for ${u.name || u.email}`}
-                  onClick={() => openPermModal(u)}
-                  aria-label="Configure permissions"
-                >
-                  <KeyRound size={14} />
-                </button>
-
-                <button
-                  title={`Set a sign-in password for ${u.name || u.email}`}
-                  onClick={() => {
-                    setResult({});
-                    setPasswordModalUser(u);
-                  }}
-                  aria-label="Set sign-in password"
-                >
-                  <LockKeyhole size={14} />
-                </button>
-
-                <button
-                  title={`Edit details for ${u.name || u.email}`}
-                  onClick={() => {
-                    setResult({});
-                    setEditingUser(u);
-                  }}
-                  aria-label="Edit user details"
-                >
-                  <Edit3 size={14} />
-                </button>
-
-                <button
-                  title={
-                    isSelf
-                      ? "Cannot delete your own account"
-                      : `Delete user ${u.name || u.email}`
-                  }
-                  disabled={isSelf}
-                  onClick={() => {
-                    setResult({});
-                    setDeletingUser(u);
-                  }}
-                  aria-label="Delete user"
-                >
-                  <Trash2 size={14} />
-                </button>
-              </div>
-            </div>
-          );
-        })}
-
-        {!visible.length && (
-          <div className="admin-empty">
-            <Users />
-            <h2>{users.length ? "No matching users" : "No users found"}</h2>
-            <p>
-              {users.length
-                ? "Try adjusting your search query or role filter."
-                : "Students appear once they register; staff accounts are created here."}
-            </p>
-          </div>
-        )}
-      </section>
+      <DataTable
+        data={users}
+        columns={columns}
+        filters={filters}
+        getRowId={(u) => u.id}
+        searchText={(u) =>
+          `${u.name ?? ""} ${u.email ?? ""} ${u.rollNumber ?? ""} ${u.title ?? ""} ${u.branch ?? ""}`
+        }
+        searchPlaceholder="Search name, email, roll number, title, or branch"
+        columnStorageKey="users"
+        minWidth={1150}
+        emptyIcon={<Users />}
+        emptyTitle={users.length ? "No matching users" : "No users found"}
+        emptyDescription={
+          users.length
+            ? "Try adjusting your search query or role filter."
+            : "Students appear once they register; staff accounts are created here."
+        }
+      />
 
       {/* ------------------------------------------------------------- */}
       {/* MODAL: Add / Pre-provision User */}

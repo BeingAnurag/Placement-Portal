@@ -8,6 +8,7 @@ import {
   BellRing,
   BriefcaseBusiness,
   Building2,
+  ChevronDown,
   ClipboardCheck,
   FileQuestion,
   FileText,
@@ -26,21 +27,38 @@ import { useState } from "react";
 import { handleSignOut } from "@/lib/actions/auth";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
 
-const nav = [
-  ["Overview", "/admin/dashboard", BarChart3],
-  ["Announcements", "/admin/announcements", BellRing],
-  ["Companies", "/admin/companies", Building2],
-  ["Job profiles", "/admin/job-profiles", BriefcaseBusiness],
-  ["Applications", "/admin/applications", ClipboardCheck],
-  ["Placement records", "/admin/placement-records", Award],
-  ["Students", "/admin/students", GraduationCap],
-  ["Users & RBAC", "/admin/users", ShieldCheck],
-  ["Feedbacks", "/admin/feedbacks", FileQuestion],
-  ["NOC requests", "/admin/noc-requests", FileText],
-  ["Interview experiences", "/admin/interview-experiences", MessageSquareText],
-  ["Team", "/admin/team", Users],
-  ["Settings", "/admin/settings", Settings],
-] as const;
+type NavLink = { label: string; href: string };
+type NavItem = {
+  label: string;
+  icon: typeof BarChart3;
+  /** Either a page of its own, or a group that expands into several. */
+  href?: string;
+  children?: NavLink[];
+};
+
+const nav: NavItem[] = [
+  { label: "Overview", href: "/admin/dashboard", icon: BarChart3 },
+  {
+    label: "Announcements",
+    icon: BellRing,
+    children: [
+      { label: "Company event announcement", href: "/admin/announcements/company-event" },
+      { label: "General announcement", href: "/admin/announcements/general" },
+      { label: "Active & drafts", href: "/admin/announcements" },
+    ],
+  },
+  { label: "Companies", href: "/admin/companies", icon: Building2 },
+  { label: "Job profiles", href: "/admin/job-profiles", icon: BriefcaseBusiness },
+  { label: "Applications", href: "/admin/applications", icon: ClipboardCheck },
+  { label: "Placement records", href: "/admin/placement-records", icon: Award },
+  { label: "Students", href: "/admin/students", icon: GraduationCap },
+  { label: "Users & RBAC", href: "/admin/users", icon: ShieldCheck },
+  { label: "Feedbacks", href: "/admin/feedbacks", icon: FileQuestion },
+  { label: "NOC requests", href: "/admin/noc-requests", icon: FileText },
+  { label: "Interview experiences", href: "/admin/interview-experiences", icon: MessageSquareText },
+  { label: "Team", href: "/admin/team", icon: Users },
+  { label: "Settings", href: "/admin/settings", icon: Settings },
+];
 
 export function AdminShell({
   children,
@@ -53,9 +71,20 @@ export function AdminShell({
   allowedPaths: string[];
 }) {
   const path = usePathname();
-  const visibleNav = nav.filter(([, href]) => allowedPaths.includes(href));
+  // A group keeps only the children this account may open, and disappears
+  // entirely when none are left, the same rule single links follow.
+  const visibleNav = nav
+    .map((item) =>
+      item.children
+        ? { ...item, children: item.children.filter((child) => allowedPaths.includes(child.href)) }
+        : item,
+    )
+    .filter((item) => (item.children ? item.children.length > 0 : allowedPaths.includes(item.href!)));
   const [open, setOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  // A group starts open when the current page is inside it, and the viewer can
+  // then expand or collapse any of them.
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
   return (
     <div className="admin-shell">
@@ -95,17 +124,55 @@ export function AdminShell({
           </div>
         </div>
         <nav>
-          {visibleNav.map(([label, href, Icon]) => (
-            <Link
-              className={path === href ? "active" : ""}
-              href={href}
-              key={href}
-              onClick={() => setOpen(false)}
-            >
-              <Icon />
-              <span>{label}</span>
-            </Link>
-          ))}
+          {visibleNav.map(({ label, href, icon: Icon, children }) => {
+            if (!children) {
+              return (
+                <Link
+                  className={path === href ? "active" : ""}
+                  href={href!}
+                  key={href}
+                  onClick={() => setOpen(false)}
+                >
+                  <Icon />
+                  <span>{label}</span>
+                </Link>
+              );
+            }
+
+            const holdsCurrentPage = children.some((child) => child.href === path);
+            const expanded = collapsed[label] ?? holdsCurrentPage;
+
+            return (
+              <div className="nav-group" key={label}>
+                <button
+                  type="button"
+                  className={holdsCurrentPage ? "nav-group-toggle current" : "nav-group-toggle"}
+                  aria-expanded={expanded}
+                  onClick={() =>
+                    setCollapsed((previous) => ({ ...previous, [label]: !expanded }))
+                  }
+                >
+                  <Icon />
+                  <span>{label}</span>
+                  <ChevronDown className={expanded ? "chevron open" : "chevron"} />
+                </button>
+                {expanded ? (
+                  <div className="nav-group-links">
+                    {children.map((child) => (
+                      <Link
+                        className={path === child.href ? "active" : ""}
+                        href={child.href}
+                        key={child.href}
+                        onClick={() => setOpen(false)}
+                      >
+                        <span>{child.label}</span>
+                      </Link>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            );
+          })}
         </nav>
         <Link className="student-portal-link" href="/dashboard">
           Open student portal →

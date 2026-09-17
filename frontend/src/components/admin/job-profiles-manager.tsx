@@ -1,6 +1,6 @@
 "use client";
 
-import { BriefcaseBusiness, Edit3, Plus, Search, Trash2, X } from "lucide-react";
+import { BriefcaseBusiness, Edit3, Plus, Trash2, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import {
@@ -8,6 +8,11 @@ import {
   saveJobProfile,
   type JobProfileActionResult,
 } from "@/app/admin/job-profiles/actions";
+import {
+  DataTable,
+  type DataTableColumn,
+  type DataTableFilter,
+} from "@/components/common/data-table";
 
 export type AdminJobProfileItem = {
   id: string;
@@ -42,6 +47,14 @@ const typeLabels: Record<AdminJobProfileItem["type"], string> = {
   INTERNSHIP_FTE: "Internship + FTE",
 };
 
+const deadlineFormat = new Intl.DateTimeFormat("en-IN", {
+  day: "2-digit",
+  month: "short",
+  year: "numeric",
+  hour: "numeric",
+  minute: "2-digit",
+});
+
 function localDateTime(value: string) {
   const date = new Date(value);
   const offset = date.getTimezoneOffset() * 60_000;
@@ -58,18 +71,9 @@ export function JobProfilesManager({
   canPersist: boolean;
 }) {
   const router = useRouter();
-  const [query, setQuery] = useState("");
-  const [status, setStatus] = useState("ALL");
   const [editing, setEditing] = useState<AdminJobProfileItem | null | undefined>(undefined);
   const [saving, setSaving] = useState(false);
   const [result, setResult] = useState<JobProfileActionResult>({});
-  const visible = useMemo(
-    () => jobs.filter((job) => {
-      const matchesSearch = `${job.companyName} ${job.title} ${job.locations.join(" ")}`.toLowerCase().includes(query.toLowerCase());
-      return matchesSearch && (status === "ALL" || job.status === status);
-    }),
-    [jobs, query, status],
-  );
 
   async function submit(formData: FormData) {
     setSaving(true);
@@ -94,6 +98,132 @@ export function JobProfilesManager({
       ? "Add a company before creating its job profile."
       : null;
 
+  const columns = useMemo<DataTableColumn<AdminJobProfileItem>[]>(
+    () => [
+      {
+        id: "role",
+        header: "Role",
+        width: "minmax(260px, 2fr)",
+        sortValue: (job) => `${job.companyName} ${job.title}`,
+        hideable: false,
+        cell: (job) => (
+          <span className="company-admin-name">
+            <i>
+              <BriefcaseBusiness />
+            </i>
+            <span>
+              <strong>
+                {job.companyName} · {job.title}
+              </strong>
+              <small>
+                {typeLabels[job.type]} · {job.locations.join(" / ")}
+              </small>
+            </span>
+          </span>
+        ),
+      },
+      {
+        id: "eligibility",
+        header: "Eligibility",
+        width: "minmax(200px, 1.4fr)",
+        sortValue: (job) => job.minCGPA,
+        cell: (job) => (
+          <span>
+            Batch {job.batch} · CGPA {job.minCGPA}+
+            <br />
+            <small>{job.allowedBranches.join(", ")}</small>
+          </span>
+        ),
+      },
+      {
+        id: "deadline",
+        header: "Deadline",
+        width: "minmax(190px, 1.2fr)",
+        sortValue: (job) => new Date(job.registrationDeadline),
+        cell: (job) => (
+          <span>
+            <b className={`cell-status ${job.status.toLowerCase()}`}>{job.status}</b>
+            <br />
+            <small>{deadlineFormat.format(new Date(job.registrationDeadline))}</small>
+          </span>
+        ),
+      },
+      {
+        id: "applications",
+        header: "Applications",
+        width: "130px",
+        sortValue: (job) => job.applicationCount,
+        cell: (job) => <span className="dt-numeric">{job.applicationCount}</span>,
+      },
+      {
+        id: "actions",
+        header: "Actions",
+        width: "110px",
+        hideable: false,
+        cell: (job) => (
+          <span className="row-actions">
+            <button
+              title={`Edit ${job.title}`}
+              aria-label={`Edit ${job.title}`}
+              disabled={!canPersist}
+              onClick={() => {
+                setResult({});
+                setEditing(job);
+              }}
+            >
+              <Edit3 />
+            </button>
+            <form action={remove}>
+              <input type="hidden" name="jobProfileId" value={job.id} />
+              <button
+                title={job.applicationCount ? "Jobs with applications cannot be deleted" : `Delete ${job.title}`}
+                aria-label={`Delete ${job.title}`}
+                disabled={!canPersist || job.applicationCount > 0}
+              >
+                <Trash2 />
+              </button>
+            </form>
+          </span>
+        ),
+      },
+    ],
+    // `remove` is redefined per render but closes over nothing that changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [canPersist],
+  );
+
+  const filters = useMemo<DataTableFilter<AdminJobProfileItem>[]>(() => {
+    const batches = Array.from(new Set(jobs.map((job) => job.batch))).sort((a, b) => b - a);
+    const types = Array.from(new Set(jobs.map((job) => job.type))).sort((a, b) =>
+      typeLabels[a].localeCompare(typeLabels[b]),
+    );
+
+    return [
+      {
+        id: "status",
+        label: "Status",
+        value: (job) => job.status,
+        options: [
+          { value: "ACTIVE", label: "Active" },
+          { value: "DRAFT", label: "Draft" },
+          { value: "ENDED", label: "Ended" },
+        ],
+      },
+      {
+        id: "batch",
+        label: "Batch",
+        value: (job) => String(job.batch),
+        options: batches.map((batch) => ({ value: String(batch), label: String(batch) })),
+      },
+      {
+        id: "type",
+        label: "Type",
+        value: (job) => job.type,
+        options: types.map((type) => ({ value: type, label: typeLabels[type] })),
+      },
+    ];
+  }, [jobs]);
+
   return (
     <div className="admin-page">
       <section className="admin-heading">
@@ -103,21 +233,23 @@ export function JobProfilesManager({
       {createDisabledReason ? <div className="admin-info">{createDisabledReason}</div> : null}
       {result.success ? <div className="admin-success">{result.success}</div> : null}
       {result.error ? <div className="admin-error">{result.error}</div> : null}
-      <section className="admin-toolbar">
-        <label><Search/><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search company, role, or location"/></label>
-        <select aria-label="Filter by status" value={status} onChange={(event) => setStatus(event.target.value)}><option value="ALL">All statuses</option><option value="ACTIVE">Active</option><option value="DRAFT">Draft</option><option value="ENDED">Ended</option></select>
-      </section>
-      <section className="admin-table">
-        <div className="admin-row admin-row-head"><span>Role</span><span>Eligibility</span><span>Deadline</span><span>Applications</span><span>Actions</span></div>
-        {visible.map((job) => <div className="admin-row" key={job.id}>
-          <span className="company-admin-name"><i><BriefcaseBusiness/></i><span><strong>{job.companyName} · {job.title}</strong><small>{typeLabels[job.type]} · {job.locations.join(" / ")}</small></span></span>
-          <span>Batch {job.batch} · CGPA {job.minCGPA}+<br/><small>{job.allowedBranches.join(", ")}</small></span>
-          <span><b className={`cell-status ${job.status.toLowerCase()}`}>{job.status}</b><br/><small>{new Intl.DateTimeFormat("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" }).format(new Date(job.registrationDeadline))}</small></span>
-          <span>{job.applicationCount}</span>
-          <span className="row-actions"><button title={`Edit ${job.title}`} disabled={!canPersist} onClick={() => { setResult({}); setEditing(job); }}><Edit3/></button><form action={remove}><input type="hidden" name="jobProfileId" value={job.id}/><button title={job.applicationCount ? "Jobs with applications cannot be deleted" : `Delete ${job.title}`} disabled={!canPersist || job.applicationCount > 0}><Trash2/></button></form></span>
-        </div>)}
-        {!visible.length ? <div className="admin-empty"><BriefcaseBusiness/><h2>{jobs.length ? "No matching job profiles" : "No job profiles yet"}</h2><p>{jobs.length ? "Change the search or status filter." : "Add a company, then publish its first real opportunity."}</p></div> : null}
-      </section>
+      <DataTable
+        data={jobs}
+        columns={columns}
+        getRowId={(job) => job.id}
+        searchText={(job) => `${job.companyName} ${job.title} ${job.locations.join(" ")}`}
+        searchPlaceholder="Search company, role, or location"
+        filters={filters}
+        columnStorageKey="job-profiles"
+        minWidth={960}
+        emptyIcon={<BriefcaseBusiness />}
+        emptyTitle={jobs.length ? "No matching job profiles" : "No job profiles yet"}
+        emptyDescription={
+          jobs.length
+            ? "Change the search or status filter."
+            : "Add a company, then publish its first real opportunity."
+        }
+      />
       {editing !== undefined ? <div className="modal-backdrop"><form className="modal job-profile-modal" action={submit}>
         <header><div><span className="eyebrow">Persistent opportunity</span><h2>{editing ? "Edit job profile" : "Add job profile"}</h2></div><button type="button" onClick={() => setEditing(undefined)} aria-label="Close dialog"><X/></button></header>
         <input type="hidden" name="id" value={editing?.id ?? ""}/>

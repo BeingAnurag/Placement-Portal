@@ -1,6 +1,6 @@
 # Canonical Project Context
 
-Last updated: 2026-08-20
+Last updated: 2026-09-17
 
 ## Product
 
@@ -21,7 +21,7 @@ The repository is split into three services, each with its own container.
 
 - `frontend` and `database` are npm workspaces sharing one lockfile at the repository root. A single Prisma schema cannot resolve a client across two independent `node_modules` trees, so do not give either package its own lockfile.
 - Tailwind CSS 4 plus repository-owned CSS in `frontend/src/app/globals.css` and `admin.css`
-- Auth.js v5 beta with Google OAuth and JWT sessions
+- Auth.js v5 beta with one credentials provider and JWT sessions; no OAuth provider
 - Zod for validation in the frontend, Pydantic in the backend
 - Lucide for icons
 - Node's test runner with `tsx` for frontend units; pytest for the backend
@@ -33,7 +33,7 @@ See `docs/DECISIONS.md` (2026-08-20) for why data access moved to FastAPI while 
 
 `database/prisma/schema.prisma` is authoritative for the database structure. The SQLAlchemy models in `backend/app/models/db.py` mirror it and must never call `Base.metadata.create_all()` or otherwise migrate. Any schema change is a Prisma migration plus a matching model update.
 
-Main entities: User, Account, Session, Company, JobProfile, Application, Announcement, Feedback, NocRequest, InterviewExperience, Resume, Coordinator, TeamMember, Notification.
+Main entities: User, Account, Session, Company, JobProfile, Application, Offer, Announcement, Feedback, NocRequest, InterviewExperience, Resume, Coordinator, TeamMember, Notification.
 
 Important invariants:
 
@@ -41,6 +41,8 @@ Important invariants:
 - Company names, user emails, and student roll numbers are unique where present.
 - Job eligibility is evaluated from the student's current profile and job criteria: CGPA, batch, branch, degree, gender, backlogs, placement bans, and document completeness. An empty `allowedDegrees` or `allowedGenders` list, or one holding `all`/`any`, places no restriction; a restriction the profile cannot answer fails.
 - `NocRequest.message` is the student's remarks and `NocRequest.adminRemarks` is the placement cell's decision remarks. A decision never writes over the student's text.
+- An `Offer` is the placement record and the only source of package figures. An application is not an offer; the two are joined by an optional, unique `applicationId`. An FTE or PPO carries `ctc`, an internship carries `stipend`, and the type the offer is not clears the other. A `DECLINED` or `REVOKED` offer stays on file but is excluded from every statistic, a rule stated once in `COUNTED_OFFER_STATUSES`. The season is the batch stored on the offer, not the student's current batch.
+- An `Announcement` is `DRAFT` or `PUBLISHED`, defaulting to `PUBLISHED`; drafts are filtered out server-side for anyone without `announcements:manage`, and the single-announcement route answers 404 for them. `publishedAt` keeps the first publication date through a withdraw and re-publish. A company event may name the drive it is about in `jobProfileId`; a general notice carries neither company nor drive. Attachments are `AnnouncementAttachment` rows; their type is verified against the file's signature rather than its name, and a draft's files are as private as the draft.
 - Sensitive Aadhaar/PAN fields contain encrypted payloads, not plaintext.
 - Destructive administrative operations require server-side admin authorization.
 
@@ -89,6 +91,7 @@ values may appear; every rule reads a semantic token. See `docs/DECISIONS.md`
 - `rgba()` tints must use the channel tokens (`--brand-rgb`, `--deep-rgb`, `--shadow-rgb`, `--warning-rgb`, `--success-rgb`, `--danger-rgb`), because `rgba()` cannot read a hex custom property
 - Rounded cards, restrained shadows, high information density, and mobile-first responsive layouts
 - Student pages use `PortalShell`; admin pages use `AdminShell`.
+- Every admin list is the shared `DataTable` (`frontend/src/components/common/data-table.tsx`) configured with columns; its pipeline lives in `frontend/src/lib/data-table.ts`. Do not hand-write another admin table, and give a column its raw `sortValue` rather than letting it sort the formatted cell.
 - Use CSS transitions only unless the architecture decision is deliberately changed.
 
 ## Repository map
@@ -97,7 +100,8 @@ values may appear; every rule reads a semantic token. See `docs/DECISIONS.md`
 frontend/src/app/                Routes, layouts, route handlers
 frontend/src/components/layout/  Student navigation shell
 frontend/src/components/admin/   Admin shell and management surfaces
-frontend/src/lib/                Auth, backend client, encryption, eligibility
+frontend/src/components/common/  Shared UI, including the one admin data table
+frontend/src/lib/                Auth, backend client, encryption, eligibility, table pipeline
 backend/app/core/                Config, database session, security, storage
 backend/app/routers/             HTTP endpoints
 backend/app/schemas/             Pydantic request/response models

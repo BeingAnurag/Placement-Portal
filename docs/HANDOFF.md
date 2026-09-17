@@ -7,9 +7,32 @@ This file carries short-lived working context between teammates and agents. Cano
 - Active objective: finish moving data access from Prisma-in-Next.js to FastAPI endpoints
 - Active owner: unassigned
 - Branch: main working tree contains the service split, containerization, and the auth rework
-- Last verified (2026-09-17): `npm run lint` (one pre-existing unused-variable warning in `profile-view.tsx`), `npm run type-check`, `npm run build`, 80 frontend unit tests, 95 backend pytest tests, and `docker compose up -d --build backend frontend` with all containers healthy after `20260916225140_add_noc_admin_remarks` applied.
-- Not yet exercised: signed-in journeys against the running stack. The four defect fixes below are covered by unit tests and, for the application export, by running its SQL against the development database; nobody has clicked Export CSV or approved a NOC in the browser.
+- Last verified (2026-09-17, shared admin data table pass): `npm run lint` (one pre-existing unused-variable warning in `profile-view.tsx`), `npm run type-check`, `npm run build`, 104 frontend unit tests, and `docker compose up -d --build frontend` with all containers healthy. The 115 backend pytest tests were last run in the announcements pass; this pass changed no backend file.
+- Not yet exercised in a browser: every signed-in journey, including the new dashboard, `/admin/placement-records`, and the announcement composer. Nobody has a known admin password on this machine — `placements@iiitl.ac.in` has a hash set by the repository owner — so the screens were verified through the production build, the unit and pytest suites, and SQL against the seeded development database rather than by clicking. The four defect fixes below are covered by unit tests and, for the application export, by running its SQL against the development database; nobody has clicked Export CSV or approved a NOC in the browser.
 - External blocker: resume/document storage provider has not been selected
+
+## One admin data table, 2026-09-17
+
+`DECISIONS.md` carries the reasoning under today's date.
+
+All eleven admin lists — companies, job profiles, students, applications, placement records, announcements, feedbacks, NOC requests, interview experiences, users, and team — now render through `frontend/src/components/common/data-table.tsx`. Each screen supplies columns, a search accessor, and filters; nothing about a page lives in the component. The pipeline is `frontend/src/lib/data-table.ts` and is covered by twelve tests in `frontend/src/lib/data-table.test.ts`.
+
+- The old `.admin-row` CSS grid, `.admin-row-head`, and `.user-row-grid` rules are deleted; `.admin-toolbar` stays because the student interview-experiences view still uses it.
+- Server actions, modals, permission gating, the applications CSV export, bulk stage changes, and the team reorder arrows were carried over unchanged. The export now narrows on a filter only when exactly one option is selected, because the endpoint takes one value per filter and a file that disagrees with the screen is worse than a wider one.
+- Column visibility persists per viewer in `localStorage` under `tnp.table.<screen>.hidden`.
+- **Not exercised in a browser.** Sorting, the filter and column popovers, pagination, and dark mode were verified through the production build, the unit suite, and code review only; see the credentials blocker below.
+
+## Placement records, dashboard, and announcements, 2026-09-17
+
+`DECISIONS.md` carries the reasoning for all three under today's date.
+
+1. **`Offer` is the placement record.** New table plus `OfferType` and `OfferStatus`, CRUD at `/api/v1/offers` behind `applications:manage`, and `/admin/placement-records` in the sidebar and `ROUTE_PERMISSIONS`. An application is not an offer; the optional `applicationId` join is unique. `DECLINED` and `REVOKED` rows stay on file and count for nothing, a rule held in `COUNTED_OFFER_STATUSES`.
+2. **The admin dashboard reads `GET /api/v1/analytics/admin/overview` and nothing else.** It is the first admin screen with no Prisma fallback. The season selector defaults to the newest season that has an offer, because the newest batch on file has usually not been placed yet.
+3. **Announcements draft, publish, and split into three routes** under an expandable `Announcements` group in the sidebar: `company-event`, `general`, and the manage list. The composer walks placement season → company → event → tag and keeps the editor locked until those are filled; the chosen drive persists in the new `Announcement.jobProfileId`. Drafts are filtered server-side for anyone without `announcements:manage`, on the backend list, on the single-announcement route, and in the student dashboard's own query.
+4. **Announcements carry attachments.** `AnnouncementAttachment` rows, a staged upload endpoint behind `announcements:manage`, signature checks per type in `validate_attachment`, and links shown in the admin preview and on the student dashboard. Resume upload stays PDF-only and untouched. Abandoning a draft after uploading leaves an orphan file under `announcement_docs/`; nothing sweeps those yet.
+5. **Seed data covers the new tables**: eleven offers across the 2027 and 2028 seasons, and two draft announcements, so both screens have something to show on a fresh database.
+
+Not built, and asked about in the reference design: an email dispatch when an announcement is published. Announcements notify nobody today, so the reference screen's "I have reviewed all the info and I am ready to send the email" confirmation would be describing something that does not happen; the composer says what publishing actually does instead.
 
 ## Four defect fixes, 2026-09-17
 
@@ -34,7 +57,7 @@ Each has a dated entry in `DECISIONS.md` with the reasoning.
 1. Port the remaining direct Prisma call sites to FastAPI endpoints. `docs/FEATURE_STATUS.md` lists them under the "Prisma direct" data path; the admin surfaces and the dashboard are the bulk of it.
 2. Sign in against the running stack and walk the student and admin journeys end to end, starting with Export CSV on `/admin/applications` and an approve/reject on `/admin/noc-requests`.
 3. Select a storage provider and implement PDF-only resume upload with ownership checks.
-4. Add persistent announcement publishing and administrator application review.
+4. Walk the announcement composer, `/admin/placement-records`, and the new shared table's sorting, filter popovers, column menu, and pagination in a browser, which needs an admin password on the target machine (`npm run db:set-password -- <email>`).
 5. Add encrypted Aadhaar/PAN profile actions using the existing encryption helper.
 
 ## Watch out for

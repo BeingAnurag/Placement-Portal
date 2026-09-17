@@ -1,8 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { AlertTriangle, Eye, GraduationCap, Search } from "lucide-react";
+import { AlertTriangle, Eye, GraduationCap } from "lucide-react";
 import { useMemo, useState } from "react";
+import {
+  DataTable,
+  type DataTableColumn,
+  type DataTableFilter,
+} from "@/components/common/data-table";
 
 export type AdminStudentListItem = {
   id: string;
@@ -19,22 +24,138 @@ export type AdminStudentListItem = {
 };
 
 export function StudentsManager({ students }: { students: AdminStudentListItem[] }) {
-  const [query, setQuery] = useState("");
   const [onlyFlagged, setOnlyFlagged] = useState(false);
 
   const flaggedCount = useMemo(() => students.filter((s) => s.missedStreak >= 3).length, [students]);
 
   const visible = useMemo(
-    () =>
-      students.filter((student) => {
-        const matchesSearch = `${student.name} ${student.email} ${student.rollNumber ?? ""} ${student.branch ?? ""}`
-          .toLowerCase()
-          .includes(query.toLowerCase());
-        const matchesFlag = !onlyFlagged || student.missedStreak >= 3;
-        return matchesSearch && matchesFlag;
-      }),
-    [students, query, onlyFlagged],
+    () => (onlyFlagged ? students.filter((student) => student.missedStreak >= 3) : students),
+    [students, onlyFlagged],
   );
+
+  const columns = useMemo<DataTableColumn<AdminStudentListItem>[]>(
+    () => [
+      {
+        id: "student",
+        header: "Student",
+        width: "minmax(220px, 1.6fr)",
+        sortValue: (student) => student.name,
+        hideable: false,
+        cell: (student) => (
+          <span className="company-admin-name">
+            <i>
+              <GraduationCap />
+            </i>
+            <span>
+              <strong>{student.name}</strong>
+              <small>{student.email}</small>
+            </span>
+          </span>
+        ),
+      },
+      {
+        id: "academic",
+        header: "Academic profile",
+        width: "minmax(200px, 1.6fr)",
+        sortValue: (student) => student.rollNumber,
+        cell: (student) => (
+          <span>
+            {student.rollNumber ?? "Roll not added"}
+            <br />
+            <small>
+              {student.branch ?? "Branch not added"}
+              {student.batch ? ` · ${student.batch}` : ""} · {student.completion}% complete
+            </small>
+          </span>
+        ),
+      },
+      {
+        id: "cgpa",
+        header: "CGPA",
+        width: "100px",
+        sortValue: (student) => student.cgpa,
+        cell: (student) => <span className="dt-numeric">{student.cgpa ?? "Not added"}</span>,
+      },
+      {
+        id: "applications",
+        header: "Applications",
+        width: "130px",
+        sortValue: (student) => student.applicationCount,
+        cell: (student) => <span className="dt-numeric">{student.applicationCount}</span>,
+      },
+      {
+        id: "followUp",
+        header: "Follow-up",
+        width: "minmax(180px, 1.4fr)",
+        sortValue: (student) => student.missedStreak,
+        cell: (student) =>
+          student.missedStreak >= 3 ? (
+            <span
+              title={`Eligible but did not apply to ${student.missedStreak} companies in a row: ${student.missedCompanies.join(", ")}`}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "4px",
+                padding: "3px 8px",
+                borderRadius: "9999px",
+                fontSize: "10px",
+                fontWeight: 800,
+                background: "var(--badge-orange-bg)",
+                color: "var(--badge-orange-text)",
+                cursor: "help",
+              }}
+            >
+              <AlertTriangle size={11} /> Missed {student.missedStreak} in a row
+            </span>
+          ) : (
+            <small className="dt-muted">—</small>
+          ),
+      },
+      {
+        id: "actions",
+        header: "Actions",
+        width: "90px",
+        hideable: false,
+        cell: (student) => (
+          <span className="row-actions">
+            <Link
+              className="admin-icon-link"
+              href={`/admin/students/${student.id}`}
+              title={`View ${student.name}`}
+              aria-label={`View ${student.name}`}
+            >
+              <Eye />
+            </Link>
+          </span>
+        ),
+      },
+    ],
+    [],
+  );
+
+  const filters = useMemo<DataTableFilter<AdminStudentListItem>[]>(() => {
+    const batches = Array.from(
+      new Set(students.map((student) => student.batch).filter((batch): batch is number => batch !== null)),
+    ).sort((a, b) => b - a);
+    const branches = Array.from(
+      new Set(students.map((student) => student.branch).filter((branch): branch is string => Boolean(branch))),
+    ).sort((a, b) => a.localeCompare(b));
+
+    return [
+      {
+        id: "batch",
+        label: "Batch",
+        value: (student) => (student.batch === null ? null : String(student.batch)),
+        options: batches.map((batch) => ({ value: String(batch), label: String(batch) })),
+      },
+      {
+        id: "branch",
+        label: "Branch",
+        value: (student) => student.branch,
+        options: branches.map((branch) => ({ value: branch, label: branch })),
+      },
+    ];
+  }, [students]);
 
   return (
     <div className="admin-page">
@@ -61,96 +182,35 @@ export function StudentsManager({ students }: { students: AdminStudentListItem[]
         </div>
       )}
 
-      <section className="admin-toolbar">
-        <label>
-          <Search />
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search name, email, roll number, or branch"
-          />
-        </label>
-        <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", fontWeight: 600, whiteSpace: "nowrap" }}>
-          <input type="checkbox" checked={onlyFlagged} onChange={(event) => setOnlyFlagged(event.target.checked)} />
-          Needs follow-up only ({flaggedCount})
-        </label>
-      </section>
-
-      <section className="admin-table">
-        <div className="admin-row admin-row-head" style={{ gridTemplateColumns: "1.6fr 1.6fr 0.8fr 1fr 1.4fr 0.8fr" }}>
-          <span>Student</span>
-          <span>Academic profile</span>
-          <span>CGPA</span>
-          <span>Applications</span>
-          <span>Follow-up</span>
-          <span>Actions</span>
-        </div>
-        {visible.map((student) => {
-          const isFlagged = student.missedStreak >= 3;
-          return (
-            <div className="admin-row" key={student.id} style={{ gridTemplateColumns: "1.6fr 1.6fr 0.8fr 1fr 1.4fr 0.8fr" }}>
-              <span className="company-admin-name">
-                <i>
-                  <GraduationCap />
-                </i>
-                <span>
-                  <strong>{student.name}</strong>
-                  <small>{student.email}</small>
-                </span>
-              </span>
-              <span>
-                {student.rollNumber ?? "Roll not added"}
-                <br />
-                <small>
-                  {student.branch ?? "Branch not added"}
-                  {student.batch ? ` · ${student.batch}` : ""} · {student.completion}% complete
-                </small>
-              </span>
-              <span>{student.cgpa ?? "Not added"}</span>
-              <span>{student.applicationCount}</span>
-              <span>
-                {isFlagged ? (
-                  <span
-                    title={`Eligible but did not apply to ${student.missedStreak} companies in a row: ${student.missedCompanies.join(", ")}`}
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "4px",
-                      padding: "3px 8px",
-                      borderRadius: "9999px",
-                      fontSize: "10px",
-                      fontWeight: 800,
-                      background: "var(--badge-orange-bg)",
-                      color: "var(--badge-orange-text)",
-                      cursor: "help",
-                    }}
-                  >
-                    <AlertTriangle size={11} /> Missed {student.missedStreak} in a row
-                  </span>
-                ) : (
-                  <small style={{ color: "var(--muted)" }}>—</small>
-                )}
-              </span>
-              <span className="row-actions">
-                <Link className="admin-icon-link" href={`/admin/students/${student.id}`} title={`View ${student.name}`}>
-                  <Eye />
-                </Link>
-              </span>
-            </div>
-          );
-        })}
-        {!visible.length ? (
-          <div className="admin-empty">
-            <GraduationCap />
-            <h2>{students.length ? "No matching students" : "No students yet"}</h2>
-            <p>
-              {students.length
-                ? "Change the search query or follow-up filter."
-                : "Students appear once they register with their institute address."}
-            </p>
-          </div>
-        ) : null}
-      </section>
+      <DataTable
+        data={visible}
+        columns={columns}
+        getRowId={(student) => student.id}
+        searchText={(student) =>
+          `${student.name} ${student.email} ${student.rollNumber ?? ""} ${student.branch ?? ""}`
+        }
+        searchPlaceholder="Search name, email, roll number, or branch"
+        filters={filters}
+        columnStorageKey="students"
+        minWidth={940}
+        toolbarExtras={
+          <label className="dt-check">
+            <input
+              type="checkbox"
+              checked={onlyFlagged}
+              onChange={(event) => setOnlyFlagged(event.target.checked)}
+            />
+            <span>Needs follow-up only ({flaggedCount})</span>
+          </label>
+        }
+        emptyIcon={<GraduationCap />}
+        emptyTitle={students.length ? "No matching students" : "No students yet"}
+        emptyDescription={
+          students.length
+            ? "Change the search query or follow-up filter."
+            : "Students appear once they register with their institute address."
+        }
+      />
     </div>
   );
 }

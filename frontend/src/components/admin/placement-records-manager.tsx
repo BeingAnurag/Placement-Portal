@@ -1,6 +1,6 @@
 "use client";
 
-import { Award, Edit3, Plus, Search, Trash2, X } from "lucide-react";
+import { Award, Edit3, Plus, Trash2, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import {
@@ -17,6 +17,11 @@ import {
   type OfferStatus,
   type OfferType,
 } from "@/lib/offer-schema";
+import {
+  DataTable,
+  type DataTableColumn,
+  type DataTableFilter,
+} from "@/components/common/data-table";
 
 export type StudentOption = {
   id: string;
@@ -103,10 +108,6 @@ export function PlacementRecordsManager({
   backendError: string | null;
 }) {
   const router = useRouter();
-  const [query, setQuery] = useState("");
-  const [seasonFilter, setSeasonFilter] = useState("ALL");
-  const [typeFilter, setTypeFilter] = useState("ALL");
-  const [statusFilter, setStatusFilter] = useState("ALL");
   const [editing, setEditing] = useState<OfferRecord | null | undefined>(undefined);
   const [formType, setFormType] = useState<OfferType>("FTE");
   const [saving, setSaving] = useState(false);
@@ -115,22 +116,6 @@ export function PlacementRecordsManager({
   const seasons = useMemo(
     () => [...new Set(offers.map((offer) => offer.batch))].sort((a, b) => b - a),
     [offers],
-  );
-
-  const visible = useMemo(
-    () =>
-      offers.filter((offer) => {
-        const haystack = `${offer.student?.name ?? ""} ${offer.student?.rollNumber ?? ""} ${
-          offer.student?.email ?? ""
-        } ${offer.company?.name ?? ""} ${offer.jobTitle ?? ""}`.toLowerCase();
-        return (
-          haystack.includes(query.trim().toLowerCase()) &&
-          (seasonFilter === "ALL" || String(offer.batch) === seasonFilter) &&
-          (typeFilter === "ALL" || offer.type === typeFilter) &&
-          (statusFilter === "ALL" || offer.status === statusFilter)
-        );
-      }),
-    [offers, query, seasonFilter, typeFilter, statusFilter],
   );
 
   function openForm(offer: OfferRecord | null) {
@@ -155,6 +140,147 @@ export function PlacementRecordsManager({
     setResult(next);
     if (next.success) router.refresh();
   }
+
+  const columns = useMemo<DataTableColumn<OfferRecord>[]>(
+    () => [
+      {
+        id: "student",
+        header: "Student",
+        width: "minmax(220px, 1.8fr)",
+        hideable: false,
+        sortValue: (offer) => offer.student?.name ?? offer.student?.email,
+        cell: (offer) => (
+          <span className="company-admin-name">
+            <i>
+              <Award />
+            </i>
+            <span>
+              <strong>{offer.student?.name ?? "Student"}</strong>
+              <small>
+                {[offer.student?.rollNumber, offer.student?.branch, offer.student?.degree]
+                  .filter(Boolean)
+                  .join(" · ") || "Profile incomplete"}
+              </small>
+            </span>
+          </span>
+        ),
+      },
+      {
+        id: "company",
+        header: "Company & role",
+        width: "minmax(180px, 1.4fr)",
+        sortValue: (offer) => offer.company?.name,
+        cell: (offer) => (
+          <span className="dt-primary">
+            <strong>{offer.company?.name ?? "—"}</strong>
+            <small>{offer.jobTitle ?? offer.location ?? "Recorded off-portal"}</small>
+          </span>
+        ),
+      },
+      {
+        id: "package",
+        header: "Package",
+        width: "minmax(140px, 1fr)",
+        // Sorted on the amount, not on the formatted rupee string, and a CTC
+        // is never compared against a monthly stipend.
+        sortValue: (offer) => (isCtcType(offer.type) ? offer.ctc : offer.stipend),
+        cell: (offer) => (
+          <span className="dt-primary">
+            <strong className="dt-numeric">
+              {isCtcType(offer.type) ? formatRupees(offer.ctc) : formatStipend(offer.stipend)}
+            </strong>
+            <small>{OFFER_TYPE_LABELS[offer.type]}</small>
+          </span>
+        ),
+      },
+      {
+        id: "status",
+        header: "Status",
+        width: "minmax(150px, 1fr)",
+        sortValue: (offer) => offer.status,
+        cell: (offer) => (
+          <span className="dt-primary">
+            <b className={`cell-status ${offer.status.toLowerCase()}`}>
+              {OFFER_STATUS_LABELS[offer.status]}
+            </b>
+            <small>offered {formatDate(offer.offeredAt)}</small>
+          </span>
+        ),
+      },
+      {
+        id: "batch",
+        header: "Season",
+        width: "100px",
+        sortValue: (offer) => offer.batch,
+        cell: (offer) => <span className="dt-numeric">{offer.batch}</span>,
+      },
+      {
+        id: "joiningDate",
+        header: "Joining",
+        width: "120px",
+        defaultHidden: true,
+        sortValue: (offer) => (offer.joiningDate ? new Date(offer.joiningDate) : null),
+        cell: (offer) => formatDate(offer.joiningDate),
+      },
+      {
+        id: "location",
+        header: "Location",
+        width: "140px",
+        defaultHidden: true,
+        sortValue: (offer) => offer.location,
+        cell: (offer) => offer.location ?? <span className="dt-muted">Not recorded</span>,
+      },
+      {
+        id: "actions",
+        header: "Actions",
+        width: "110px",
+        hideable: false,
+        cell: (offer) => (
+          <span className="row-actions">
+            <button
+              title={`Edit the offer for ${offer.student?.name ?? "this student"}`}
+              aria-label={`Edit the offer for ${offer.student?.name ?? "this student"}`}
+              onClick={() => openForm(offer)}
+            >
+              <Edit3 />
+            </button>
+            <form action={remove}>
+              <input type="hidden" name="offerId" value={offer.id} />
+              <button title="Delete this placement record" aria-label="Delete this placement record">
+                <Trash2 />
+              </button>
+            </form>
+          </span>
+        ),
+      },
+    ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+
+  const filters = useMemo<DataTableFilter<OfferRecord>[]>(
+    () => [
+      {
+        id: "season",
+        label: "Season",
+        options: seasons.map((season) => ({ value: String(season), label: String(season) })),
+        value: (offer) => String(offer.batch),
+      },
+      {
+        id: "type",
+        label: "Type",
+        options: Object.entries(OFFER_TYPE_LABELS).map(([value, label]) => ({ value, label })),
+        value: (offer) => offer.type,
+      },
+      {
+        id: "status",
+        label: "Status",
+        options: Object.entries(OFFER_STATUS_LABELS).map(([value, label]) => ({ value, label })),
+        value: (offer) => offer.status,
+      },
+    ],
+    [seasons],
+  );
 
   const createDisabledReason = backendError
     ? "The API service is unreachable."
@@ -186,122 +312,28 @@ export function PlacementRecordsManager({
       {result.success ? <div className="admin-success">{result.success}</div> : null}
       {result.error ? <div className="admin-error">{result.error}</div> : null}
 
-      <section className="admin-toolbar">
-        <label>
-          <Search />
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search student, roll number, or company"
-          />
-        </label>
-        <select
-          aria-label="Filter by season"
-          value={seasonFilter}
-          onChange={(event) => setSeasonFilter(event.target.value)}
-        >
-          <option value="ALL">All seasons</option>
-          {seasons.map((season) => (
-            <option key={season} value={String(season)}>
-              {season}
-            </option>
-          ))}
-        </select>
-        <select
-          aria-label="Filter by offer type"
-          value={typeFilter}
-          onChange={(event) => setTypeFilter(event.target.value)}
-        >
-          <option value="ALL">All types</option>
-          {Object.entries(OFFER_TYPE_LABELS).map(([value, label]) => (
-            <option key={value} value={value}>
-              {label}
-            </option>
-          ))}
-        </select>
-        <select
-          aria-label="Filter by offer status"
-          value={statusFilter}
-          onChange={(event) => setStatusFilter(event.target.value)}
-        >
-          <option value="ALL">All statuses</option>
-          {Object.entries(OFFER_STATUS_LABELS).map(([value, label]) => (
-            <option key={value} value={value}>
-              {label}
-            </option>
-          ))}
-        </select>
-      </section>
-
-      <section className="admin-table">
-        <div className="admin-row admin-row-head">
-          <span>Student</span>
-          <span>Company &amp; role</span>
-          <span>Package</span>
-          <span>Season</span>
-          <span>Actions</span>
-        </div>
-        {visible.map((offer) => (
-          <div className="admin-row" key={offer.id}>
-            <span className="company-admin-name">
-              <i>
-                <Award />
-              </i>
-              <span>
-                <strong>{offer.student?.name ?? "Student"}</strong>
-                <small>
-                  {[offer.student?.rollNumber, offer.student?.branch, offer.student?.degree]
-                    .filter(Boolean)
-                    .join(" · ") || "Profile incomplete"}
-                </small>
-              </span>
-            </span>
-            <span>
-              <strong>{offer.company?.name ?? "—"}</strong>
-              <br />
-              <small>{offer.jobTitle ?? offer.location ?? "Recorded off-portal"}</small>
-            </span>
-            <span>
-              <strong>
-                {isCtcType(offer.type) ? formatRupees(offer.ctc) : formatStipend(offer.stipend)}
-              </strong>
-              <br />
-              <small>{OFFER_TYPE_LABELS[offer.type]}</small>
-            </span>
-            <span>
-              <b className={`cell-status ${offer.status.toLowerCase()}`}>
-                {OFFER_STATUS_LABELS[offer.status]}
-              </b>
-              <br />
-              <small>
-                {offer.batch} · offered {formatDate(offer.offeredAt)}
-              </small>
-            </span>
-            <span className="row-actions">
-              <button title={`Edit the offer for ${offer.student?.name ?? "this student"}`} onClick={() => openForm(offer)}>
-                <Edit3 />
-              </button>
-              <form action={remove}>
-                <input type="hidden" name="offerId" value={offer.id} />
-                <button title="Delete this placement record">
-                  <Trash2 />
-                </button>
-              </form>
-            </span>
-          </div>
-        ))}
-        {!visible.length ? (
-          <div className="admin-empty">
-            <Award />
-            <h2>{offers.length ? "No matching records" : "No placement records yet"}</h2>
-            <p>
-              {offers.length
-                ? "Change the search or the filters above."
-                : "Add the season's first offer; the dashboard fills in from here."}
-            </p>
-          </div>
-        ) : null}
-      </section>
+      <DataTable
+        data={offers}
+        columns={columns}
+        filters={filters}
+        getRowId={(offer) => offer.id}
+        searchText={(offer) =>
+          `${offer.student?.name ?? ""} ${offer.student?.rollNumber ?? ""} ${
+            offer.student?.email ?? ""
+          } ${offer.company?.name ?? ""} ${offer.jobTitle ?? ""}`
+        }
+        searchPlaceholder="Search student, roll number, or company"
+        columnStorageKey="placement-records"
+        minWidth={1080}
+        initialSort={{ columnId: "batch", direction: "desc" }}
+        emptyIcon={<Award />}
+        emptyTitle={offers.length ? "No matching records" : "No placement records yet"}
+        emptyDescription={
+          offers.length
+            ? "Try changing your search or filters."
+            : "Add the season's first offer; the dashboard fills in from here."
+        }
+      />
 
       {editing !== undefined ? (
         <div className="modal-backdrop">

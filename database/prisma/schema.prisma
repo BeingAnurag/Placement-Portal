@@ -184,33 +184,34 @@ model Company {
 }
 
 model JobProfile {
-  id                   String        @id @default(cuid())
+  id                   String         @id @default(cuid())
   companyId            String
   title                String
   type                 JobType
   locations            String[]
   ctcStipend           Float?
   ctcStipendInfo       String?
-  minCGPA              Float         @default(0)
-  maxBacklogs          Int           @default(0)
-  maxBans              Int           @default(0)
+  minCGPA              Float          @default(0)
+  maxBacklogs          Int            @default(0)
+  maxBans              Int            @default(0)
   allowedBranches      String[]
   allowedDegrees       String[]
   allowedGenders       String[]
   jobCategory          String?
   batch                Int
   registrationDeadline DateTime
-  status               JobStatus     @default(DRAFT)
+  status               JobStatus      @default(DRAFT)
   description          String?
   openingOverview      String?
   attachments          String[]
-  createdAt            DateTime      @default(now())
+  createdAt            DateTime       @default(now())
   createdById          String
-  company              Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  createdBy            User          @relation("JobCreator", fields: [createdById], references: [id])
+  company              Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdBy            User           @relation("JobCreator", fields: [createdById], references: [id])
   applications         Application[]
   coordinators         Coordinator[]
   offers               Offer[]
+  announcements        Announcement[]
 }
 
 model Application {
@@ -230,22 +231,44 @@ model Application {
 }
 
 model Announcement {
-  id          String               @id @default(cuid())
-  title       String
-  companyId   String?
-  content     String
-  tags        String[]
-  category    AnnouncementCategory
+  id           String                   @id @default(cuid())
+  title        String
+  companyId    String?
+  // The drive this announcement is about, when it is about one. The composer
+  // narrows season -> company -> event, and this is where that choice lands,
+  // so a shortlist notice can be traced to the opening it belongs to.
+  jobProfileId String?
+  content      String
+  tags         String[]
+  category     AnnouncementCategory
   // A DRAFT is visible only to the placement cell. Students see PUBLISHED rows
   // and nothing else, on every surface that lists announcements.
-  status      AnnouncementStatus   @default(PUBLISHED)
-  publishedAt DateTime?
-  createdAt   DateTime             @default(now())
-  createdById String
-  company     Company?             @relation(fields: [companyId], references: [id], onDelete: SetNull)
-  createdBy   User                 @relation("AnnouncementCreator", fields: [createdById], references: [id])
+  status       AnnouncementStatus       @default(PUBLISHED)
+  publishedAt  DateTime?
+  createdAt    DateTime                 @default(now())
+  createdById  String
+  company      Company?                 @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  jobProfile   JobProfile?              @relation(fields: [jobProfileId], references: [id], onDelete: SetNull)
+  createdBy    User                     @relation("AnnouncementCreator", fields: [createdById], references: [id])
+  attachments  AnnouncementAttachment[]
 
   @@index([status])
+}
+
+/// A file published with an announcement: a shortlist, a schedule, a form. Kept
+/// as rows rather than a URL array so the name and size a student sees come
+/// from the upload itself instead of from parsing a storage URL.
+model AnnouncementAttachment {
+  id             String       @id @default(cuid())
+  announcementId String
+  fileName       String
+  fileUrl        String
+  mimeType       String
+  sizeBytes      Int
+  uploadedAt     DateTime     @default(now())
+  announcement   Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+
+  @@index([announcementId])
 }
 
 /// A recorded placement, pre-placement, or internship offer. This is the

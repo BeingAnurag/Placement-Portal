@@ -79,7 +79,11 @@ async def admin_overview(
     db: AsyncSession = Depends(get_db),
 ):
     seasons = await list_seasons(caller=caller, db=db)
-    season = batch or (seasons[0] if seasons else None)
+    # Without an explicit choice, open on the newest season that has results.
+    # The newest season overall is usually next year's batch, whose drives have
+    # not run yet, and an empty dashboard is not what the office wants to see.
+    offer_seasons = sorted((await db.scalars(select(Offer.batch).distinct())).all(), reverse=True)
+    season = batch or (offer_seasons[0] if offer_seasons else (seasons[0] if seasons else None))
 
     # Portal-wide totals. These do not belong to a season: they describe the
     # register, not the year's results.

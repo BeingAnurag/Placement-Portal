@@ -4,6 +4,7 @@ import {
   announcementDeleteSchema,
   announcementFormSchema,
   announcementStatusSchema,
+  MAX_ATTACHMENTS,
 } from "./announcement-schema";
 
 test("announcement schema trims values and handles comma-separated tags", () => {
@@ -113,4 +114,79 @@ test("announcement delete schema validates required ID", () => {
 
   const empty = announcementDeleteSchema.safeParse({ announcementId: "" });
   assert.equal(empty.success, false);
+});
+
+test("a company event keeps its drive and a general notice cannot have one", () => {
+  const event = announcementFormSchema.parse({
+    title: "Shortlist released",
+    content: "The shortlist for round two is attached.",
+    category: "COMPANY_EVENT",
+    companyId: "cmp_1",
+    jobProfileId: "job_1",
+  });
+  assert.equal(event.jobProfileId, "job_1");
+
+  // Switching a company event to a general notice drops both the company and
+  // the drive; a general notice is about neither.
+  const general = announcementFormSchema.parse({
+    title: "Placement policy update",
+    content: "The revised policy takes effect on Monday.",
+    category: "GENERAL",
+    companyId: "cmp_1",
+    jobProfileId: "job_1",
+  });
+  assert.equal(general.companyId, null);
+  assert.equal(general.jobProfileId, null);
+});
+
+test("attachments arrive as JSON from the composer and default to none", () => {
+  const withFiles = announcementFormSchema.parse({
+    title: "Shortlist released",
+    content: "The shortlist for round two is attached.",
+    category: "COMPANY_EVENT",
+    attachments: JSON.stringify([
+      {
+        fileName: "shortlist.pdf",
+        fileUrl: "/api/v1/uploads/files/announcement_docs/abc.pdf",
+        mimeType: "application/pdf",
+        sizeBytes: 20480,
+      },
+    ]),
+  });
+  assert.equal(withFiles.attachments.length, 1);
+  assert.equal(withFiles.attachments[0].fileName, "shortlist.pdf");
+
+  const withoutFiles = announcementFormSchema.parse({
+    title: "Placement policy update",
+    content: "The revised policy takes effect on Monday.",
+    category: "GENERAL",
+  });
+  assert.deepEqual(withoutFiles.attachments, []);
+});
+
+test("an attachment missing its size or URL is rejected", () => {
+  const incomplete = announcementFormSchema.safeParse({
+    title: "Shortlist released",
+    content: "The shortlist for round two is attached.",
+    category: "COMPANY_EVENT",
+    attachments: JSON.stringify([{ fileName: "shortlist.pdf", mimeType: "application/pdf" }]),
+  });
+  assert.equal(incomplete.success, false);
+});
+
+test("an announcement cannot carry more files than the limit", () => {
+  const tooMany = Array.from({ length: MAX_ATTACHMENTS + 1 }, (_, index) => ({
+    fileName: `file-${index}.pdf`,
+    fileUrl: `/api/v1/uploads/files/announcement_docs/${index}.pdf`,
+    mimeType: "application/pdf",
+    sizeBytes: 1024,
+  }));
+
+  const result = announcementFormSchema.safeParse({
+    title: "Shortlist released",
+    content: "Every shortlist is attached.",
+    category: "COMPANY_EVENT",
+    attachments: JSON.stringify(tooMany),
+  });
+  assert.equal(result.success, false);
 });

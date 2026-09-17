@@ -68,6 +68,112 @@ def validate_pdf(data: bytes) -> None:
         )
 
 
+# What an announcement may carry. A shortlist arrives as a spreadsheet and a
+# venue map as an image, so this list is wider than the resume rule, but it is
+# still a closed list checked against the bytes rather than the file name.
+ATTACHMENT_TYPES: dict[str, str] = {
+    "pdf": "application/pdf",
+    "png": "image/png",
+    "jpg": "image/jpeg",
+    "jpeg": "image/jpeg",
+    "csv": "text/csv",
+    "txt": "text/plain",
+    "doc": "application/msword",
+    "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "xls": "application/vnd.ms-excel",
+    "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+}
+
+_ZIP_MAGIC = b"PK\x03\x04"
+_OLE_MAGIC = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
+_PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
+_JPEG_MAGIC = b"\xff\xd8\xff"
+
+
+def validate_attachment(data: bytes, filename: str, max_mb: int) -> tuple[str, str]:
+    """
+    Validate an announcement attachment against the closed type list.
+
+    Returns the lowercase extension and the media type to store. Raises
+    StorageError with a message meant for the uploader.
+    """
+    extension = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+    media_type = ATTACHMENT_TYPES.get(extension)
+    if not media_type:
+        allowed = ", ".join(f".{name}" for name in sorted(ATTACHMENT_TYPES))
+        raise StorageError(f"'{filename}' is not an accepted file type. Allowed: {allowed}.")
+
+    if not data:
+        raise StorageError(f"'{filename}' is empty.")
+    if len(data) > max_mb * 1024 * 1024:
+        raise StorageError(
+            f"'{filename}' exceeds the {max_mb} MB limit. "
+            f"Received {len(data) / (1024 * 1024):.1f} MB."
+        )
+
+    # A renamed executable is the thing this catches: the signature has to
+    # agree with the extension. Text formats have no signature, so they are
+    # held to decoding as text instead.
+    if extension == "pdf" and not data.startswith(_PDF_MAGIC):
+        raise StorageError(f"'{filename}' is not a valid PDF.")
+    if extension == "png" and not data.startswith(_PNG_MAGIC):
+        raise StorageError(f"'{filename}' is not a valid PNG image.")
+    if extension in ("jpg", "jpeg") and not data.startswith(_JPEG_MAGIC):
+        raise StorageError(f"'{filename}' is not a valid JPEG image.")
+    if extension in ("docx", "xlsx") and not data.startswith(_ZIP_MAGIC):
+        raise StorageError(f"'{filename}' is not a valid Office file.")
+    if extension in ("doc", "xls") and not data.startswith(_OLE_MAGIC):
+        raise StorageError(
+            f"'{filename}' is not a valid legacy Office file. Save it as .docx or .xlsx."
+        )
+    if extension in ("csv", "txt"):
+        if b"\x00" in data[:4096]:
+            raise StorageError(f"'{filename}' is not readable text.")
+        try:
+            data[:4096].decode("utf-8")
+        except UnicodeDecodeError:
+            raise StorageError(f"'{filename}' must be UTF-8 text.")
+
+    return extension, media_type
+
+
+def upload_document(data: bytes, folder: str, public_id: str, extension: str) -> dict:
+    """Store a validated non-resume document, keeping its own extension."""
+    if _is_cloudinary_configured():
+        try:
+            result = cloudinary.uploader.upload(
+                io.BytesIO(data),
+                resource_type="raw",
+                folder=folder,
+                public_id=f"{public_id}.{extension}",
+                overwrite=True,
+                use_filename=False,
+                unique_filename=False,
+            )
+            return {
+                "secure_url": result["secure_url"],
+                "public_id": result["public_id"],
+                "bytes": result.get("bytes", len(data)),
+            }
+        except Exception:
+            pass
+
+    folder_clean = folder.strip("/").replace("..", "_")
+    target_dir = LOCAL_UPLOADS_DIR / folder_clean
+    target_dir.mkdir(parents=True, exist_ok=True)
+
+    file_path = target_dir / f"{public_id}.{extension}"
+    with open(file_path, "wb") as f:
+        f.write(data)
+
+    relative_path = f"{folder_clean}/{public_id}.{extension}"
+    return {
+        "secure_url": f"/api/v1/uploads/files/{relative_path}",
+        "public_id": relative_path,
+        "bytes": len(data),
+    }
+
+
 def upload_pdf(data: bytes, folder: str, public_id: str) -> dict:
     """
     Upload a validated PDF buffer to Cloudinary (if configured) or local disk.

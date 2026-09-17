@@ -222,6 +222,7 @@ class JobProfile(Base):
     applications: Mapped[list["Application"]] = relationship(back_populates="job_profile", cascade="all, delete-orphan")
     coordinators: Mapped[list["Coordinator"]] = relationship(back_populates="job_profile", cascade="all, delete-orphan")
     offers: Mapped[list["Offer"]] = relationship(back_populates="job_profile")
+    announcements: Mapped[list["Announcement"]] = relationship(back_populates="job_profile")
 
 
 class Application(Base):
@@ -296,6 +297,10 @@ class Announcement(Base):
     id: Mapped[str] = mapped_column(String, primary_key=True)
     title: Mapped[str] = mapped_column(String)
     companyId: Mapped[str | None] = mapped_column(String, ForeignKey("Company.id", ondelete="SET NULL"), nullable=True)
+    # The drive this announcement is about, when it is about one.
+    jobProfileId: Mapped[str | None] = mapped_column(
+        String, ForeignKey("JobProfile.id", ondelete="SET NULL"), nullable=True
+    )
     content: Mapped[str] = mapped_column(Text)
     tags: Mapped[list[str]] = mapped_column(ARRAY(String), default=list)
     category: Mapped[AnnouncementCategory] = mapped_column(Enum(AnnouncementCategory, name="AnnouncementCategory"))
@@ -309,7 +314,27 @@ class Announcement(Base):
     createdById: Mapped[str] = mapped_column(String, ForeignKey("User.id"))
 
     company: Mapped["Company | None"] = relationship(back_populates="announcements")
+    job_profile: Mapped["JobProfile | None"] = relationship(back_populates="announcements")
     created_by: Mapped["User"] = relationship(back_populates="created_announcements")
+    attachments: Mapped[list["AnnouncementAttachment"]] = relationship(
+        back_populates="announcement", cascade="all, delete-orphan"
+    )
+
+
+class AnnouncementAttachment(Base):
+    __tablename__ = "AnnouncementAttachment"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    announcementId: Mapped[str] = mapped_column(
+        String, ForeignKey("Announcement.id", ondelete="CASCADE")
+    )
+    fileName: Mapped[str] = mapped_column(String)
+    fileUrl: Mapped[str] = mapped_column(String)
+    mimeType: Mapped[str] = mapped_column(String)
+    sizeBytes: Mapped[int] = mapped_column(Integer)
+    uploadedAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    announcement: Mapped["Announcement"] = relationship(back_populates="attachments")
 
 
 class Feedback(Base):

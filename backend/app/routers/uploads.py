@@ -17,15 +17,26 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.security import (
+    PERM_ANNOUNCEMENTS_MANAGE,
     PERM_APPLICATIONS_READ,
     PERM_STUDENTS_READ,
     has_permission,
     is_admin_email,
     is_elevated_role,
+    require_permission,
 )
-from app.core.storage import StorageError, delete_file, get_local_file_path, upload_pdf, validate_pdf
+from app.core.storage import (
+    ATTACHMENT_TYPES,
+    StorageError,
+    delete_file,
+    get_local_file_path,
+    upload_document,
+    upload_pdf,
+    validate_attachment,
+    validate_pdf,
+)
 from app.dependencies import get_current_user, get_db, require_admin, require_student
-from app.models.db import NocRequest, Resume
+from app.models.db import Announcement, AnnouncementAttachment, AnnouncementStatus, NocRequest, Resume
 from app.schemas.student import ResumeResponse
 
 router = APIRouter(prefix="/uploads", tags=["uploads"])
@@ -105,6 +116,43 @@ async def upload_noc_document(
     return {"url": result["secure_url"]}
 
 
+@router.post("/admin/announcement-attachment")
+async def upload_announcement_attachment(
+    file: UploadFile = File(...),
+    token_payload: dict = Depends(require_permission(PERM_ANNOUNCEMENTS_MANAGE)),
+):
+    """
+    Stage one file for an announcement that may not exist yet.
+
+    The composer uploads while the author is still writing, so the file is
+    stored first and the row that owns it is written when the announcement is
+    saved. A file nobody attaches is an orphan on disk, which is the cost of
+    letting the author see the upload succeed before publishing.
+    """
+    content = await file.read()
+    filename = file.filename or "attachment"
+
+    try:
+        extension, media_type = validate_attachment(
+            content, filename, settings.allowed_pdf_size_mb
+        )
+    except StorageError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    result = upload_document(
+        content,
+        folder="announcement_docs",
+        public_id=str(uuid.uuid4()),
+        extension=extension,
+    )
+    return {
+        "url": result["secure_url"],
+        "fileName": filename,
+        "mimeType": media_type,
+        "sizeBytes": len(content),
+    }
+
+
 @router.get("/files/{file_path:path}")
 async def get_uploaded_file(
     file_path: str,
@@ -146,15 +194,36 @@ async def get_uploaded_file(
                 if doc_record and doc_record.documentUrl and resolved_rel in doc_record.documentUrl:
                     is_noc_doc = True
 
-            if not (is_own_resume or is_noc_doc):
+            # An attachment is readable by any signed-in user once the
+            # announcement carrying it is published, and by nobody while it is
+            # still a draft. A staged file no announcement owns stays private.
+            is_published_attachment = False
+            if resolved_rel.startswith("announcement_docs/"):
+                owner_status = await db.scalar(
+                    select(Announcement.status)
+                    .join(
+                        AnnouncementAttachment,
+                        AnnouncementAttachment.announcementId == Announcement.id,
+                    )
+                    .where(AnnouncementAttachment.fileUrl.like(f"%{resolved_rel}"))
+                )
+                is_published_attachment = owner_status == AnnouncementStatus.PUBLISHED
+
+            if not (is_own_resume or is_noc_doc or is_published_attachment):
                 raise HTTPException(status_code=403, detail="Not authorized to access this file.")
         except ValueError:
             raise HTTPException(status_code=403, detail="Not authorized to access this file.")
 
+    extension = local_path.suffix.lstrip(".").lower()
+    media_type = ATTACHMENT_TYPES.get(extension, "application/pdf")
+    # A browser renders a PDF or an image in place; anything else downloads.
+    inline = media_type == "application/pdf" or media_type.startswith("image/")
+    disposition = "inline" if inline else "attachment"
+
     return FileResponse(
         path=local_path,
-        media_type="application/pdf",
-        headers={"Content-Disposition": "inline; filename=document.pdf"},
+        media_type=media_type,
+        headers={"Content-Disposition": f'{disposition}; filename="{local_path.name}"'},
     )
 
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { DataTable, type DataTableColumn } from "@/components/common/data-table";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -13,7 +14,6 @@ import {
   Mail,
   Phone,
   Plus,
-  Search,
   Shield,
   ShieldAlert,
   ShieldCheck,
@@ -71,7 +71,6 @@ export function TeamManager({
 }) {
   const router = useRouter();
 
-  const [query, setQuery] = useState("");
   const [tabFilter, setTabFilter] = useState<"ALL" | "FACULTY" | "COORDINATORS" | "LINKED">("ALL");
 
   const [result, setResult] = useState<TeamActionResult>({});
@@ -107,9 +106,9 @@ export function TeamManager({
   }, [members]);
 
   // Filtered members
-  const filteredMembers = useMemo(() => {
-    return members
-      .filter((m) => {
+  const tabMembers = useMemo(
+    () =>
+      members.filter((m) => {
         if (tabFilter === "COORDINATORS") {
           return (
             m.role.toLowerCase().includes("coordinator") ||
@@ -126,18 +125,14 @@ export function TeamManager({
           return m.hasUserAccount;
         }
         return true;
-      })
-      .filter((m) => {
-        if (!query.trim()) return true;
-        const q = query.toLowerCase();
-        return (
-          m.name.toLowerCase().includes(q) ||
-          m.role.toLowerCase().includes(q) ||
-          (m.email && m.email.toLowerCase().includes(q)) ||
-          (m.phone && m.phone.toLowerCase().includes(q))
-        );
-      });
-  }, [members, tabFilter, query]);
+      }),
+    [members, tabFilter],
+  );
+
+  // The rows on screen, which the reorder arrows swap between. Manual order
+  // is the point of this table, so it is neither sortable nor paginated and
+  // what is displayed always matches this list.
+  const [visibleMembers, setVisibleMembers] = useState<AdminTeamMemberItem[]>(members);
 
   // Open add modal
   function openAddModal() {
@@ -255,11 +250,11 @@ export function TeamManager({
   // Reorder single member
   async function handleMove(index: number, direction: "UP" | "DOWN") {
     if (direction === "UP" && index === 0) return;
-    if (direction === "DOWN" && index === filteredMembers.length - 1) return;
+    if (direction === "DOWN" && index === visibleMembers.length - 1) return;
 
     const targetIndex = direction === "UP" ? index - 1 : index + 1;
-    const currentItem = filteredMembers[index];
-    const targetItem = filteredMembers[targetIndex];
+    const currentItem = visibleMembers[index];
+    const targetItem = visibleMembers[targetIndex];
     if (!currentItem || !targetItem) return;
 
     const newItems = [
@@ -287,6 +282,228 @@ export function TeamManager({
     }
     return Array.from(map.entries());
   }, []);
+
+  // No column declares a sortValue: the order of this table is the order the
+  // team is published in, and the arrows below are how it changes.
+  const columns = useMemo<DataTableColumn<AdminTeamMemberItem>[]>(
+    () => [
+      {
+        id: "order",
+        header: "Order",
+        width: "84px",
+        align: "center",
+        hideable: false,
+        cell: (member) => {
+          const index = visibleMembers.findIndex((m) => m.id === member.id);
+          return (
+            <div className="flex items-center justify-center gap-1">
+              <span className="font-mono text-xs font-bold text-[var(--muted)] w-5">
+                {member.displayOrder}
+              </span>
+              <div className="flex flex-col gap-0.5">
+                <button
+                  type="button"
+                  disabled={saving || index <= 0}
+                  onClick={() => handleMove(index, "UP")}
+                  title="Move Up"
+                  aria-label={`Move ${member.name} up`}
+                  className="p-0.5 rounded hover:bg-[var(--surface)] text-[var(--muted)] hover:text-[var(--ink)] disabled:opacity-20"
+                >
+                  <ArrowUp size={11} />
+                </button>
+                <button
+                  type="button"
+                  disabled={saving || index === -1 || index === visibleMembers.length - 1}
+                  onClick={() => handleMove(index, "DOWN")}
+                  title="Move Down"
+                  aria-label={`Move ${member.name} down`}
+                  className="p-0.5 rounded hover:bg-[var(--surface)] text-[var(--muted)] hover:text-[var(--ink)] disabled:opacity-20"
+                >
+                  <ArrowDown size={11} />
+                </button>
+              </div>
+            </div>
+          );
+        },
+      },
+      {
+        id: "member",
+        header: "Member",
+        width: "minmax(220px, 1.6fr)",
+        hideable: false,
+        cell: (member) => {
+          const initials =
+            member.name
+              .split(" ")
+              .map((s) => s[0])
+              .filter(Boolean)
+              .slice(0, 2)
+              .join("")
+              .toUpperCase() || "TM";
+          const isCoordinator =
+            member.role.toLowerCase().includes("coordinator") ||
+            member.role.toLowerCase().includes("student");
+
+          return (
+            <div className="flex items-center gap-3">
+              {member.photoUrl ? (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img
+                  src={member.photoUrl}
+                  alt={member.name}
+                  className="w-9 h-9 rounded-full object-cover border border-[var(--border)]"
+                />
+              ) : (
+                <div
+                  className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs ${
+                    isCoordinator
+                      ? "bg-[var(--blue)]/15 text-[var(--blue)]"
+                      : "bg-[var(--orange)]/15 text-[var(--orange)]"
+                  }`}
+                >
+                  {initials}
+                </div>
+              )}
+              <div>
+                <strong className="block text-sm text-[var(--ink)] font-bold">{member.name}</strong>
+                <span className="text-[10px] text-[var(--muted)]">
+                  ID: {member.id.startsWith("cuid_") ? member.id.slice(0, 10) + "..." : member.id}
+                </span>
+              </div>
+            </div>
+          );
+        },
+      },
+      {
+        id: "role",
+        header: "Role / designation",
+        width: "minmax(170px, 1.1fr)",
+        cell: (member) => {
+          const isCoordinator =
+            member.role.toLowerCase().includes("coordinator") ||
+            member.role.toLowerCase().includes("student");
+          return (
+            <span
+              className={`inline-block px-2.5 py-1 rounded-lg text-xs font-semibold ${
+                isCoordinator
+                  ? "bg-blue-500/10 text-blue-700 dark:text-blue-400 border border-blue-500/20"
+                  : "bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20"
+              }`}
+            >
+              {member.role}
+            </span>
+          );
+        },
+      },
+      {
+        id: "contact",
+        header: "Contact details",
+        width: "minmax(200px, 1.3fr)",
+        cell: (member) => (
+          <div className="space-y-0.5 text-xs">
+            {member.email ? (
+              <a
+                href={`mailto:${member.email}`}
+                className="flex items-center gap-1.5 text-[var(--blue)] hover:underline font-medium"
+              >
+                <Mail size={12} />
+                <span>{member.email}</span>
+              </a>
+            ) : (
+              <span className="text-[var(--muted)] italic text-[11px]">No email specified</span>
+            )}
+            {member.phone && (
+              <a
+                href={`tel:${member.phone}`}
+                className="flex items-center gap-1.5 text-[var(--muted)] hover:text-[var(--ink)] font-mono text-[11px]"
+              >
+                <Phone size={11} />
+                <span>{member.phone}</span>
+              </a>
+            )}
+          </div>
+        ),
+      },
+      {
+        id: "account",
+        header: "User account & RBAC",
+        width: "minmax(190px, 1.2fr)",
+        cell: (member) =>
+          member.hasUserAccount ? (
+            <div className="space-y-1">
+              <div className="flex items-center gap-1.5">
+                <span
+                  className={`cell-status ${
+                    ROLE_METADATA[member.userRole as Role]?.badgeClass || "badge-student"
+                  }`}
+                >
+                  {member.userRole || "STUDENT"}
+                </span>
+                {member.userActive === false && (
+                  <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-500/15 text-red-600">
+                    Suspended
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] text-[var(--muted)] font-medium">
+                  {member.userCustomPermissions.length} custom perms
+                </span>
+                <Link
+                  href={`/admin/users?query=${encodeURIComponent(member.email || "")}`}
+                  className="text-[10px] text-[var(--blue)] font-bold hover:underline"
+                >
+                  Edit in RBAC →
+                </Link>
+              </div>
+            </div>
+          ) : (
+            <div>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-[var(--surface-alt)] text-[var(--muted)] border border-[var(--border)]">
+                Not signed in yet
+              </span>
+              <small className="block text-[10px] text-[var(--muted)] mt-0.5">
+                Perms auto-apply on login
+              </small>
+            </div>
+          ),
+      },
+      {
+        id: "actions",
+        header: "Actions",
+        width: "110px",
+        align: "right",
+        hideable: false,
+        cell: (member) => (
+          <div className="flex items-center justify-end gap-1.5">
+            <button
+              type="button"
+              onClick={() => openEditModal(member)}
+              className="p-1.5 rounded-lg text-[var(--muted)] hover:text-[var(--blue)] hover:bg-[var(--surface-alt)] transition-colors"
+              title="Edit Member"
+              aria-label={`Edit ${member.name}`}
+            >
+              <Edit3 size={15} />
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setDeletingMember(member);
+                setResult({});
+              }}
+              className="p-1.5 rounded-lg text-[var(--muted)] hover:text-red-600 hover:bg-red-500/10 transition-colors"
+              title="Remove Member"
+              aria-label={`Remove ${member.name}`}
+            >
+              <Trash2 size={15} />
+            </button>
+          </div>
+        ),
+      },
+    ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [saving, visibleMembers],
+  );
 
   return (
     <div className="admin-page">
@@ -436,231 +653,24 @@ export function TeamManager({
           </button>
         </div>
 
-        <div className="relative w-full md:w-72">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]" />
-          <input
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search by name, role, email, phone..."
-            className="w-full pl-9 pr-3 py-1.5 text-xs rounded-xl bg-[var(--surface-alt)] border border-[var(--border)] text-[var(--ink)] focus:outline-none focus:border-[var(--blue)]"
-          />
-        </div>
       </section>
 
-      {/* Team Member Table & Cards */}
-      <section className="admin-card overflow-hidden">
-        {filteredMembers.length === 0 ? (
-          <div className="py-12 text-center text-[var(--muted)]">
-            <Users size={36} className="mx-auto mb-2 opacity-40" />
-            <p className="font-semibold text-sm">No placement team members found.</p>
-            <p className="text-xs mt-1">
-              {query ? "Try adjusting your search query." : "Click 'Add Team Member' above to create one."}
-            </p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="admin-table w-full text-left text-xs">
-              <thead>
-                <tr className="border-b border-[var(--border)] bg-[var(--surface-alt)] text-[var(--muted)]">
-                  <th className="py-3 px-3 w-14 text-center">Order</th>
-                  <th className="py-3 px-4">Member</th>
-                  <th className="py-3 px-4">Role / Designation</th>
-                  <th className="py-3 px-4">Contact Details</th>
-                  <th className="py-3 px-4">User Account &amp; RBAC</th>
-                  <th className="py-3 px-4 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[var(--border)]">
-                {filteredMembers.map((member, index) => {
-                  const initials = member.name
-                    .split(" ")
-                    .map((s) => s[0])
-                    .filter(Boolean)
-                    .slice(0, 2)
-                    .join("")
-                    .toUpperCase() || "TM";
-
-                  const isCoordinator =
-                    member.role.toLowerCase().includes("coordinator") ||
-                    member.role.toLowerCase().includes("student");
-
-                  return (
-                    <tr key={member.id} className="hover:bg-[var(--surface-alt)]/50 transition-colors">
-                      {/* Order & Reorder arrows */}
-                      <td className="py-3 px-3 text-center">
-                        <div className="flex items-center justify-center gap-1">
-                          <span className="font-mono text-xs font-bold text-[var(--muted)] w-5">
-                            {member.displayOrder}
-                          </span>
-                          <div className="flex flex-col gap-0.5">
-                            <button
-                              type="button"
-                              disabled={saving || index === 0}
-                              onClick={() => handleMove(index, "UP")}
-                              title="Move Up"
-                              className="p-0.5 rounded hover:bg-[var(--surface)] text-[var(--muted)] hover:text-[var(--ink)] disabled:opacity-20"
-                            >
-                              <ArrowUp size={11} />
-                            </button>
-                            <button
-                              type="button"
-                              disabled={saving || index === filteredMembers.length - 1}
-                              onClick={() => handleMove(index, "DOWN")}
-                              title="Move Down"
-                              className="p-0.5 rounded hover:bg-[var(--surface)] text-[var(--muted)] hover:text-[var(--ink)] disabled:opacity-20"
-                            >
-                              <ArrowDown size={11} />
-                            </button>
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* Member Info */}
-                      <td className="py-3 px-4">
-                        <div className="flex items-center gap-3">
-                          {member.photoUrl ? (
-                            /* eslint-disable-next-line @next/next/no-img-element */
-                            <img
-                              src={member.photoUrl}
-                              alt={member.name}
-                              className="w-9 h-9 rounded-full object-cover border border-[var(--border)]"
-                            />
-                          ) : (
-                            <div
-                              className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs ${
-                                isCoordinator
-                                  ? "bg-[var(--blue)]/15 text-[var(--blue)]"
-                                  : "bg-[var(--orange)]/15 text-[var(--orange)]"
-                              }`}
-                            >
-                              {initials}
-                            </div>
-                          )}
-                          <div>
-                            <strong className="block text-sm text-[var(--ink)] font-bold">
-                              {member.name}
-                            </strong>
-                            <span className="text-[10px] text-[var(--muted)]">
-                              ID: {member.id.startsWith("cuid_") ? member.id.slice(0, 10) + "..." : member.id}
-                            </span>
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* Role / Designation */}
-                      <td className="py-3 px-4">
-                        <span
-                          className={`inline-block px-2.5 py-1 rounded-lg text-xs font-semibold ${
-                            isCoordinator
-                              ? "bg-blue-500/10 text-blue-700 dark:text-blue-400 border border-blue-500/20"
-                              : "bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20"
-                          }`}
-                        >
-                          {member.role}
-                        </span>
-                      </td>
-
-                      {/* Contact Details */}
-                      <td className="py-3 px-4">
-                        <div className="space-y-0.5 text-xs">
-                          {member.email ? (
-                            <a
-                              href={`mailto:${member.email}`}
-                              className="flex items-center gap-1.5 text-[var(--blue)] hover:underline font-medium"
-                            >
-                              <Mail size={12} />
-                              <span>{member.email}</span>
-                            </a>
-                          ) : (
-                            <span className="text-[var(--muted)] italic text-[11px]">No email specified</span>
-                          )}
-                          {member.phone && (
-                            <a
-                              href={`tel:${member.phone}`}
-                              className="flex items-center gap-1.5 text-[var(--muted)] hover:text-[var(--ink)] font-mono text-[11px]"
-                            >
-                              <Phone size={11} />
-                              <span>{member.phone}</span>
-                            </a>
-                          )}
-                        </div>
-                      </td>
-
-                      {/* User Account & RBAC Status */}
-                      <td className="py-3 px-4">
-                        {member.hasUserAccount ? (
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-1.5">
-                              <span
-                                className={`cell-status ${
-                                  ROLE_METADATA[member.userRole as Role]?.badgeClass || "badge-student"
-                                }`}
-                              >
-                                {member.userRole || "STUDENT"}
-                              </span>
-                              {member.userActive === false && (
-                                <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-500/15 text-red-600">
-                                  Suspended
-                                </span>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-[10px] text-[var(--muted)] font-medium">
-                                {member.userCustomPermissions.length} custom perms
-                              </span>
-                              <Link
-                                href={`/admin/users?query=${encodeURIComponent(member.email || "")}`}
-                                className="text-[10px] text-[var(--blue)] font-bold hover:underline"
-                              >
-                                Edit in RBAC →
-                              </Link>
-                            </div>
-                          </div>
-                        ) : (
-                          <div>
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-[var(--surface-alt)] text-[var(--muted)] border border-[var(--border)]">
-                              Not signed in yet
-                            </span>
-                            <small className="block text-[10px] text-[var(--muted)] mt-0.5">
-                              Perms auto-apply on login
-                            </small>
-                          </div>
-                        )}
-                      </td>
-
-                      {/* Actions */}
-                      <td className="py-3 px-4 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => openEditModal(member)}
-                            className="p-1.5 rounded-lg text-[var(--muted)] hover:text-[var(--blue)] hover:bg-[var(--surface-alt)] transition-colors"
-                            title="Edit Member"
-                          >
-                            <Edit3 size={15} />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setDeletingMember(member);
-                              setResult({});
-                            }}
-                            className="p-1.5 rounded-lg text-[var(--muted)] hover:text-red-600 hover:bg-red-500/10 transition-colors"
-                            title="Remove Member"
-                          >
-                            <Trash2 size={15} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
+      <DataTable
+        data={tabMembers}
+        columns={columns}
+        getRowId={(member) => member.id}
+        searchText={(member) =>
+          `${member.name} ${member.role} ${member.email ?? ""} ${member.phone ?? ""}`
+        }
+        searchPlaceholder="Search by name, role, email, phone..."
+        columnStorageKey="team"
+        pagination={false}
+        minWidth={1020}
+        onViewChange={(view) => setVisibleMembers(view.rows)}
+        emptyIcon={<Users />}
+        emptyTitle="No placement team members found."
+        emptyDescription="Try adjusting your search, or use Add Team Member above to create one."
+      />
 
       {/* ------------------------------------------------------------- */}
       {/* MODAL: Configure Default Placement Team Permissions          */}

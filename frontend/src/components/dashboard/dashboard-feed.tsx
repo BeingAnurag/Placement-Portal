@@ -8,6 +8,7 @@ import {
   CalendarDays,
   ChevronRight,
   Clock3,
+  Paperclip,
   Search,
   Sparkles,
   X,
@@ -19,6 +20,8 @@ export type DashboardAnnouncement = {
   company: string;
   title: string;
   summary: string;
+  /** Files published with the announcement, in upload order. */
+  attachments?: { fileName: string; fileUrl: string }[];
   date: string;
   type: string;
   category: "Company event" | "General";
@@ -320,6 +323,30 @@ export function DashboardFeed({ data }: { data: DashboardFeedData }) {
               >
                 {selectedAnnouncement.summary}
               </div>
+
+              {selectedAnnouncement.attachments?.length ? (
+                <div style={{ display: "grid", gap: 8 }}>
+                  <span
+                    style={{
+                      fontSize: 10,
+                      fontWeight: 800,
+                      letterSpacing: "0.05em",
+                      textTransform: "uppercase",
+                      color: "var(--muted)",
+                    }}
+                  >
+                    Attachments ({selectedAnnouncement.attachments.length})
+                  </span>
+                  <div className="attachment-links">
+                    {selectedAnnouncement.attachments.map((file) => (
+                      <a key={file.fileUrl} href={file.fileUrl} target="_blank" rel="noreferrer">
+                        <Paperclip />
+                        {file.fileName}
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
             </div>
 
             <footer>

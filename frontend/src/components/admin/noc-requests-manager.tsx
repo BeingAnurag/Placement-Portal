@@ -10,7 +10,6 @@ import {
   FileText,
   FileUp,
   MapPin,
-  Search,
   Upload,
   User,
   X,
@@ -24,6 +23,11 @@ import {
   uploadNocDocumentAction,
   type NocActionResult,
 } from "@/app/admin/noc-requests/actions";
+import {
+  DataTable,
+  type DataTableColumn,
+  type DataTableFilter,
+} from "@/components/common/data-table";
 
 export type AdminNocItem = {
   id: string;
@@ -59,9 +63,6 @@ export function NocRequestsManager({
   canPersist?: boolean;
 }) {
   const router = useRouter();
-  const [query, setQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"ALL" | "PENDING" | "APPROVED" | "REJECTED">("ALL");
-
   const [detailItem, setDetailItem] = useState<AdminNocItem | null>(null);
   const [approvingItem, setApprovingItem] = useState<AdminNocItem | null>(null);
   const [rejectingItem, setRejectingItem] = useState<AdminNocItem | null>(null);
@@ -79,17 +80,245 @@ export function NocRequestsManager({
     return { total, pending, approved, rejected };
   }, [nocRequests]);
 
-  const visible = useMemo(() => {
-    return nocRequests.filter((item) => {
-      const matchesSearch =
-        `${item.studentName ?? ""} ${item.rollNumber ?? ""} ${item.studentEmail ?? ""} ${item.company} ${item.city} ${item.state} ${item.message ?? ""} ${item.adminRemarks ?? ""}`
-          .toLowerCase()
-          .includes(query.toLowerCase());
+  const columns = useMemo<DataTableColumn<AdminNocItem>[]>(
+    () => [
+      {
+        id: "student",
+        header: "Student",
+        width: "minmax(220px, 1.8fr)",
+        hideable: false,
+        sortValue: (item) => item.studentName || item.rollNumber || item.studentEmail,
+        cell: (item) => (
+          <span className="dt-primary">
+            <strong>{item.studentName || item.rollNumber || "Student"}</strong>
+            <small>
+              {[item.rollNumber, item.branch, item.batch ? `Batch '${String(item.batch).slice(-2)}` : null]
+                .filter(Boolean)
+                .join(" · ") || item.studentEmail}
+            </small>
+          </span>
+        ),
+      },
+      {
+        id: "company",
+        header: "Company & Location",
+        width: "minmax(180px, 1.6fr)",
+        sortValue: (item) => item.company,
+        cell: (item) => (
+          <span className="dt-primary">
+            <strong>{item.company}</strong>
+            <small>{[item.city, item.state].filter(Boolean).join(", ")}</small>
+          </span>
+        ),
+      },
+      {
+        id: "period",
+        header: "Training Period",
+        width: "minmax(150px, 1.3fr)",
+        sortValue: (item) => new Date(item.startDate),
+        cell: (item) => (
+          <span className="dt-primary">
+            <strong>
+              {new Date(item.startDate).toLocaleDateString("en-IN", { month: "short", day: "numeric", year: "numeric" })}
+            </strong>
+            <small>
+              to {new Date(item.endDate).toLocaleDateString("en-IN", { month: "short", day: "numeric", year: "numeric" })}
+            </small>
+          </span>
+        ),
+      },
+      {
+        id: "status",
+        header: "Status",
+        width: "minmax(120px, 1fr)",
+        sortValue: (item) => item.status,
+        cell: (item) => (
+          <>
+            {item.status === "PENDING" && (
+              <span className="cell-status pending" style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                <Clock3 size={11} /> Pending
+              </span>
+            )}
+            {item.status === "APPROVED" && (
+              <span className="cell-status" style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                <CheckCircle2 size={11} /> Approved
+              </span>
+            )}
+            {item.status === "REJECTED" && (
+              <span
+                className="cell-status"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "4px",
+                  background: "var(--badge-red-bg)",
+                  color: "var(--badge-red-text)",
+                }}
+              >
+                <XCircle size={11} /> Rejected
+              </span>
+            )}
+          </>
+        ),
+      },
+      {
+        id: "certificate",
+        header: "Certificate",
+        width: "minmax(120px, 1fr)",
+        sortValue: (item) => Boolean(item.documentUrl),
+        cell: (item) =>
+          item.documentUrl ? (
+            <button
+              type="button"
+              onClick={() => setPreviewDoc({ url: `/api/noc-documents/${item.id}`, title: `NOC - ${item.company} (${item.studentName || item.rollNumber})` })}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "4px",
+                background: "var(--badge-green-bg)",
+                color: "var(--badge-green-text)",
+                border: 0,
+                padding: "4px 8px",
+                borderRadius: "6px",
+                fontSize: "10px",
+                fontWeight: 700,
+                cursor: "pointer",
+              }}
+            >
+              <FileCheck2 size={12} /> View PDF
+            </button>
+          ) : (
+            <small className="dt-muted">No document</small>
+          ),
+      },
+      {
+        id: "actions",
+        header: "Actions",
+        width: "260px",
+        align: "right",
+        hideable: false,
+        cell: (item) => (
+          <span style={{ display: "flex", justifyContent: "flex-end", gap: "6px" }}>
+            <button
+              type="button"
+              onClick={() => setDetailItem(item)}
+              title="View full request details"
+              style={{
+                border: 0,
+                background: "var(--surface-alt)",
+                color: "var(--blue)",
+                borderRadius: "8px",
+                padding: "6px 9px",
+                fontSize: "11px",
+                fontWeight: 600,
+                display: "flex",
+                alignItems: "center",
+                gap: "4px",
+                cursor: "pointer",
+              }}
+            >
+              <Eye size={13} /> Details
+            </button>
 
-      const matchesStatus = statusFilter === "ALL" || item.status === statusFilter;
-      return matchesSearch && matchesStatus;
-    });
-  }, [nocRequests, query, statusFilter]);
+            {item.status === "PENDING" && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setResult({});
+                    setApprovingItem(item);
+                  }}
+                  title="Approve NOC request"
+                  style={{
+                    border: 0,
+                    background: "var(--badge-green-bg)",
+                    color: "var(--green)",
+                    borderRadius: "8px",
+                    padding: "6px 9px",
+                    fontSize: "11px",
+                    fontWeight: 700,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "4px",
+                    cursor: "pointer",
+                  }}
+                >
+                  <CheckCircle2 size={13} /> Approve
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setResult({});
+                    setRejectingItem(item);
+                  }}
+                  title="Reject NOC request"
+                  style={{
+                    border: 0,
+                    background: "var(--badge-red-bg)",
+                    color: "var(--badge-red-text)",
+                    borderRadius: "8px",
+                    padding: "6px 9px",
+                    fontSize: "11px",
+                    fontWeight: 700,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "4px",
+                    cursor: "pointer",
+                  }}
+                >
+                  <XCircle size={13} /> Reject
+                </button>
+              </>
+            )}
+
+            {item.status === "APPROVED" && (
+              <button
+                type="button"
+                onClick={() => {
+                  setResult({});
+                  setUploadingItem(item);
+                }}
+                title="Upload/replace certificate PDF"
+                style={{
+                  border: 0,
+                  background: "var(--surface-alt)",
+                  color: "var(--ink)",
+                  borderRadius: "8px",
+                  padding: "6px 9px",
+                  fontSize: "11px",
+                  fontWeight: 600,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "4px",
+                  cursor: "pointer",
+                }}
+              >
+                <FileUp size={13} /> {item.documentUrl ? "Replace" : "Upload"}
+              </button>
+            )}
+          </span>
+        ),
+      },
+    ],
+    [],
+  );
+
+  const filters = useMemo<DataTableFilter<AdminNocItem>[]>(
+    () => [
+      {
+        id: "status",
+        label: "Status",
+        options: [
+          { value: "PENDING", label: "Pending Review" },
+          { value: "APPROVED", label: "Approved" },
+          { value: "REJECTED", label: "Rejected" },
+        ],
+        value: (item) => item.status,
+      },
+    ],
+    [],
+  );
 
   function handleApprove(formData: FormData) {
     setResult({});
@@ -217,257 +446,25 @@ export function NocRequestsManager({
       {result.success && <div className="admin-success">{result.success}</div>}
       {result.error && <div className="admin-error">{result.error}</div>}
 
-      {/* Toolbar */}
-      <div className="admin-toolbar">
-        <label>
-          <Search />
-          <input
-            type="search"
-            placeholder="Search by student name, roll number, email, company, city..."
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-        </label>
-
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value as "ALL" | "PENDING" | "APPROVED" | "REJECTED")}
-          aria-label="Filter by status"
-        >
-          <option value="ALL">All Statuses ({nocRequests.length})</option>
-          <option value="PENDING">Pending Review ({metrics.pending})</option>
-          <option value="APPROVED">Approved ({metrics.approved})</option>
-          <option value="REJECTED">Rejected ({metrics.rejected})</option>
-        </select>
-      </div>
-
-      {/* Table */}
-      <section className="admin-table">
-        <div
-          className="admin-row admin-row-head"
-          style={{ gridTemplateColumns: "1.8fr 1.6fr 1.3fr 1fr 1fr 1.4fr" }}
-        >
-          <span>Student</span>
-          <span>Company & Location</span>
-          <span>Training Period</span>
-          <span>Status</span>
-          <span>Certificate</span>
-          <span style={{ textAlign: "right" }}>Actions</span>
-        </div>
-
-        {visible.length > 0 ? (
-          visible.map((item) => {
-            const isPendingStatus = item.status === "PENDING";
-            const isApproved = item.status === "APPROVED";
-            const isRejected = item.status === "REJECTED";
-
-            return (
-              <div
-                key={item.id}
-                className="admin-row"
-                style={{ gridTemplateColumns: "1.8fr 1.6fr 1.3fr 1fr 1fr 1.4fr" }}
-              >
-                {/* Student */}
-                <div>
-                  <strong style={{ color: "var(--ink)", fontWeight: 700 }}>
-                    {item.studentName || item.rollNumber || "Student"}
-                  </strong>
-                  <small style={{ color: "var(--muted)", display: "block", fontSize: "10px" }}>
-                    {[item.rollNumber, item.branch, item.batch ? `Batch '${String(item.batch).slice(-2)}` : null]
-                      .filter(Boolean)
-                      .join(" · ") || item.studentEmail}
-                  </small>
-                </div>
-
-                {/* Company & Location */}
-                <div>
-                  <strong style={{ color: "var(--ink)" }}>{item.company}</strong>
-                  <small style={{ color: "var(--muted)", display: "block", fontSize: "10px" }}>
-                    {[item.city, item.state].filter(Boolean).join(", ")}
-                  </small>
-                </div>
-
-                {/* Training Period */}
-                <div>
-                  <span style={{ fontWeight: 600, display: "block" }}>
-                    {new Date(item.startDate).toLocaleDateString("en-IN", { month: "short", day: "numeric", year: "numeric" })}
-                  </span>
-                  <small style={{ color: "var(--muted)", fontSize: "10px" }}>
-                    to {new Date(item.endDate).toLocaleDateString("en-IN", { month: "short", day: "numeric", year: "numeric" })}
-                  </small>
-                </div>
-
-                {/* Status */}
-                <div>
-                  {isPendingStatus && (
-                    <span className="cell-status pending" style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
-                      <Clock3 size={11} /> Pending
-                    </span>
-                  )}
-                  {isApproved && (
-                    <span className="cell-status" style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
-                      <CheckCircle2 size={11} /> Approved
-                    </span>
-                  )}
-                  {isRejected && (
-                    <span
-                      className="cell-status"
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: "4px",
-                        background: "var(--badge-red-bg)",
-                        color: "var(--badge-red-text)",
-                      }}
-                    >
-                      <XCircle size={11} /> Rejected
-                    </span>
-                  )}
-                </div>
-
-                {/* Certificate */}
-                <div>
-                  {item.documentUrl ? (
-                    <button
-                      type="button"
-                      onClick={() => setPreviewDoc({ url: `/api/noc-documents/${item.id}`, title: `NOC - ${item.company} (${item.studentName || item.rollNumber})` })}
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: "4px",
-                        background: "var(--badge-green-bg)",
-                        color: "var(--badge-green-text)",
-                        border: 0,
-                        padding: "4px 8px",
-                        borderRadius: "6px",
-                        fontSize: "10px",
-                        fontWeight: 700,
-                        cursor: "pointer",
-                      }}
-                    >
-                      <FileCheck2 size={12} /> View PDF
-                    </button>
-                  ) : (
-                    <small style={{ color: "var(--muted)", fontSize: "10px" }}>No document</small>
-                  )}
-                </div>
-
-                {/* Actions */}
-                <div style={{ display: "flex", justifyContent: "flex-end", gap: "6px" }}>
-                  <button
-                    type="button"
-                    onClick={() => setDetailItem(item)}
-                    title="View full request details"
-                    style={{
-                      border: 0,
-                      background: "var(--surface-alt)",
-                      color: "var(--blue)",
-                      borderRadius: "8px",
-                      padding: "6px 9px",
-                      fontSize: "11px",
-                      fontWeight: 600,
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "4px",
-                      cursor: "pointer",
-                    }}
-                  >
-                    <Eye size={13} /> Details
-                  </button>
-
-                  {isPendingStatus && (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setResult({});
-                          setApprovingItem(item);
-                        }}
-                        title="Approve NOC request"
-                        style={{
-                          border: 0,
-                          background: "var(--badge-green-bg)",
-                          color: "var(--green)",
-                          borderRadius: "8px",
-                          padding: "6px 9px",
-                          fontSize: "11px",
-                          fontWeight: 700,
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "4px",
-                          cursor: "pointer",
-                        }}
-                      >
-                        <CheckCircle2 size={13} /> Approve
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setResult({});
-                          setRejectingItem(item);
-                        }}
-                        title="Reject NOC request"
-                        style={{
-                          border: 0,
-                          background: "var(--badge-red-bg)",
-                          color: "var(--badge-red-text)",
-                          borderRadius: "8px",
-                          padding: "6px 9px",
-                          fontSize: "11px",
-                          fontWeight: 700,
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "4px",
-                          cursor: "pointer",
-                        }}
-                      >
-                        <XCircle size={13} /> Reject
-                      </button>
-                    </>
-                  )}
-
-                  {isApproved && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setResult({});
-                        setUploadingItem(item);
-                      }}
-                      title="Upload/replace certificate PDF"
-                      style={{
-                        border: 0,
-                        background: "var(--surface-alt)",
-                        color: "var(--ink)",
-                        borderRadius: "8px",
-                        padding: "6px 9px",
-                        fontSize: "11px",
-                        fontWeight: 600,
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "4px",
-                        cursor: "pointer",
-                      }}
-                    >
-                      <FileUp size={13} /> {item.documentUrl ? "Replace" : "Upload"}
-                    </button>
-                  )}
-                </div>
-              </div>
-            );
-          })
-        ) : (
-          <div className="admin-empty">
-            <FileText size={32} />
-            <h2>No NOC requests found</h2>
-            <p>
-              {query
-                ? "No student requests match your search filter."
-                : "No NOC requests are currently registered in the database."}
-            </p>
-          </div>
-        )}
-      </section>
+      <DataTable
+        data={nocRequests}
+        columns={columns}
+        getRowId={(item) => item.id}
+        searchText={(item) =>
+          `${item.studentName ?? ""} ${item.rollNumber ?? ""} ${item.studentEmail ?? ""} ${item.company} ${item.city} ${item.state} ${item.message ?? ""} ${item.adminRemarks ?? ""}`
+        }
+        searchPlaceholder="Search by student name, roll number, email, company, city..."
+        filters={filters}
+        columnStorageKey="noc-requests"
+        minWidth={1080}
+        emptyIcon={<FileText />}
+        emptyTitle="No NOC requests found"
+        emptyDescription={
+          nocRequests.length
+            ? "No student requests match your search filter."
+            : "No NOC requests are currently registered in the database."
+        }
+      />
 
       {/* Details Modal */}
       {detailItem && (

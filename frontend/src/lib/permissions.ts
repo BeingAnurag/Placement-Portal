@@ -309,6 +309,8 @@ export const ROUTE_PERMISSIONS: Record<string, PermissionKey[]> = {
   "/admin/placement-records": [PERM_APPLICATIONS_MANAGE],
   "/admin/students": [PERM_STUDENTS_READ, PERM_STUDENTS_MANAGE],
   "/admin/announcements": [PERM_ANNOUNCEMENTS_MANAGE],
+  "/admin/announcements/company-event": [PERM_ANNOUNCEMENTS_MANAGE],
+  "/admin/announcements/general": [PERM_ANNOUNCEMENTS_MANAGE],
   "/admin/feedbacks": [PERM_FEEDBACKS_MANAGE],
   "/admin/noc-requests": [PERM_NOC_MANAGE],
   "/admin/interview-experiences": [PERM_INTERVIEW_EXPERIENCES_MANAGE],

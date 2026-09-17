@@ -8,7 +8,6 @@ import {
   MessageSquare,
   MessageSquareReply,
   MessageSquareText,
-  Search,
   Send,
   Trash2,
   User,
@@ -21,6 +20,11 @@ import {
   respondFeedbackAction,
   type FeedbackActionResult,
 } from "@/app/admin/feedbacks/actions";
+import {
+  DataTable,
+  type DataTableColumn,
+  type DataTableFilter,
+} from "@/components/common/data-table";
 
 export type AdminFeedbackItem = {
   id: string;
@@ -47,10 +51,6 @@ export function FeedbacksManager({
   canPersist?: boolean;
 }) {
   const router = useRouter();
-  const [query, setQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"ALL" | "PENDING" | "RESOLVED">("ALL");
-  const [typeFilter, setTypeFilter] = useState<string>("ALL");
-
   const [activeItem, setActiveItem] = useState<AdminFeedbackItem | null>(null);
   const [deletingItem, setDeletingItem] = useState<AdminFeedbackItem | null>(null);
   const [replyText, setReplyText] = useState("");
@@ -68,24 +68,6 @@ export function FeedbacksManager({
     const complaints = feedbacks.filter((f) => f.feedbackType.toUpperCase() === "COMPLAINT").length;
     return { total, pending, resolved, queries, feedbackCount, complaints };
   }, [feedbacks]);
-
-  const visible = useMemo(() => {
-    return feedbacks.filter((item) => {
-      const matchesSearch =
-        `${item.studentName ?? ""} ${item.rollNumber ?? ""} ${item.studentEmail ?? ""} ${item.subject} ${item.message} ${item.adminResponse ?? ""}`
-          .toLowerCase()
-          .includes(query.toLowerCase());
-
-      const matchesStatus =
-        statusFilter === "ALL" ||
-        (statusFilter === "RESOLVED" && item.resolved) ||
-        (statusFilter === "PENDING" && !item.resolved);
-
-      const matchesType = typeFilter === "ALL" || item.feedbackType.toUpperCase() === typeFilter;
-
-      return matchesSearch && matchesStatus && matchesType;
-    });
-  }, [feedbacks, query, statusFilter, typeFilter]);
 
   function openRespondModal(item: AdminFeedbackItem) {
     setResult({});
@@ -181,6 +163,165 @@ export function FeedbacksManager({
     );
   }
 
+  const columns = useMemo<DataTableColumn<AdminFeedbackItem>[]>(
+    () => [
+      {
+        id: "student",
+        header: "Student",
+        width: "minmax(200px, 1.8fr)",
+        hideable: false,
+        sortValue: (item) => item.studentName || item.rollNumber || item.studentEmail,
+        cell: (item) => (
+          <>
+            <strong style={{ color: "var(--ink)", fontWeight: 700 }}>
+              {item.studentName || item.rollNumber || "Student"}
+            </strong>
+            <small style={{ color: "var(--muted)", display: "block", fontSize: "10px" }}>
+              {[item.rollNumber, item.branch, item.batch ? `Batch '${String(item.batch).slice(-2)}` : null]
+                .filter(Boolean)
+                .join(" · ") || item.studentEmail}
+            </small>
+          </>
+        ),
+      },
+      {
+        id: "type",
+        header: "Type",
+        width: "minmax(120px, 1.1fr)",
+        sortValue: (item) => item.feedbackType.toUpperCase(),
+        cell: (item) => getTypeBadge(item.feedbackType),
+      },
+      {
+        id: "subject",
+        header: "Subject & Message",
+        width: "minmax(260px, 2.4fr)",
+        sortValue: (item) => item.subject,
+        cell: (item) => (
+          <>
+            <strong style={{ color: "var(--ink)", fontSize: "12px" }}>{item.subject}</strong>
+            <small
+              style={{
+                color: "var(--muted)",
+                display: "block",
+                fontSize: "10px",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                maxWidth: "280px",
+              }}
+            >
+              {item.message}
+            </small>
+          </>
+        ),
+      },
+      {
+        id: "createdAt",
+        header: "Submitted",
+        width: "minmax(120px, 1.1fr)",
+        sortValue: (item) => new Date(item.createdAt),
+        cell: (item) => (
+          <span style={{ fontWeight: 600, fontSize: "11px" }}>
+            {new Date(item.createdAt).toLocaleDateString("en-IN", { month: "short", day: "numeric", year: "numeric" })}
+          </span>
+        ),
+      },
+      {
+        id: "status",
+        header: "Status",
+        width: "minmax(110px, 1fr)",
+        sortValue: (item) => item.resolved,
+        cell: (item) =>
+          item.resolved ? (
+            <span className="cell-status" style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
+              <CheckCircle2 size={11} /> Resolved
+            </span>
+          ) : (
+            <span className="cell-status pending" style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
+              <Clock3 size={11} /> Awaiting
+            </span>
+          ),
+      },
+      {
+        id: "actions",
+        header: "Actions",
+        width: "150px",
+        align: "right",
+        hideable: false,
+        cell: (item) => (
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: "6px" }}>
+            <button
+              type="button"
+              onClick={() => openRespondModal(item)}
+              title={item.resolved ? "View conversation & edit response" : "Respond to student"}
+              style={{
+                border: 0,
+                background: item.resolved ? "var(--surface-alt)" : "var(--badge-blue-bg)",
+                color: "var(--blue)",
+                borderRadius: "8px",
+                padding: "6px 10px",
+                fontSize: "11px",
+                fontWeight: 700,
+                display: "flex",
+                alignItems: "center",
+                gap: "4px",
+                cursor: "pointer",
+              }}
+            >
+              <MessageSquareReply size={13} /> {item.resolved ? "View" : "Reply"}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setResult({});
+                setDeletingItem(item);
+              }}
+              title="Delete feedback item"
+              aria-label={`Delete feedback ${item.subject}`}
+              style={{
+                border: 0,
+                background: "var(--surface-alt)",
+                color: "var(--badge-red-text)",
+                borderRadius: "8px",
+                padding: "6px",
+                cursor: "pointer",
+              }}
+            >
+              <Trash2 size={13} />
+            </button>
+          </div>
+        ),
+      },
+    ],
+    [],
+  );
+
+  const filters = useMemo<DataTableFilter<AdminFeedbackItem>[]>(
+    () => [
+      {
+        id: "type",
+        label: "Type",
+        options: [
+          { value: "QUERY", label: `Queries (${metrics.queries})` },
+          { value: "FEEDBACK", label: `Feedback (${metrics.feedbackCount})` },
+          { value: "COMPLAINT", label: `Complaints (${metrics.complaints})` },
+        ],
+        value: (item) => item.feedbackType.toUpperCase(),
+      },
+      {
+        id: "status",
+        label: "Status",
+        options: [
+          { value: "PENDING", label: `Awaiting Response (${metrics.pending})` },
+          { value: "RESOLVED", label: `Resolved (${metrics.resolved})` },
+        ],
+        value: (item) => (item.resolved ? "RESOLVED" : "PENDING"),
+      },
+    ],
+    [metrics],
+  );
+
   return (
     <div className="admin-page">
       <section className="admin-heading">
@@ -242,172 +383,25 @@ export function FeedbacksManager({
       {result.success && <div className="admin-success">{result.success}</div>}
       {result.error && <div className="admin-error">{result.error}</div>}
 
-      {/* Toolbar */}
-      <div className="admin-toolbar">
-        <label>
-          <Search />
-          <input
-            type="search"
-            placeholder="Search by student name, roll number, subject, content..."
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-        </label>
-
-        <select
-          value={typeFilter}
-          onChange={(e) => setTypeFilter(e.target.value)}
-          aria-label="Filter by type"
-        >
-          <option value="ALL">All Types ({feedbacks.length})</option>
-          <option value="QUERY">Queries ({metrics.queries})</option>
-          <option value="FEEDBACK">Feedback ({metrics.feedbackCount})</option>
-          <option value="COMPLAINT">Complaints ({metrics.complaints})</option>
-        </select>
-
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value as "ALL" | "PENDING" | "RESOLVED")}
-          aria-label="Filter by resolution status"
-        >
-          <option value="ALL">All Statuses ({feedbacks.length})</option>
-          <option value="PENDING">Awaiting Response ({metrics.pending})</option>
-          <option value="RESOLVED">Resolved ({metrics.resolved})</option>
-        </select>
-      </div>
-
-      {/* Table */}
-      <section className="admin-table">
-        <div
-          className="admin-row admin-row-head"
-          style={{ gridTemplateColumns: "1.8fr 1.1fr 2.4fr 1.1fr 1fr 1.2fr" }}
-        >
-          <span>Student</span>
-          <span>Type</span>
-          <span>Subject & Message</span>
-          <span>Submitted</span>
-          <span>Status</span>
-          <span style={{ textAlign: "right" }}>Actions</span>
-        </div>
-
-        {visible.length > 0 ? (
-          visible.map((item) => {
-            return (
-              <div
-                key={item.id}
-                className="admin-row"
-                style={{ gridTemplateColumns: "1.8fr 1.1fr 2.4fr 1.1fr 1fr 1.2fr" }}
-              >
-                {/* Student */}
-                <div>
-                  <strong style={{ color: "var(--ink)", fontWeight: 700 }}>
-                    {item.studentName || item.rollNumber || "Student"}
-                  </strong>
-                  <small style={{ color: "var(--muted)", display: "block", fontSize: "10px" }}>
-                    {[item.rollNumber, item.branch, item.batch ? `Batch '${String(item.batch).slice(-2)}` : null]
-                      .filter(Boolean)
-                      .join(" · ") || item.studentEmail}
-                  </small>
-                </div>
-
-                {/* Type */}
-                <div>{getTypeBadge(item.feedbackType)}</div>
-
-                {/* Subject & snippet */}
-                <div>
-                  <strong style={{ color: "var(--ink)", fontSize: "12px" }}>{item.subject}</strong>
-                  <small
-                    style={{
-                      color: "var(--muted)",
-                      display: "block",
-                      fontSize: "10px",
-                      whiteSpace: "nowrap",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      maxWidth: "280px",
-                    }}
-                  >
-                    {item.message}
-                  </small>
-                </div>
-
-                {/* Date */}
-                <div>
-                  <span style={{ fontWeight: 600, fontSize: "11px" }}>
-                    {new Date(item.createdAt).toLocaleDateString("en-IN", { month: "short", day: "numeric", year: "numeric" })}
-                  </span>
-                </div>
-
-                {/* Status */}
-                <div>
-                  {item.resolved ? (
-                    <span className="cell-status" style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
-                      <CheckCircle2 size={11} /> Resolved
-                    </span>
-                  ) : (
-                    <span className="cell-status pending" style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
-                      <Clock3 size={11} /> Awaiting
-                    </span>
-                  )}
-                </div>
-
-                {/* Actions */}
-                <div style={{ display: "flex", justifyContent: "flex-end", gap: "6px" }}>
-                  <button
-                    type="button"
-                    onClick={() => openRespondModal(item)}
-                    title={item.resolved ? "View conversation & edit response" : "Respond to student"}
-                    style={{
-                      border: 0,
-                      background: item.resolved ? "var(--surface-alt)" : "var(--badge-blue-bg)",
-                      color: "var(--blue)",
-                      borderRadius: "8px",
-                      padding: "6px 10px",
-                      fontSize: "11px",
-                      fontWeight: 700,
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "4px",
-                      cursor: "pointer",
-                    }}
-                  >
-                    <MessageSquareReply size={13} /> {item.resolved ? "View" : "Reply"}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setResult({});
-                      setDeletingItem(item);
-                    }}
-                    title="Delete feedback item"
-                    style={{
-                      border: 0,
-                      background: "var(--surface-alt)",
-                      color: "var(--badge-red-text)",
-                      borderRadius: "8px",
-                      padding: "6px",
-                      cursor: "pointer",
-                    }}
-                  >
-                    <Trash2 size={13} />
-                  </button>
-                </div>
-              </div>
-            );
-          })
-        ) : (
-          <div className="admin-empty">
-            <MessageSquare size={32} />
-            <h2>No messages found</h2>
-            <p>
-              {query
-                ? "No student feedback items match your search filter."
-                : "No messages or queries submitted yet."}
-            </p>
-          </div>
-        )}
-      </section>
+      <DataTable
+        data={feedbacks}
+        columns={columns}
+        getRowId={(item) => item.id}
+        searchText={(item) =>
+          `${item.studentName ?? ""} ${item.rollNumber ?? ""} ${item.studentEmail ?? ""} ${item.subject} ${item.message} ${item.adminResponse ?? ""}`
+        }
+        searchPlaceholder="Search by student name, roll number, subject, content..."
+        filters={filters}
+        columnStorageKey="feedbacks"
+        minWidth={1080}
+        emptyIcon={<MessageSquare />}
+        emptyTitle="No messages found"
+        emptyDescription={
+          feedbacks.length
+            ? "No student feedback items match your search filter."
+            : "No messages or queries submitted yet."
+        }
+      />
 
       {/* Response & Detail Modal */}
       {activeItem && (

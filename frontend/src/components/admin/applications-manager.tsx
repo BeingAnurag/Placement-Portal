@@ -2,7 +2,6 @@
 
 import { useState, useMemo, useTransition } from "react";
 import {
-  Search,
   Download,
   CheckCircle2,
   Clock3,
@@ -16,6 +15,12 @@ import {
   updateApplicationStatusAction,
   bulkUpdateApplicationsAction,
 } from "@/app/admin/applications/actions";
+import {
+  DataTable,
+  type DataTableColumn,
+  type DataTableFilter,
+  type DataTableView,
+} from "@/components/common/data-table";
 
 export type AdminApplicationRow = {
   id: string;
@@ -53,6 +58,11 @@ const ALL_STATUSES: ApplicationStatus[] = [
   "WITHDRAWN",
 ];
 
+/** The filter ids the backend export understands, matched one to one below. */
+const JOB_FILTER = "job";
+const STATUS_FILTER = "status";
+const BRANCH_FILTER = "branch";
+
 export function ApplicationsManager({
   applications: initialApplications,
   jobs,
@@ -61,15 +71,11 @@ export function ApplicationsManager({
   jobs: JobOption[];
 }) {
   const [applications, setApplications] = useState<AdminApplicationRow[]>(initialApplications);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [selectedJob, setSelectedJob] = useState<string>("ALL");
-  const [selectedStatus, setSelectedStatus] = useState<string>("ALL");
-  const [selectedBranch, setSelectedBranch] = useState<string>("ALL");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [statusMessage, setStatusMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [view, setView] = useState<DataTableView<AdminApplicationRow> | null>(null);
 
-  // Extract unique branches
   const branches = useMemo(() => {
     const set = new Set<string>();
     for (const app of applications) {
@@ -78,23 +84,6 @@ export function ApplicationsManager({
     return Array.from(set).sort();
   }, [applications]);
 
-  // Filtering
-  const filtered = useMemo(() => {
-    return applications.filter((app) => {
-      if (selectedJob !== "ALL" && app.jobProfileId !== selectedJob) return false;
-      if (selectedStatus !== "ALL" && app.status !== selectedStatus) return false;
-      if (selectedBranch !== "ALL" && app.branch !== selectedBranch) return false;
-
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
-        const haystack = `${app.studentName} ${app.studentEmail} ${app.rollNumber ?? ""} ${app.jobTitle} ${app.companyName}`.toLowerCase();
-        if (!haystack.includes(q)) return false;
-      }
-      return true;
-    });
-  }, [applications, selectedJob, selectedStatus, selectedBranch, searchQuery]);
-
-  // Metric counts
   const stats = useMemo(() => {
     const total = applications.length;
     const shortlisted = applications.filter((a) => a.status === "SHORTLISTED").length;
@@ -104,23 +93,16 @@ export function ApplicationsManager({
     return { total, shortlisted, interviews, selected, rejected };
   }, [applications]);
 
-  // Check if all currently visible filtered items are selected
-  const allFilteredSelected = useMemo(
-    () => filtered.length > 0 && filtered.every((a) => selectedIds.has(a.id)),
-    [filtered, selectedIds],
-  );
+  const rowsOnPage = view?.rows ?? [];
+  const allOnPageSelected = rowsOnPage.length > 0 && rowsOnPage.every((a) => selectedIds.has(a.id));
 
-  // Selection handlers
+  // Select-all covers the rows the viewer can actually see, which on a
+  // paginated table is the current page rather than the whole result set.
   const toggleSelectAll = () => {
     const next = new Set(selectedIds);
-    if (allFilteredSelected) {
-      for (const item of filtered) {
-        next.delete(item.id);
-      }
-    } else {
-      for (const item of filtered) {
-        next.add(item.id);
-      }
+    for (const item of rowsOnPage) {
+      if (allOnPageSelected) next.delete(item.id);
+      else next.add(item.id);
     }
     setSelectedIds(next);
   };
@@ -132,7 +114,6 @@ export function ApplicationsManager({
     setSelectedIds(next);
   };
 
-  // Status update for a single application
   const handleSingleStatusChange = (appId: string, newStatus: ApplicationStatus) => {
     startTransition(async () => {
       setStatusMessage(null);
@@ -148,7 +129,6 @@ export function ApplicationsManager({
     });
   };
 
-  // Bulk status update
   const handleBulkStatusChange = (newStatus: ApplicationStatus) => {
     const ids = Array.from(selectedIds);
     if (!ids.length) return;
@@ -169,24 +149,34 @@ export function ApplicationsManager({
   };
 
   // The CSV comes from the backend, which owns the query and includes the
-  // resume label. The filters below are the ones it understands; the rest of
-  // this screen's filtering is client-side only and matches them one to one.
+  // resume label. The endpoint takes one value per filter, so a multi-select
+  // narrows the export only when exactly one option is chosen; the file then
+  // matches the screen instead of quietly disagreeing with it.
   const exportHref = useMemo(() => {
     const query = new URLSearchParams();
-    if (selectedJob !== "ALL") query.set("job_id", selectedJob);
-    if (selectedStatus !== "ALL") query.set("status", selectedStatus);
-    if (selectedBranch !== "ALL") query.set("branch", selectedBranch);
-    if (searchQuery.trim()) query.set("search", searchQuery.trim());
+    const single = (id: string) => {
+      const values = view?.filters?.[id] ?? [];
+      return values.length === 1 ? values[0] : null;
+    };
+
+    const job = single(JOB_FILTER);
+    const status = single(STATUS_FILTER);
+    const branch = single(BRANCH_FILTER);
+    if (job) query.set("job_id", job);
+    if (status) query.set("status", status);
+    if (branch) query.set("branch", branch);
+    if (view?.query.trim()) query.set("search", view.query.trim());
+
     const suffix = query.size ? `?${query}` : "";
     return `/api/admin/applications/export${suffix}`;
-  }, [selectedJob, selectedStatus, selectedBranch, searchQuery]);
+  }, [view]);
 
   const getStatusBadgeClass = (status: ApplicationStatus) => {
     switch (status) {
       case "SELECTED":
         return "cell-status";
       case "SHORTLISTED":
-        return "cell-status" ;
+        return "cell-status";
       case "INTERVIEW":
         return "cell-status draft";
       case "REJECTED":
@@ -198,6 +188,145 @@ export function ApplicationsManager({
         return "cell-status development";
     }
   };
+
+  const columns = useMemo<DataTableColumn<AdminApplicationRow>[]>(
+    () => [
+      {
+        id: "candidate",
+        header: "Candidate",
+        width: "minmax(200px, 1.5fr)",
+        hideable: false,
+        sortValue: (app) => app.studentName,
+        cell: (app) => (
+          <span className="dt-primary">
+            <strong>{app.studentName}</strong>
+            <small>{app.studentEmail}</small>
+            {app.rollNumber ? <small>{app.rollNumber}</small> : null}
+          </span>
+        ),
+      },
+      {
+        id: "branch",
+        header: "Branch",
+        width: "minmax(130px, 1fr)",
+        sortValue: (app) => app.branch,
+        cell: (app) => app.branch ?? <span className="dt-muted">Not specified</span>,
+      },
+      {
+        id: "batch",
+        header: "Batch",
+        width: "90px",
+        sortValue: (app) => app.batch,
+        cell: (app) => <span className="dt-numeric">{app.batch ?? "—"}</span>,
+      },
+      {
+        id: "cgpa",
+        header: "CGPA",
+        width: "90px",
+        sortValue: (app) => app.cgpa,
+        cell: (app) => <span className="dt-numeric">{app.cgpa ?? "—"}</span>,
+      },
+      {
+        id: "job",
+        header: "Job & company",
+        width: "minmax(190px, 1.4fr)",
+        sortValue: (app) => `${app.companyName} ${app.jobTitle}`,
+        cell: (app) => (
+          <span className="dt-primary">
+            <strong>{app.companyName}</strong>
+            <small>{app.jobTitle}</small>
+          </span>
+        ),
+      },
+      {
+        id: "appliedAt",
+        header: "Applied",
+        width: "minmax(120px, 1fr)",
+        // `appliedAt` is already a display string from the server, so the raw
+        // date is parsed here rather than compared as text.
+        sortValue: (app) => new Date(app.appliedAt),
+        cell: (app) => <span className="dt-muted">{app.appliedAt}</span>,
+      },
+      {
+        id: "resume",
+        header: "Resume",
+        width: "minmax(140px, 1fr)",
+        sortValue: (app) => app.resumeLabel,
+        cell: (app) =>
+          app.resumeUrl ? (
+            <a
+              href={app.resumeUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="admin-external-link"
+              title="Open attached resume"
+            >
+              <FileText />
+              {app.resumeLabel || "Resume"}
+              <ExternalLink />
+            </a>
+          ) : (
+            <span className="dt-muted">Default profile</span>
+          ),
+      },
+      {
+        id: "status",
+        header: "Status",
+        width: "130px",
+        sortValue: (app) => app.status,
+        cell: (app) => <b className={getStatusBadgeClass(app.status)}>{app.status}</b>,
+      },
+      {
+        id: "stage",
+        header: "Stage action",
+        width: "150px",
+        hideable: false,
+        cell: (app) => (
+          <select
+            className="dt-inline-select"
+            value={app.status}
+            disabled={isPending}
+            aria-label={`Change stage for ${app.studentName}`}
+            onChange={(e) => handleSingleStatusChange(app.id, e.target.value as ApplicationStatus)}
+          >
+            {ALL_STATUSES.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+        ),
+      },
+    ],
+    [isPending],
+  );
+
+  const filters = useMemo<DataTableFilter<AdminApplicationRow>[]>(
+    () => [
+      {
+        id: JOB_FILTER,
+        label: "Job profile",
+        options: jobs.map((job) => ({
+          value: job.id,
+          label: `${job.companyName} — ${job.title}`,
+        })),
+        value: (app) => app.jobProfileId,
+      },
+      {
+        id: STATUS_FILTER,
+        label: "Status",
+        options: ALL_STATUSES.map((status) => ({ value: status, label: status })),
+        value: (app) => app.status,
+      },
+      {
+        id: BRANCH_FILTER,
+        label: "Branch",
+        options: branches.map((branch) => ({ value: branch, label: branch })),
+        value: (app) => app.branch,
+      },
+    ],
+    [jobs, branches],
+  );
 
   return (
     <div className="admin-page">
@@ -218,7 +347,6 @@ export function ApplicationsManager({
         </div>
       ) : null}
 
-      {/* Summary Metrics */}
       <section className="admin-metrics">
         <article>
           <div className="company-admin-name">
@@ -268,142 +396,33 @@ export function ApplicationsManager({
         </article>
       </section>
 
-      {/* Filters & Search Toolbar */}
-      <section className="admin-toolbar" style={{ flexWrap: "wrap", gap: "10px" }}>
-        <label style={{ minWidth: "220px", flex: 2 }}>
-          <Search />
-          <input
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search candidate, email, roll no, or company"
-          />
-        </label>
-
-        <select
-          value={selectedJob}
-          onChange={(e) => setSelectedJob(e.target.value)}
-          aria-label="Filter by Job Profile"
-          style={{ flex: 1.5, minWidth: "180px" }}
-        >
-          <option value="ALL">All Job Profiles ({jobs.length})</option>
-          {jobs.map((j) => (
-            <option key={j.id} value={j.id}>
-              {j.companyName} — {j.title}
-            </option>
-          ))}
-        </select>
-
-        <select
-          value={selectedStatus}
-          onChange={(e) => setSelectedStatus(e.target.value)}
-          aria-label="Filter by Status"
-          style={{ flex: 1, minWidth: "130px" }}
-        >
-          <option value="ALL">All Statuses</option>
-          {ALL_STATUSES.map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </select>
-
-        {branches.length > 0 && (
-          <select
-            value={selectedBranch}
-            onChange={(e) => setSelectedBranch(e.target.value)}
-            aria-label="Filter by Branch"
-            style={{ flex: 1, minWidth: "120px" }}
-          >
-            <option value="ALL">All Branches</option>
-            {branches.map((b) => (
-              <option key={b} value={b}>
-                {b}
-              </option>
-            ))}
-          </select>
-        )}
-      </section>
-
-      {/* Multi-Candidate Bulk Actions Bar */}
       {selectedIds.size > 0 && (
-        <div
-          style={{
-            background: "var(--surface-alt)",
-            border: "1px solid var(--blue)",
-            borderRadius: "10px",
-            padding: "10px 16px",
-            marginBottom: "14px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            flexWrap: "wrap",
-            gap: "10px",
-          }}
-        >
-          <span style={{ fontSize: "11px", fontWeight: 700, color: "var(--ink)" }}>
+        <div className="bulk-action-bar">
+          <span>
             Selected <strong>{selectedIds.size}</strong> candidate(s)
           </span>
-          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-            <button
-              onClick={() => handleBulkStatusChange("SHORTLISTED")}
-              disabled={isPending}
-              style={{
-                border: "1px solid var(--border)",
-                background: "var(--card-bg)",
-                padding: "6px 10px",
-                borderRadius: "7px",
-                fontSize: "10px",
-                fontWeight: 700,
-                cursor: "pointer",
-              }}
-            >
+          <div>
+            <button onClick={() => handleBulkStatusChange("SHORTLISTED")} disabled={isPending}>
               Mark Shortlisted
             </button>
             <button
+              className="interview"
               onClick={() => handleBulkStatusChange("INTERVIEW")}
               disabled={isPending}
-              style={{
-                border: "1px solid var(--orange)",
-                background: "var(--badge-orange-bg)",
-                color: "var(--orange)",
-                padding: "6px 10px",
-                borderRadius: "7px",
-                fontSize: "10px",
-                fontWeight: 700,
-                cursor: "pointer",
-              }}
             >
               Move to Interview
             </button>
             <button
+              className="select"
               onClick={() => handleBulkStatusChange("SELECTED")}
               disabled={isPending}
-              style={{
-                border: "1px solid var(--green)",
-                background: "var(--badge-green-bg)",
-                color: "var(--green)",
-                padding: "6px 10px",
-                borderRadius: "7px",
-                fontSize: "10px",
-                fontWeight: 700,
-                cursor: "pointer",
-              }}
             >
               Select / Offer
             </button>
             <button
+              className="reject"
               onClick={() => handleBulkStatusChange("REJECTED")}
               disabled={isPending}
-              style={{
-                border: "1px solid var(--badge-red-text)",
-                background: "var(--badge-red-bg)",
-                color: "var(--badge-red-text)",
-                padding: "6px 10px",
-                borderRadius: "7px",
-                fontSize: "10px",
-                fontWeight: 700,
-                cursor: "pointer",
-              }}
             >
               Reject
             </button>
@@ -411,138 +430,45 @@ export function ApplicationsManager({
         </div>
       )}
 
-      {/* Applications Table */}
-      <section className="admin-table">
-        <div
-          className="admin-row admin-row-head"
-          style={{ gridTemplateColumns: "36px 1.4fr 1.1fr 1.3fr 1fr 1fr 1.2fr" }}
-        >
-          <span>
+      <DataTable
+        data={applications}
+        columns={columns}
+        filters={filters}
+        getRowId={(app) => app.id}
+        searchText={(app) =>
+          `${app.studentName} ${app.studentEmail} ${app.rollNumber ?? ""} ${app.branch ?? ""} ${app.jobTitle} ${app.companyName}`
+        }
+        searchPlaceholder="Search candidate, email, roll no, or company"
+        columnStorageKey="applications"
+        minWidth={1280}
+        initialSort={{ columnId: "appliedAt", direction: "desc" }}
+        onViewChange={setView}
+        leadingColumn={{
+          header: (
             <input
               type="checkbox"
-              checked={allFilteredSelected}
+              checked={allOnPageSelected}
               onChange={toggleSelectAll}
-              aria-label="Select all candidates"
+              aria-label="Select all candidates on this page"
             />
-          </span>
-          <span>Candidate</span>
-          <span>Academic Info</span>
-          <span>Job & Company</span>
-          <span>Resume</span>
-          <span>Status</span>
-          <span>Stage Action</span>
-        </div>
-
-        {filtered.map((app) => (
-          <div
-            className="admin-row"
-            key={app.id}
-            style={{ gridTemplateColumns: "36px 1.4fr 1.1fr 1.3fr 1fr 1fr 1.2fr" }}
-          >
-            {/* Checkbox */}
-            <span>
-              <input
-                type="checkbox"
-                checked={selectedIds.has(app.id)}
-                onChange={() => toggleSelectOne(app.id)}
-                aria-label={`Select ${app.studentName}`}
-              />
-            </span>
-
-            {/* Candidate */}
-            <div>
-              <strong style={{ color: "var(--ink)", display: "block" }}>{app.studentName}</strong>
-              <small style={{ color: "var(--muted)", fontSize: "9px" }}>{app.studentEmail}</small>
-              {app.rollNumber ? (
-                <small style={{ display: "block", color: "var(--ink)", fontWeight: 600, fontSize: "9px" }}>
-                  {app.rollNumber}
-                </small>
-              ) : null}
-            </div>
-
-            {/* Academic Info */}
-            <div>
-              <span style={{ fontWeight: 600 }}>{app.branch ?? "Branch not specified"}</span>
-              <small style={{ display: "block", color: "var(--muted)", fontSize: "9px" }}>
-                {app.batch ? `Batch ${app.batch}` : ""} {app.cgpa !== null ? `· CGPA ${app.cgpa}` : ""}
-              </small>
-            </div>
-
-            {/* Job & Company */}
-            <div>
-              <strong style={{ color: "var(--ink)" }}>{app.companyName}</strong>
-              <small style={{ display: "block", color: "var(--muted)", fontSize: "9px" }}>
-                {app.jobTitle}
-              </small>
-              <small style={{ display: "block", color: "var(--muted)", fontSize: "8px", marginTop: "2px" }}>
-                Applied {app.appliedAt}
-              </small>
-            </div>
-
-            {/* Resume */}
-            <div>
-              {app.resumeUrl ? (
-                <a
-                  href={app.resumeUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="admin-external-link"
-                  style={{ fontSize: "10px" }}
-                  title="Open attached resume"
-                >
-                  <FileText style={{ width: "13px" }} />
-                  {app.resumeLabel || "Resume"}
-                  <ExternalLink style={{ width: "10px" }} />
-                </a>
-              ) : (
-                <span style={{ color: "var(--muted)", fontSize: "9px" }}>Default profile</span>
-              )}
-            </div>
-
-            {/* Current Status Pill */}
-            <div>
-              <b className={getStatusBadgeClass(app.status)}>{app.status}</b>
-            </div>
-
-            {/* Stage Action Dropdown */}
-            <div>
-              <select
-                value={app.status}
-                disabled={isPending}
-                onChange={(e) => handleSingleStatusChange(app.id, e.target.value as ApplicationStatus)}
-                style={{
-                  padding: "5px 8px",
-                  borderRadius: "6px",
-                  border: "1px solid var(--border)",
-                  background: "var(--surface-alt)",
-                  color: "var(--ink)",
-                  fontSize: "10px",
-                  fontWeight: 600,
-                  width: "100%",
-                }}
-              >
-                {ALL_STATUSES.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-        ))}
-
-        {!filtered.length && (
-          <div className="admin-empty">
-            <Users />
-            <h2>{applications.length ? "No matching candidates" : "No applications yet"}</h2>
-            <p>
-              {applications.length
-                ? "Try adjusting your search query, job profile, status, or branch filters."
-                : "Student applications submitted to active job postings will appear here."}
-            </p>
-          </div>
-        )}
-      </section>
+          ),
+          cell: (app) => (
+            <input
+              type="checkbox"
+              checked={selectedIds.has(app.id)}
+              onChange={() => toggleSelectOne(app.id)}
+              aria-label={`Select ${app.studentName}`}
+            />
+          ),
+        }}
+        emptyIcon={<Users />}
+        emptyTitle={applications.length ? "No matching candidates" : "No applications yet"}
+        emptyDescription={
+          applications.length
+            ? "Try adjusting your search query, job profile, status, or branch filters."
+            : "Student applications submitted to active job postings will appear here."
+        }
+      />
     </div>
   );
 }

@@ -7,7 +7,6 @@ import {
   Clock3,
   Eye,
   MessageSquareText,
-  Search,
   Trash2,
   X,
   XCircle,
@@ -20,6 +19,11 @@ import {
   rejectInterviewExperienceAction,
   type InterviewExperienceActionResult,
 } from "@/app/admin/interview-experiences/actions";
+import {
+  DataTable,
+  type DataTableColumn,
+  type DataTableFilter,
+} from "@/components/common/data-table";
 
 const QUESTION_SECTIONS: { key: string; label: string }[] = [
   { key: "dsaQuestions", label: "DSA questions asked" },
@@ -64,8 +68,6 @@ export type AdminInterviewExperienceItem = {
 
 export function InterviewExperiencesManager({ experiences }: { experiences: AdminInterviewExperienceItem[] }) {
   const router = useRouter();
-  const [query, setQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"ALL" | "PENDING" | "APPROVED" | "REJECTED">("PENDING");
   const [detailItem, setDetailItem] = useState<AdminInterviewExperienceItem | null>(null);
   const [rejectingItem, setRejectingItem] = useState<AdminInterviewExperienceItem | null>(null);
   const [deletingItem, setDeletingItem] = useState<AdminInterviewExperienceItem | null>(null);
@@ -79,16 +81,6 @@ export function InterviewExperiencesManager({ experiences }: { experiences: Admi
     const rejected = experiences.filter((e) => e.status === "REJECTED").length;
     return { total, pending, approved, rejected };
   }, [experiences]);
-
-  const visible = useMemo(() => {
-    return experiences.filter((item) => {
-      const matchesSearch = `${item.author?.name ?? ""} ${item.author?.rollNumber ?? ""} ${item.companyName} ${item.role}`
-        .toLowerCase()
-        .includes(query.toLowerCase());
-      const matchesStatus = statusFilter === "ALL" || item.status === statusFilter;
-      return matchesSearch && matchesStatus;
-    });
-  }, [experiences, query, statusFilter]);
 
   function handleApprove(item: AdminInterviewExperienceItem) {
     setResult({});
@@ -124,6 +116,201 @@ export function InterviewExperiencesManager({ experiences }: { experiences: Admi
       }
     });
   }
+
+  const columns = useMemo<DataTableColumn<AdminInterviewExperienceItem>[]>(
+    () => [
+      {
+        id: "student",
+        header: "Student",
+        width: "minmax(200px, 1.8fr)",
+        hideable: false,
+        sortValue: (item) => item.author?.name || item.author?.rollNumber || item.author?.email,
+        cell: (item) => (
+          <>
+            <strong style={{ color: "var(--ink)", fontWeight: 700 }}>
+              {item.author?.name || item.author?.rollNumber || "Student"}
+            </strong>
+            <small style={{ color: "var(--muted)", display: "block", fontSize: "10px" }}>
+              {[item.author?.rollNumber, item.author?.branch, item.author?.batch ? `Batch ${item.author.batch}` : null]
+                .filter(Boolean)
+                .join(" · ") || item.author?.email}
+            </small>
+          </>
+        ),
+      },
+      {
+        id: "company",
+        header: "Company & role",
+        width: "minmax(180px, 1.6fr)",
+        sortValue: (item) => item.companyName,
+        cell: (item) => (
+          <>
+            <strong style={{ color: "var(--ink)" }}>{item.companyName}</strong>
+            <small style={{ color: "var(--muted)", display: "block", fontSize: "10px" }}>{item.role}</small>
+          </>
+        ),
+      },
+      {
+        id: "interviewType",
+        header: "Type",
+        width: "minmax(120px, 1fr)",
+        sortValue: (item) => item.interviewType,
+        cell: (item) => <span style={{ fontSize: "11px" }}>{item.interviewType}</span>,
+      },
+      {
+        id: "status",
+        header: "Status",
+        width: "minmax(120px, 1fr)",
+        sortValue: (item) => item.status,
+        cell: (item) => (
+          <>
+            {item.status === "PENDING" && (
+              <span className="cell-status pending" style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                <Clock3 size={11} /> Pending
+              </span>
+            )}
+            {item.status === "APPROVED" && (
+              <span className="cell-status" style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                <CheckCircle2 size={11} /> Live
+              </span>
+            )}
+            {item.status === "REJECTED" && (
+              <span
+                className="cell-status"
+                style={{ display: "inline-flex", alignItems: "center", gap: "4px", background: "var(--badge-red-bg)", color: "var(--badge-red-text)" }}
+              >
+                <XCircle size={11} /> Rejected
+              </span>
+            )}
+          </>
+        ),
+      },
+      {
+        id: "actions",
+        header: "Actions",
+        width: "260px",
+        align: "right",
+        hideable: false,
+        cell: (item) => (
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: "6px" }}>
+            <button
+              type="button"
+              onClick={() => setDetailItem(item)}
+              title="View full submission"
+              style={{
+                border: 0,
+                background: "var(--surface-alt)",
+                color: "var(--blue)",
+                borderRadius: "8px",
+                padding: "6px 9px",
+                fontSize: "11px",
+                fontWeight: 600,
+                display: "flex",
+                alignItems: "center",
+                gap: "4px",
+                cursor: "pointer",
+              }}
+            >
+              <Eye size={13} /> Details
+            </button>
+
+            {item.status === "PENDING" && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => handleApprove(item)}
+                  disabled={isPending}
+                  title="Approve and publish"
+                  style={{
+                    border: 0,
+                    background: "var(--badge-green-bg)",
+                    color: "var(--green)",
+                    borderRadius: "8px",
+                    padding: "6px 9px",
+                    fontSize: "11px",
+                    fontWeight: 700,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "4px",
+                    cursor: "pointer",
+                  }}
+                >
+                  <CheckCircle2 size={13} /> Approve
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setResult({});
+                    setRejectingItem(item);
+                  }}
+                  title="Reject submission"
+                  style={{
+                    border: 0,
+                    background: "var(--badge-red-bg)",
+                    color: "var(--badge-red-text)",
+                    borderRadius: "8px",
+                    padding: "6px 9px",
+                    fontSize: "11px",
+                    fontWeight: 700,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "4px",
+                    cursor: "pointer",
+                  }}
+                >
+                  <XCircle size={13} /> Reject
+                </button>
+              </>
+            )}
+
+            <button
+              type="button"
+              onClick={() => {
+                setResult({});
+                setDeletingItem(item);
+              }}
+              title="Delete submission"
+              aria-label={`Delete submission for ${item.companyName}`}
+              style={{
+                border: 0,
+                background: "var(--surface-alt)",
+                color: "var(--muted)",
+                borderRadius: "8px",
+                padding: "6px 9px",
+                fontSize: "11px",
+                fontWeight: 600,
+                display: "flex",
+                alignItems: "center",
+                gap: "4px",
+                cursor: "pointer",
+              }}
+            >
+              <Trash2 size={13} />
+            </button>
+          </div>
+        ),
+      },
+    ],
+    // The handlers are redefined per render but close over nothing that changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [isPending],
+  );
+
+  const filters = useMemo<DataTableFilter<AdminInterviewExperienceItem>[]>(
+    () => [
+      {
+        id: "status",
+        label: "Status",
+        options: [
+          { value: "PENDING", label: `Pending review (${metrics.pending})` },
+          { value: "APPROVED", label: `Live (${metrics.approved})` },
+          { value: "REJECTED", label: `Rejected (${metrics.rejected})` },
+        ],
+        value: (item) => item.status,
+      },
+    ],
+    [metrics],
+  );
 
   return (
     <div className="admin-page">
@@ -181,190 +368,27 @@ export function InterviewExperiencesManager({ experiences }: { experiences: Admi
       {result.success && <div className="admin-success">{result.success}</div>}
       {result.error && <div className="admin-error">{result.error}</div>}
 
-      <div className="admin-toolbar">
-        <label>
-          <Search />
-          <input
-            type="search"
-            placeholder="Search by student name, roll number, company, role..."
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-        </label>
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value as "ALL" | "PENDING" | "APPROVED" | "REJECTED")}
-          aria-label="Filter by status"
-        >
-          <option value="ALL">All statuses ({experiences.length})</option>
-          <option value="PENDING">Pending review ({metrics.pending})</option>
-          <option value="APPROVED">Live ({metrics.approved})</option>
-          <option value="REJECTED">Rejected ({metrics.rejected})</option>
-        </select>
-      </div>
-
-      <section className="admin-table">
-        <div className="admin-row admin-row-head" style={{ gridTemplateColumns: "1.8fr 1.6fr 1fr 1fr 1.6fr" }}>
-          <span>Student</span>
-          <span>Company & role</span>
-          <span>Type</span>
-          <span>Status</span>
-          <span style={{ textAlign: "right" }}>Actions</span>
-        </div>
-
-        {visible.length > 0 ? (
-          visible.map((item) => {
-            const isPendingStatus = item.status === "PENDING";
-            const isApproved = item.status === "APPROVED";
-            const isRejected = item.status === "REJECTED";
-
-            return (
-              <div key={item.id} className="admin-row" style={{ gridTemplateColumns: "1.8fr 1.6fr 1fr 1fr 1.6fr" }}>
-                <div>
-                  <strong style={{ color: "var(--ink)", fontWeight: 700 }}>
-                    {item.author?.name || item.author?.rollNumber || "Student"}
-                  </strong>
-                  <small style={{ color: "var(--muted)", display: "block", fontSize: "10px" }}>
-                    {[item.author?.rollNumber, item.author?.branch, item.author?.batch ? `Batch ${item.author.batch}` : null]
-                      .filter(Boolean)
-                      .join(" · ") || item.author?.email}
-                  </small>
-                </div>
-
-                <div>
-                  <strong style={{ color: "var(--ink)" }}>{item.companyName}</strong>
-                  <small style={{ color: "var(--muted)", display: "block", fontSize: "10px" }}>{item.role}</small>
-                </div>
-
-                <div style={{ fontSize: "11px" }}>{item.interviewType}</div>
-
-                <div>
-                  {isPendingStatus && (
-                    <span className="cell-status pending" style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
-                      <Clock3 size={11} /> Pending
-                    </span>
-                  )}
-                  {isApproved && (
-                    <span className="cell-status" style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
-                      <CheckCircle2 size={11} /> Live
-                    </span>
-                  )}
-                  {isRejected && (
-                    <span
-                      className="cell-status"
-                      style={{ display: "inline-flex", alignItems: "center", gap: "4px", background: "var(--badge-red-bg)", color: "var(--badge-red-text)" }}
-                    >
-                      <XCircle size={11} /> Rejected
-                    </span>
-                  )}
-                </div>
-
-                <div style={{ display: "flex", justifyContent: "flex-end", gap: "6px" }}>
-                  <button
-                    type="button"
-                    onClick={() => setDetailItem(item)}
-                    title="View full submission"
-                    style={{
-                      border: 0,
-                      background: "var(--surface-alt)",
-                      color: "var(--blue)",
-                      borderRadius: "8px",
-                      padding: "6px 9px",
-                      fontSize: "11px",
-                      fontWeight: 600,
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "4px",
-                      cursor: "pointer",
-                    }}
-                  >
-                    <Eye size={13} /> Details
-                  </button>
-
-                  {isPendingStatus && (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => handleApprove(item)}
-                        disabled={isPending}
-                        title="Approve and publish"
-                        style={{
-                          border: 0,
-                          background: "var(--badge-green-bg)",
-                          color: "var(--green)",
-                          borderRadius: "8px",
-                          padding: "6px 9px",
-                          fontSize: "11px",
-                          fontWeight: 700,
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "4px",
-                          cursor: "pointer",
-                        }}
-                      >
-                        <CheckCircle2 size={13} /> Approve
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setResult({});
-                          setRejectingItem(item);
-                        }}
-                        title="Reject submission"
-                        style={{
-                          border: 0,
-                          background: "var(--badge-red-bg)",
-                          color: "var(--badge-red-text)",
-                          borderRadius: "8px",
-                          padding: "6px 9px",
-                          fontSize: "11px",
-                          fontWeight: 700,
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "4px",
-                          cursor: "pointer",
-                        }}
-                      >
-                        <XCircle size={13} /> Reject
-                      </button>
-                    </>
-                  )}
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setResult({});
-                      setDeletingItem(item);
-                    }}
-                    title="Delete submission"
-                    style={{
-                      border: 0,
-                      background: "var(--surface-alt)",
-                      color: "var(--muted)",
-                      borderRadius: "8px",
-                      padding: "6px 9px",
-                      fontSize: "11px",
-                      fontWeight: 600,
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "4px",
-                      cursor: "pointer",
-                    }}
-                  >
-                    <Trash2 size={13} />
-                  </button>
-                </div>
-              </div>
-            );
-          })
-        ) : (
-          <div className="admin-empty">
-            <MessageSquareText size={32} />
-            <h2>No interview experiences found</h2>
-            <p>{query ? "No submissions match your search filter." : "No submissions in this status yet."}</p>
-          </div>
-        )}
-      </section>
+      <DataTable
+        data={experiences}
+        columns={columns}
+        getRowId={(item) => item.id}
+        searchText={(item) =>
+          `${item.author?.name ?? ""} ${item.author?.rollNumber ?? ""} ${item.companyName} ${item.role}`
+        }
+        searchPlaceholder="Search by student name, roll number, company, role..."
+        filters={filters}
+        // This screen is a moderation queue, so it opens on what is waiting.
+        initialFilters={{ status: ["PENDING"] }}
+        columnStorageKey="interview-experiences"
+        minWidth={1020}
+        emptyIcon={<MessageSquareText />}
+        emptyTitle="No interview experiences found"
+        emptyDescription={
+          experiences.length
+            ? "No submissions match your search filter."
+            : "No submissions in this status yet."
+        }
+      />
 
       {/* Details modal */}
       {detailItem && (

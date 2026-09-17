@@ -28,7 +28,7 @@ export default async function DashboardPage() {
       where: { status: "PUBLISHED" },
       orderBy: { createdAt: "desc" },
       take: 20,
-      include: { company: true },
+      include: { company: true, attachments: { orderBy: { uploadedAt: "asc" } } },
     }),
     userId ? db.resume.count({ where: { userId } }) : Promise.resolve(0),
   ]);
@@ -90,6 +90,10 @@ export default async function DashboardPage() {
         category:
           announcement.category === "COMPANY_EVENT" ? "Company event" : "General",
         tags: announcement.tags || [],
+        attachments: announcement.attachments.map((file) => ({
+          fileName: file.fileName,
+          fileUrl: file.fileUrl,
+        })),
         color: companyColor(companyName),
         initial: companyInitials(companyName),
       };

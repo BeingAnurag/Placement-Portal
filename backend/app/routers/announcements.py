@@ -14,18 +14,23 @@ from app.core.security import (
     has_permission,
     require_permission,
 )
+from app.core.storage import delete_file
 from app.dependencies import get_db
 from app.models.db import (
     Announcement,
+    AnnouncementAttachment,
     AnnouncementCategory,
     AnnouncementStatus,
     Company,
+    JobProfile,
     User,
 )
 from app.schemas.announcement import (
     AnnouncementAuthorSummary,
     AnnouncementCompanySummary,
     AnnouncementCreate,
+    AnnouncementAttachmentInput,
+    AnnouncementAttachmentResponse,
     AnnouncementResponse,
     AnnouncementUpdate,
 )
@@ -58,11 +63,17 @@ def _to_announcement_response(a: Announcement) -> AnnouncementResponse:
         publishedAt=a.publishedAt,
         tags=a.tags or [],
         companyId=a.companyId,
+        jobProfileId=a.jobProfileId,
+        jobTitle=a.job_profile.title if a.job_profile else None,
         company=company_summary,
         createdAt=a.createdAt,
         createdById=a.createdById,
         createdByName=creator_name,
         createdByEmail=creator_email,
+        attachments=[
+            AnnouncementAttachmentResponse.model_validate(attachment)
+            for attachment in sorted(a.attachments, key=lambda item: item.uploadedAt)
+        ],
     )
 
 
@@ -86,6 +97,18 @@ def _parse_status(status_input: str) -> AnnouncementStatus:
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Invalid status '{status_input}'. Allowed: {[s.value for s in AnnouncementStatus]}",
         )
+
+
+def _attachment_row(announcement_id: str, data: AnnouncementAttachmentInput) -> AnnouncementAttachment:
+    return AnnouncementAttachment(
+        id=f"cuid_{uuid.uuid4().hex[:20]}",
+        announcementId=announcement_id,
+        fileName=data.fileName.strip(),
+        fileUrl=data.fileUrl.strip(),
+        mimeType=data.mimeType.strip(),
+        sizeBytes=data.sizeBytes,
+        uploadedAt=datetime.now(timezone.utc),
+    )
 
 
 def _may_see_drafts(caller: dict) -> bool:
@@ -112,7 +135,12 @@ async def list_announcements(
     """
     stmt = (
         select(Announcement)
-        .options(selectinload(Announcement.company), selectinload(Announcement.created_by))
+        .options(
+            selectinload(Announcement.company),
+            selectinload(Announcement.job_profile),
+            selectinload(Announcement.created_by),
+            selectinload(Announcement.attachments),
+        )
         .order_by(Announcement.createdAt.desc())
     )
 
@@ -157,7 +185,12 @@ async def get_announcement(
     """
     stmt = (
         select(Announcement)
-        .options(selectinload(Announcement.company), selectinload(Announcement.created_by))
+        .options(
+            selectinload(Announcement.company),
+            selectinload(Announcement.job_profile),
+            selectinload(Announcement.created_by),
+            selectinload(Announcement.attachments),
+        )
         .where(Announcement.id == announcement_id)
     )
     announcement = await db.scalar(stmt)
@@ -228,6 +261,16 @@ async def create_announcement(
     # Clean tags
     clean_tags = [t.strip() for t in data.tags if t and t.strip()]
 
+    # A general notice is not about a drive, so it never carries one.
+    clean_job_id = data.jobProfileId if cat_enum == AnnouncementCategory.COMPANY_EVENT else None
+    if clean_job_id:
+        job = await db.scalar(select(JobProfile).where(JobProfile.id == clean_job_id))
+        if not job:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Job profile with ID '{clean_job_id}' does not exist.",
+            )
+
     announcement_id = f"cuid_{uuid.uuid4().hex[:20]}"
     status_enum = _parse_status(data.status)
     new_announcement = Announcement(
@@ -241,16 +284,24 @@ async def create_announcement(
         ),
         tags=clean_tags,
         companyId=clean_company_id,
+        jobProfileId=clean_job_id,
         createdById=author_id,
     )
 
     db.add(new_announcement)
+    for attachment in data.attachments:
+        db.add(_attachment_row(announcement_id, attachment))
     await db.commit()
 
     # Re-fetch with relations for proper response serialization
     stmt = (
         select(Announcement)
-        .options(selectinload(Announcement.company), selectinload(Announcement.created_by))
+        .options(
+            selectinload(Announcement.company),
+            selectinload(Announcement.job_profile),
+            selectinload(Announcement.created_by),
+            selectinload(Announcement.attachments),
+        )
         .where(Announcement.id == announcement_id)
     )
     saved = await db.scalar(stmt)
@@ -269,7 +320,12 @@ async def update_announcement(
     """
     stmt = (
         select(Announcement)
-        .options(selectinload(Announcement.company), selectinload(Announcement.created_by))
+        .options(
+            selectinload(Announcement.company),
+            selectinload(Announcement.job_profile),
+            selectinload(Announcement.created_by),
+            selectinload(Announcement.attachments),
+        )
         .where(Announcement.id == announcement_id)
     )
     announcement = await db.scalar(stmt)
@@ -289,9 +345,24 @@ async def update_announcement(
         announcement.category = _parse_category(data.category)
         if announcement.category == AnnouncementCategory.GENERAL:
             announcement.companyId = None
+            announcement.jobProfileId = None
 
     if data.tags is not None:
         announcement.tags = [t.strip() for t in data.tags if t and t.strip()]
+
+    if "jobProfileId" in data.model_fields_set:
+        if announcement.category == AnnouncementCategory.GENERAL:
+            announcement.jobProfileId = None
+        elif data.jobProfileId:
+            job = await db.scalar(select(JobProfile).where(JobProfile.id == data.jobProfileId))
+            if not job:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Job profile with ID '{data.jobProfileId}' does not exist.",
+                )
+            announcement.jobProfileId = data.jobProfileId
+        else:
+            announcement.jobProfileId = None
 
     if data.status is not None:
         new_status = _parse_status(data.status)
@@ -317,6 +388,27 @@ async def update_announcement(
         else:
             announcement.companyId = None
 
+    if data.attachments is not None:
+        # The list arrives whole. Files dropped from it are deleted from
+        # storage too, otherwise removing an attachment only hides it.
+        keep = {item.fileUrl.strip() for item in data.attachments}
+        existing = (
+            await db.scalars(
+                select(AnnouncementAttachment).where(
+                    AnnouncementAttachment.announcementId == announcement.id
+                )
+            )
+        ).all()
+        for row in existing:
+            if row.fileUrl in keep:
+                continue
+            delete_file(row.fileUrl)
+            await db.delete(row)
+        known = {row.fileUrl for row in existing}
+        for item in data.attachments:
+            if item.fileUrl.strip() not in known:
+                db.add(_attachment_row(announcement.id, item))
+
     await db.commit()
 
     # Re-fetch with relations
@@ -333,12 +425,20 @@ async def delete_announcement(
     """
     Delete an announcement. Requires 'announcements:manage' permission.
     """
-    announcement = await db.scalar(select(Announcement).where(Announcement.id == announcement_id))
+    announcement = await db.scalar(
+        select(Announcement)
+        .options(selectinload(Announcement.attachments))
+        .where(Announcement.id == announcement_id)
+    )
     if not announcement:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Announcement not found.",
         )
+
+    # The rows cascade; the stored files do not.
+    for attachment in announcement.attachments:
+        delete_file(attachment.fileUrl)
 
     await db.delete(announcement)
     await db.commit()

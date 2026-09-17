@@ -236,3 +236,68 @@ The Export CSV control is now a link to `/api/admin/applications/export`, a rout
 
 - **The endpoint gained a `search` parameter** matching student name, email, roll number, job title, and company name, because the screen's free-text box is client-side only and the export has to cover the same rows the administrator is looking at.
 - **There is no Prisma fallback.** Unlike the surrounding NOC and application actions, if the backend is unreachable the export fails with a 502 rather than falling back to a second implementation in the frontend; rebuilding the query in Next.js is what produced the divergence in the first place.
+
+## 2026-09-17 — `Offer` is the placement record, and the only source of package statistics
+
+The dashboard reported counts and percentages and no money at all, because the portal had nowhere to put an offer. `JobProfile.ctcStipend` is the advertised figure for a drive, shared by everyone selected from it, and an application stops at `SELECTED`, which says a student cleared a process and nothing about what they were offered.
+
+`Offer` is a new table: student, company, optional drive, type (`FTE`, `PPO`, `INTERNSHIP`), status, season, money, location, offer and joining dates, and remarks. `GET /api/v1/analytics/admin/overview` aggregates it and nothing else.
+
+- **An application is not an offer.** They are separate rows joined by an optional `applicationId`, unique so one application cannot produce two records. Offers made outside a portal drive — the majority in the first years of a placement cell — need no drive at all.
+- **`ctc` and `stipend` are separate nullable columns, not one amount.** An annual CTC and a monthly stipend are different units; a single column would average 18,00,000 against 75,000 the first time somebody forgot which was which. The offer type decides which is required, in the Pydantic schema, in the Zod schema, and again in the router, and saving an offer clears the figure its type does not use.
+- **A revoked or declined offer is excluded from every statistic but stays in the table.** `COUNTED_OFFER_STATUSES` in `backend/app/services/placement_stats.py` is the single answer to "which offers count", so a new query cannot quietly disagree with the dashboard. The office still needs to see those rows on the placement-records screen.
+- **A PPO counts as a placement and is also reported on its own**, because the cell tracks internship conversion as its own number.
+- **An offer with no amount recorded is excluded from the averages rather than counted as zero.** One incomplete row would otherwise report a lowest package of ₹0 for the season. The package count says how many offers carried a figure.
+- **The season is stored on the offer** as the graduating batch year rather than derived from the student, so correcting a student's batch does not silently rewrite a closed season's results.
+- Writes require `applications:manage` and reads `analytics:view`; no new permission was added, and the RBAC catalog stays at 17 entries.
+
+## 2026-09-17 — The admin dashboard reads one backend endpoint and has no Prisma fallback
+
+The page ran seven Prisma queries and did its own arithmetic. Adding packages, per-degree and per-branch distributions, and a season filter would have made that a dozen, in a page component, in the service that is supposed to be leaving direct database access behind.
+
+`GET /api/v1/analytics/admin/overview?batch=` returns the whole screen: totals, package statistics, distributions, recruiters, funnel, and recent applications, all scoped to one season. `/admin/dashboard` renders that response.
+
+- **There is no Prisma fallback**, unlike the older admin screens. Re-deriving these numbers in Next.js is exactly how the application CSV drifted from its endpoint (2026-09-17). If the API is unreachable the dashboard says so.
+- **The season defaults to the newest one that has an offer**, not the newest that exists. The newest batch on file is usually next year's, whose drives have not run, and opening on an empty dashboard is not useful.
+- **Totals that describe the register rather than the year — students, companies, active drives — are not season-scoped.** The funnel and recent applications are, through the drive's batch.
+- Charts remain repository CSS rather than a charting dependency: a column chart of counts is a flex row with percentage heights, and a bar with one offer in it is still readable because every bar has a floor of 6%.
+
+## 2026-09-17 — Announcements are drafted, published, and written on their own pages
+
+Every announcement was live the moment it was saved, and one screen did composing and managing at once with a modal form.
+
+`AnnouncementStatus` (`DRAFT`, `PUBLISHED`) and `publishedAt` are new columns, and the screen is now three routes under an expandable sidebar group: `/admin/announcements/company-event`, `/admin/announcements/general`, and `/admin/announcements` for active and drafts.
+
+- **`PUBLISHED` is the default and an omitted status publishes.** Every existing caller and the seed data keep behaving as they did, and a forgotten field can never silently hide a notice the cell meant to send. Saving a draft is the deliberate act, and it is its own button rather than a dropdown, because the label has to say who will see the result.
+- **Drafts are filtered out server-side for anyone without `announcements:manage`**, on the list and on the single-announcement route, which answers 404 rather than 403: the existence of a draft is not public either. The student dashboard's own Prisma query filters the same way.
+- **`publishedAt` records the first time students could see it.** Withdrawing and re-publishing keeps the original date rather than pretending the announcement is new.
+- **`Announcement.jobProfileId` links a company event to the drive it is about.** The composer narrows placement season → company → event, and that last choice has to land somewhere; without the column the control would be decoration. A general notice never carries one, and switching a company event to general clears both the company and the drive.
+- **The composer locks its editor until the fields above it are filled**, listing what is missing. The sequence is the point: an announcement that does not know which drive it belongs to is the one that gets sent to the wrong batch.
+
+## 2026-09-17 — Announcement attachments are rows, checked on their bytes, and served by status
+
+A shortlist arrives as a spreadsheet and a venue map as an image, so an announcement had to carry files. Resume storage was the only upload path, and it is PDF-only by design.
+
+`AnnouncementAttachment` is a new table, `POST /api/v1/uploads/admin/announcement-attachment` stores one file, and `validate_attachment` in `backend/app/core/storage.py` holds the closed type list.
+
+- **Rows, not a URL array.** Students see a file name and a size, and both come from the upload rather than from parsing a storage URL.
+- **The type is decided by the bytes, not the file name.** Every accepted extension has its signature checked — `%PDF`, the PNG and JPEG magic numbers, the ZIP header behind `.docx`/`.xlsx`, the OLE header behind `.doc`/`.xls` — and `.csv`/`.txt`, which have no signature, must decode as UTF-8 with no NUL bytes. An executable renamed to `.pdf` is the case this exists for. The resume rule is untouched and stays PDF-only.
+- **The composer uploads before the announcement exists.** The author has to see the upload succeed while still writing, so files are staged under `announcement_docs/` and the owning rows are written on save. The cost is an orphan file when somebody abandons a draft, which is cheaper than the alternative of saving a half-written announcement to hold an upload.
+- **Access follows the announcement's status.** A signed-in user may fetch an attachment once the announcement carrying it is published; a draft's file and a staged file nobody attached are private. Serving now sets the real media type, and anything that is not a PDF or an image downloads rather than rendering.
+- **An omitted attachment list leaves the files alone; a supplied list replaces them,** and files dropped from it are deleted from storage. The edit modal sends no list, so editing text cannot silently discard a shortlist.
+- **There is no Prisma fallback for the upload**, unlike the other admin writes. Recording a row that points at a file no service stored is worse than failing the upload.
+
+## 2026-09-17 — One data table for every admin list
+
+Eleven admin screens each rendered their own table: a `.admin-row` CSS grid with the column widths inlined per page, a hand-written search box, and a `useMemo` that filtered the array. None of them sorted, none of them paginated, and none of them let the viewer choose columns, so a thousand-row register was a thousand rows in the DOM.
+
+`frontend/src/components/common/data-table.tsx` is now the only table in the admin portal, and `frontend/src/lib/data-table.ts` holds the pipeline behind it.
+
+- **The pipeline is separate from the component and is the tested part.** Search, then filters, then sorting, then pagination, in that order, over plain arrays. Pagination running last is what makes a search that leaves 12 of 100 rows say "Page 1 of 1", and `frontend/src/lib/data-table.test.ts` pins that along with the comparator.
+- **A column declares `sortValue` separately from what it renders.** Returning the raw number, `Date`, or boolean is what keeps 10 above 9.2 and orders a date by its instant; sorting the formatted cell is the failure this shape exists to prevent. A column with no `sortValue` is not sortable, which is the honest answer for an actions column.
+- **Empty values sort last in both directions.** A missing CGPA is unknown rather than lowest, and burying it keeps the top of the column meaningful whichever way it is pointing.
+- **Semantic `<table>` markup replaced the CSS grid rows.** `aria-sort`, header buttons, a sticky `<thead>`, and honest column widths come with it, and a wide register now scrolls sideways inside the card instead of squeezing every column to nothing.
+- **Filters are multi-select, AND across fields and OR within one.** The page-level `<select>` controls that narrowed rows became these; the ones that change what is fetched, or that are not a value match, stay on the page and are passed through `toolbarExtras`.
+- **Hidden columns persist per viewer in `localStorage`, read through `useSyncExternalStore`** the way the theme is, so the server render and the first client paint agree. One column always stays visible.
+- **The table reports its view rather than owning what depends on it.** `onViewChange` is how the applications CSV keeps honouring the on-screen filters, how bulk selection covers the rows actually displayed, and how the team screen's reorder arrows know which rows they sit between.
+- **The team table is neither sortable nor paginated.** Its order is the order the team is published in, and the move arrows are how it changes; a sortable column would quietly lie about what those arrows do.

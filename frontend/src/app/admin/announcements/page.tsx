@@ -19,6 +19,7 @@ export default async function Page() {
       include: {
         company: { select: { id: true, name: true, logoUrl: true } },
         createdBy: { select: { name: true, email: true } },
+        attachments: { orderBy: { uploadedAt: "asc" } },
       },
     }),
     db.company.findMany({
@@ -41,6 +42,12 @@ export default async function Page() {
     createdAt: a.createdAt.toISOString(),
     createdByName: a.createdBy?.name ?? null,
     createdByEmail: a.createdBy?.email ?? null,
+    attachments: a.attachments.map((file) => ({
+      fileName: file.fileName,
+      fileUrl: file.fileUrl,
+      mimeType: file.mimeType,
+      sizeBytes: file.sizeBytes,
+    })),
   }));
 
   const companyOptions: CompanyOption[] = companies.map((c) => ({
