@@ -1,5 +1,56 @@
 @import "tailwindcss";
+@import "tw-animate-css";
 @import "./admin.css";
+
+/* The theme toggle sets both `data-theme` and `.dark`; match either so shadcn
+   components and the hand-written CSS agree on what "dark" means. */
+@custom-variant dark (&:is([data-theme="dark"] *, .dark *));
+
+/* shadcn/ui token bridge.
+ *
+ * shadcn components are written against `bg-background`, `text-muted-foreground`,
+ * `border-input` and friends. Rather than adopting shadcn's own palette, those
+ * utilities are pointed at the semantic tokens this repo already themes, so a
+ * migrated component inherits the institute palette and both themes for free.
+ *
+ * These are `--color-*` entries only. Declaring shadcn's bare names in `:root`
+ * would collide: `--muted` here is muted *text* (117 usages) whereas shadcn's
+ * `--muted` is a muted *surface* and `--muted-foreground` is its text.
+ */
+@theme inline {
+  --color-background: var(--surface);
+  --color-foreground: var(--ink);
+
+  --color-card: var(--card-bg);
+  --color-card-foreground: var(--ink);
+  --color-popover: var(--card-bg);
+  --color-popover-foreground: var(--ink);
+
+  /* Primary is the brand orange, secondary the analytics teal. */
+  --color-primary: var(--navy);
+  --color-primary-foreground: #ffffff;
+  --color-secondary: var(--surface-alt);
+  --color-secondary-foreground: var(--ink);
+
+  --color-muted: var(--surface-alt);
+  --color-muted-foreground: var(--muted);
+  --color-accent: var(--surface-highlight);
+  --color-accent-foreground: var(--ink);
+
+  --color-destructive: var(--badge-red-text);
+  --color-destructive-foreground: #ffffff;
+
+  --color-border: var(--border);
+  --color-input: var(--border);
+  --color-ring: var(--blue);
+
+  /* Matches the 10px radius of .form-grid input, so a migrated control sits
+     flush beside one that has not been migrated yet. */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --radius-xl: 14px;
+}
 
 /* Palette ramp. These are the only literal brand hex values in the repository;
    every rule reads the semantic tokens below instead. See docs/DECISIONS.md
@@ -986,7 +1037,11 @@ button { cursor: pointer; }
 .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .form-grid label { font-size: 11px; color: var(--muted); font-weight: 700; display: grid; gap: 5px; }
 .form-grid label.wide { grid-column: 1/-1; }
-.form-grid input {
+/* Selects share the input rule rather than copying its values, so a closed-list
+   field is the same control as the one beside it in every theme and at every
+   breakpoint. The native arrow is kept, as on every other select in the portal. */
+.form-grid input,
+.form-grid select {
   display: block;
   width: 100%;
   border: 1px solid var(--border);
@@ -997,8 +1052,13 @@ button { cursor: pointer; }
   font-size: 12px;
   transition: all 0.15s ease;
 }
-.form-grid input:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px rgba(var(--brand-rgb), 0.15); }
-.form-grid input:disabled { background: var(--surface-alt); color: var(--muted); }
+.form-grid input:focus,
+.form-grid select:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px rgba(var(--brand-rgb), 0.15); }
+.form-grid input:disabled,
+.form-grid select:disabled { background: var(--surface-alt); color: var(--muted); }
+.form-grid select { cursor: pointer; }
+.form-grid select:hover:not(:disabled) { border-color: var(--blue); }
+.form-grid select:disabled { cursor: not-allowed; }
 
 /* Feedback form */
 .feedback-form { background: var(--card-bg); border: 1px solid var(--border); border-radius: 18px; padding: 28px; box-shadow: var(--card-shadow); }

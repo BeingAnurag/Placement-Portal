@@ -13,7 +13,7 @@ export async function POST(
   { params }: { params: Promise<{ type: string }> },
 ) {
   const { type } = await params;
-  if (type !== "aadhaar" && type !== "pan") {
+  if (type !== "aadhaar" && type !== "pan" && type !== "college-id") {
     return NextResponse.json({ error: "Invalid document type" }, { status: 400 });
   }
 
@@ -31,7 +31,8 @@ export async function POST(
 
   // Attempt backend proxy first
   try {
-    const payloadKey = type === "aadhaar" ? "aadhaar" : "pan";
+    const payloadKey =
+      type === "aadhaar" ? "aadhaar" : type === "pan" ? "pan" : "collegeId";
     // For admin, we don't proxy to backend because the backend requires a student token for this endpoint,
     // and would check the admin's own Aadhaar instead of the student's.
     // Skip proxying and go straight to local fallback if an admin studentId is provided.
@@ -139,10 +140,36 @@ export async function POST(
       console.error("Failed to decrypt stored PAN", err);
       return NextResponse.json({ error: "Failed to verify stored record" }, { status: 500 });
     }
+  } else if (type === "college-id") {
+    if (!user.collegeIdEncrypted || !user.collegeIdDocUrl) {
+      return NextResponse.json({ error: "No College ID document uploaded" }, { status: 404 });
+    }
+    try {
+      const realCollegeId = decryptSensitiveValue(user.collegeIdEncrypted);
+      if (realCollegeId.toUpperCase() !== number.toUpperCase()) {
+        return NextResponse.json(
+          { error: "Incorrect College ID. Access denied." },
+          { status: 403 },
+        );
+      }
+    } catch (err) {
+      console.error("Failed to decrypt stored College ID", err);
+      return NextResponse.json({ error: "Failed to verify stored record" }, { status: 500 });
+    }
   }
 
-  const docUrl = type === "aadhaar" ? user.aadhaarDocUrl : user.panCardDocUrl;
-  const fileName = (type === "aadhaar" ? user.aadhaarDocFileName : user.panCardDocFileName) || `${type}_doc.pdf`;
+  const docUrl =
+    type === "aadhaar"
+      ? user.aadhaarDocUrl
+      : type === "pan"
+        ? user.panCardDocUrl
+        : user.collegeIdDocUrl;
+  const fileName =
+    (type === "aadhaar"
+      ? user.aadhaarDocFileName
+      : type === "pan"
+        ? user.panCardDocFileName
+        : user.collegeIdDocFileName) || `${type}_doc.pdf`;
 
   if (!docUrl) {
     return NextResponse.json({ error: "Document not found" }, { status: 404 });

@@ -34,6 +34,11 @@ export type BackendProfile = {
   panMasked?: string | null;
   panDocProvided?: boolean;
   panDocFileName?: string | null;
+  collegeIdEncrypted?: string | null;
+  collegeIdProvided?: boolean;
+  collegeIdMasked?: string | null;
+  collegeIdDocProvided?: boolean;
+  collegeIdDocFileName?: string | null;
 };
 
 export type BackendResume = {

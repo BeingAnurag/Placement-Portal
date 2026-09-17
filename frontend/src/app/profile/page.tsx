@@ -52,6 +52,10 @@ export default async function Page() {
       panMasked: user?.panMasked ?? (user?.panCardEncrypted ? "••••• ••••" : null),
       panDocProvided: Boolean(user?.panDocProvided),
       panDocFileName: user?.panDocFileName ?? null,
+      collegeIdProvided: Boolean(user?.collegeIdProvided ?? user?.collegeIdEncrypted),
+      collegeIdMasked: user?.collegeIdMasked ?? (user?.collegeIdEncrypted ? "••••••••" : null),
+      collegeIdDocProvided: Boolean(user?.collegeIdDocProvided),
+      collegeIdDocFileName: user?.collegeIdDocFileName ?? null,
     },
     resumes: resumes.map((resume) => ({
       id: resume.id,

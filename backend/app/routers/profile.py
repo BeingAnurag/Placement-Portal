@@ -1,3 +1,4 @@
+import re
 import os
 from pathlib import Path
 from fastapi import APIRouter, Depends, Form, HTTPException, Response, UploadFile, File, status
@@ -9,6 +10,8 @@ from app.models.db import User, Resume
 from app.schemas.student import (
     AadhaarUnlockRequest,
     AadhaarUpdate,
+    CollegeIdUnlockRequest,
+    CollegeIdUpdate,
     PanUnlockRequest,
     PanUpdate,
     ResumeResponse,
@@ -38,6 +41,18 @@ def _mask_aadhaar(encrypted_val: str | None) -> str | None:
         return "•••• •••• ••••"
     except Exception:
         return "•••• •••• ••••"
+
+
+def _mask_college_id(encrypted_val: str | None) -> str | None:
+    if not encrypted_val or not is_encrypted(encrypted_val):
+        return None
+    try:
+        raw = decrypt_value(encrypted_val)
+        if len(raw) >= 4:
+            return f"••••{raw[-4:]}"
+        return "••••"
+    except Exception:
+        return "••••"
 
 
 def _mask_pan(encrypted_val: str | None) -> str | None:
@@ -87,6 +102,10 @@ async def get_profile(
         panMasked=_mask_pan(user.panCardEncrypted),
         panDocProvided=bool(user.panCardDocUrl),
         panDocFileName=user.panCardDocFileName,
+        collegeIdProvided=bool(user.collegeIdEncrypted),
+        collegeIdMasked=_mask_college_id(user.collegeIdEncrypted),
+        collegeIdDocProvided=bool(user.collegeIdDocUrl),
+        collegeIdDocFileName=user.collegeIdDocFileName,
         class10Percent=user.class10Percent,
         class12Percent=user.class12Percent,
         cgpa=user.cgpa,
@@ -421,3 +440,143 @@ async def delete_resume(
     return {"message": "Resume deleted successfully."}
 
 
+
+
+# ---------------------------------------------------------------------------
+# College ID card
+#
+# Mirrors the Aadhaar and PAN flow: the card number is encrypted at rest, the
+# scan is encrypted on disk, and the number is the challenge that unlocks it.
+# The number is normalised to upper case on the way in so that the unlock
+# comparison does not fail on casing the student did not intend.
+# ---------------------------------------------------------------------------
+
+
+def _normalise_college_id(value: str) -> str:
+    return value.strip().upper()
+
+
+@router.put("/college-id")
+async def save_college_id(
+    data: CollegeIdUpdate,
+    user_payload: dict = Depends(require_student),
+    db: AsyncSession = Depends(get_db),
+):
+    user = await db.scalar(select(User).where(User.id == user_payload["sub"]))
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    clean = _normalise_college_id(data.collegeId)
+    user.collegeIdEncrypted = encrypt_value(clean)
+    await db.commit()
+    return {"message": "College ID saved securely", "masked": f"••••{clean[-4:]}"}
+
+
+@router.post("/college-id-doc")
+async def upload_college_id_document(
+    file: UploadFile = File(...),
+    collegeId: str = Form(...),
+    user_payload: dict = Depends(require_student),
+    db: AsyncSession = Depends(get_db),
+):
+    clean = _normalise_college_id(collegeId)
+    if not re.fullmatch(r"[A-Z0-9/-]{4,20}", clean):
+        raise HTTPException(
+            status_code=400,
+            detail="College ID must be 4-20 letters, digits, hyphens, or slashes.",
+        )
+
+    user = await db.scalar(select(User).where(User.id == user_payload["sub"]))
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    content = await file.read()
+    try:
+        validate_pdf(content)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    encrypted_payload = encrypt_bytes(content)
+
+    target_dir = LOCAL_UPLOADS_DIR / "identity_docs" / user.id
+    target_dir.mkdir(parents=True, exist_ok=True)
+    target_file = target_dir / "college_id.enc"
+    target_file.write_bytes(encrypted_payload)
+
+    user.collegeIdEncrypted = encrypt_value(clean)
+    user.collegeIdDocUrl = f"identity_docs/{user.id}/college_id.enc"
+    user.collegeIdDocFileName = file.filename or "college_id.pdf"
+
+    await db.commit()
+    return {
+        "message": "College ID document encrypted and saved securely.",
+        "fileName": user.collegeIdDocFileName,
+        "masked": f"••••{clean[-4:]}",
+    }
+
+
+@router.post("/college-id-doc/unlock")
+async def unlock_college_id_document(
+    request_data: CollegeIdUnlockRequest,
+    user_payload: dict = Depends(require_student),
+    db: AsyncSession = Depends(get_db),
+):
+    user = await db.scalar(select(User).where(User.id == user_payload["sub"]))
+    if not user or not user.collegeIdDocUrl:
+        raise HTTPException(status_code=404, detail="College ID document not found.")
+
+    if not user.collegeIdEncrypted:
+        raise HTTPException(status_code=400, detail="No College ID number on record.")
+
+    try:
+        real_college_id = decrypt_value(user.collegeIdEncrypted)
+    except Exception:
+        raise HTTPException(status_code=500, detail="Failed to decrypt identity record.")
+
+    if real_college_id != _normalise_college_id(request_data.collegeId):
+        raise HTTPException(
+            status_code=403,
+            detail="Incorrect College ID number. Verification failed and document cannot be unlocked.",
+        )
+
+    file_path = LOCAL_UPLOADS_DIR / user.collegeIdDocUrl
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Encrypted document file not found.")
+
+    try:
+        encrypted_bytes = file_path.read_bytes()
+        decrypted_pdf = decrypt_bytes(encrypted_bytes)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Decryption failed: {str(e)}")
+
+    return Response(
+        content=decrypted_pdf,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f"inline; filename=\"{user.collegeIdDocFileName or 'college_id.pdf'}\"",
+            "X-Frame-Options": "SAMEORIGIN",
+        },
+    )
+
+
+@router.delete("/college-id-doc")
+async def delete_college_id_document(
+    user_payload: dict = Depends(require_student),
+    db: AsyncSession = Depends(get_db),
+):
+    user = await db.scalar(select(User).where(User.id == user_payload["sub"]))
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if user.collegeIdDocUrl:
+        file_path = LOCAL_UPLOADS_DIR / user.collegeIdDocUrl
+        if file_path.exists():
+            try:
+                os.remove(file_path)
+            except Exception:
+                pass
+        user.collegeIdDocUrl = None
+        user.collegeIdDocFileName = None
+        await db.commit()
+
+    return {"message": "College ID document removed successfully."}

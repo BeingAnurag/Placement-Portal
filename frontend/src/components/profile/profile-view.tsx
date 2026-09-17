@@ -27,14 +27,19 @@ import {
   deletePanDocAction,
   deleteResumeAction,
   renameResumeAction,
+  deleteCollegeIdDocAction,
   updateAadhaarAction,
+  updateCollegeIdAction,
   updatePanAction,
+  uploadCollegeIdDocAction,
   updateStudentProfile,
   uploadAadhaarDocAction,
   uploadPanDocAction,
   type ProfileUpdateResult,
 } from "@/app/profile/actions";
 import { uploadResume } from "@/app/profile/upload-action";
+import { IdentityDocumentRow } from "@/components/profile/identity-document-row";
+import { BACKLOG_OPTIONS, BLOOD_GROUPS, GENDERS } from "@/lib/profile-schema";
 
 type ProfileValues = {
   name: string;
@@ -70,6 +75,10 @@ export type StudentProfileViewData = {
     panMasked?: string | null;
     panDocProvided?: boolean;
     panDocFileName?: string | null;
+    collegeIdProvided: boolean;
+    collegeIdMasked?: string | null;
+    collegeIdDocProvided?: boolean;
+    collegeIdDocFileName?: string | null;
   };
   resumes: Array<{
     id: string;
@@ -90,27 +99,43 @@ const LOCKED_FIELDS = new Set<keyof ProfileValues>([
   "batch",
 ]);
 
-const personalFields: Array<[keyof ProfileValues, string, string]> = [
-  ["name", "Full name", "text"],
-  ["dateOfBirth", "Date of birth", "date"],
-  ["gender", "Gender", "text"],
-  ["bloodGroup", "Blood group", "text"],
+/**
+ * A field descriptor. Supplying `options` renders the shared `.form-grid`
+ * select instead of an input, so a new closed-list field is one entry here
+ * rather than new markup.
+ */
+type ProfileField = {
+  key: keyof ProfileValues;
+  label: string;
+  type: string;
+  options?: readonly string[];
+  /** Native hints for immediate feedback. The schema is what actually decides. */
+  step?: string;
+  min?: number;
+  max?: number;
+};
+
+const personalFields: ProfileField[] = [
+  { key: "name", label: "Full name", type: "text" },
+  { key: "dateOfBirth", label: "Date of birth", type: "date" },
+  { key: "gender", label: "Gender", type: "text", options: GENDERS },
+  { key: "bloodGroup", label: "Blood group", type: "text", options: BLOOD_GROUPS },
 ];
-const academicFields: Array<[keyof ProfileValues, string, string]> = [
-  ["rollNumber", "Roll number", "text"],
-  ["branch", "Branch", "text"],
-  ["degree", "Degree", "text"],
-  ["batch", "Graduation year", "number"],
-  ["class10Percent", "Class 10 %", "number"],
-  ["class12Percent", "Class 12 %", "number"],
-  ["cgpa", "Current CGPA", "number"],
-  ["backlogs", "Active backlogs", "number"],
+const academicFields: ProfileField[] = [
+  { key: "rollNumber", label: "Roll number", type: "text" },
+  { key: "branch", label: "Branch", type: "text" },
+  { key: "degree", label: "Degree", type: "text" },
+  { key: "batch", label: "Graduation year", type: "number" },
+  { key: "class10Percent", label: "Class 10 %", type: "number", step: "0.01", min: 0, max: 100 },
+  { key: "class12Percent", label: "Class 12 %", type: "number", step: "0.01", min: 0, max: 100 },
+  { key: "cgpa", label: "Current CGPA", type: "number", step: "0.01", min: 0, max: 10 },
+  { key: "backlogs", label: "Active backlogs", type: "number", options: BACKLOG_OPTIONS },
 ];
-const contactFields: Array<[keyof ProfileValues, string, string]> = [
-  ["personalEmail", "Personal email", "email"],
-  ["contactNumber", "Phone", "tel"],
-  ["altContactNumber", "Alternate phone", "tel"],
-  ["currentAddress", "Current address", "text"],
+const contactFields: ProfileField[] = [
+  { key: "personalEmail", label: "Personal email", type: "email" },
+  { key: "contactNumber", label: "Phone", type: "tel" },
+  { key: "altContactNumber", label: "Alternate phone", type: "tel" },
+  { key: "currentAddress", label: "Current address", type: "text" },
 ];
 
 const DATE_FMT = new Intl.DateTimeFormat("en-IN", {
@@ -145,9 +170,16 @@ export function ProfileView({ profile }: { profile: StudentProfileViewData }) {
   const [panDocModal, setPanDocModal] = useState(false);
   const [panDocError, setPanDocError] = useState<string | null>(null);
 
+  const [collegeIdModal, setCollegeIdModal] = useState(false);
+  const [collegeIdInput, setCollegeIdInput] = useState("");
+  const [collegeIdError, setCollegeIdError] = useState<string | null>(null);
+
+  const [collegeIdDocModal, setCollegeIdDocModal] = useState(false);
+  const [collegeIdDocError, setCollegeIdDocError] = useState<string | null>(null);
+
   // Unlock identity doc modal
   const [unlockDocModal, setUnlockDocModal] = useState<{
-    type: "aadhaar" | "pan";
+    type: "aadhaar" | "pan" | "college-id";
     label: string;
     fileName: string;
   } | null>(null);
@@ -299,6 +331,31 @@ export function ProfileView({ profile }: { profile: StudentProfileViewData }) {
     });
   }
 
+  function handleCollegeIdSubmit(e: FormEvent) {
+    e.preventDefault();
+    setCollegeIdError(null);
+    const formData = new FormData();
+    formData.append("collegeId", collegeIdInput.trim().toUpperCase());
+    startTransition(async () => {
+      const res = await updateCollegeIdAction(formData);
+      if (res.error) {
+        setCollegeIdError(res.error);
+      } else {
+        setCollegeIdModal(false);
+        setCollegeIdInput("");
+        router.refresh();
+      }
+    });
+  }
+
+  function handleDeleteCollegeIdDoc() {
+    if (!confirm("Are you sure you want to remove the uploaded College ID document?")) return;
+    startTransition(async () => {
+      await deleteCollegeIdDocAction();
+      router.refresh();
+    });
+  }
+
   function handleDeletePanDoc() {
     if (!confirm("Are you sure you want to remove the uploaded PAN document?")) return;
     startTransition(async () => {
@@ -347,24 +404,47 @@ export function ProfileView({ profile }: { profile: StudentProfileViewData }) {
     });
   }
 
-  function renderFields(fields: Array<[keyof ProfileValues, string, string]>) {
-    return fields.map(([key, label, type]) => {
+  function renderFields(fields: ProfileField[]) {
+    return fields.map(({ key, label, type, options, step, min, max }) => {
       const locked = LOCKED_FIELDS.has(key);
+      const error = result.fieldErrors?.[key]?.[0];
+      const shared = {
+        name: key,
+        disabled: locked || !editing,
+        value: form[key],
+        title: locked ? "Set by the placement office from the official roster" : undefined,
+        "aria-invalid": error ? (true as const) : undefined,
+        "aria-errormessage": error ? `${key}-error` : undefined,
+        onChange: (event: { target: { value: string } }) => update(key, event.target.value),
+      };
+
       return (
         <label className={key === "currentAddress" ? "wide" : ""} key={key}>
           {label}
-          <input
-            name={key}
-            type={type}
-            disabled={locked || !editing}
-            value={form[key]}
-            step={type === "number" ? "any" : undefined}
-            placeholder="Not provided"
-            title={locked ? "Set by the placement office from the official roster" : undefined}
-            onChange={(event) => update(key, event.target.value)}
-          />
-          {result.fieldErrors?.[key]?.[0] ? (
-            <small className="field-error">{result.fieldErrors[key][0]}</small>
+          {options ? (
+            <select {...shared}>
+              {/* Every one of these fields is optional, so clearing stays possible. */}
+              <option value="">Not provided</option>
+              {options.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <input
+              {...shared}
+              type={type}
+              step={type === "number" ? (step ?? "any") : undefined}
+              min={min}
+              max={max}
+              placeholder="Not provided"
+            />
+          )}
+          {error ? (
+            <small className="field-error" id={`${key}-error`}>
+              {error}
+            </small>
           ) : null}
         </label>
       );
@@ -475,338 +555,93 @@ export function ProfileView({ profile }: { profile: StudentProfileViewData }) {
                 <p>Numbers and document files are encrypted at rest with AES-256-GCM</p>
               </div>
             </header>
-            <div style={{ display: "grid", gap: "12px" }}>
-              {/* Aadhaar Card Box */}
-              <div
-                style={{
-                  display: "grid",
-                  gap: "10px",
-                  padding: "14px",
-                  background: "var(--surface-alt)",
-                  borderRadius: "10px",
-                  border: "1px solid var(--border)",
+            <div className="grid gap-3">
+              <IdentityDocumentRow
+                title="Aadhaar card"
+                icon={<IdCard className="size-4.5 shrink-0 text-[color:var(--blue)]" />}
+                masked={profile.identityDocuments.aadhaarMasked}
+                provided={profile.identityDocuments.aadhaarProvided}
+                docProvided={Boolean(profile.identityDocuments.aadhaarDocProvided)}
+                docFileName={profile.identityDocuments.aadhaarDocFileName}
+                fallbackFileName="aadhaar_card.pdf"
+                onEditNumber={() => {
+                  setAadhaarError(null);
+                  setAadhaarInput("");
+                  setAadhaarModal(true);
                 }}
-              >
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                    <IdCard style={{ width: "18px", color: "var(--blue)" }} />
-                    <div>
-                      <strong style={{ fontSize: "12px", display: "block", color: "var(--ink)" }}>
-                        Aadhaar card
-                      </strong>
-                      <span style={{ fontSize: "11px", color: "var(--muted)" }}>
-                        {profile.identityDocuments.aadhaarMasked || (profile.identityDocuments.aadhaarProvided ? "Encrypted on file" : "Number not added")}
-                      </span>
-                    </div>
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                    <b
-                      style={{
-                        fontSize: "9px",
-                        fontWeight: 700,
-                        padding: "3px 8px",
-                        borderRadius: "6px",
-                        background: profile.identityDocuments.aadhaarProvided ? "var(--badge-green-bg)" : "var(--badge-orange-bg)",
-                        color: profile.identityDocuments.aadhaarProvided ? "var(--badge-green-text)" : "var(--badge-orange-text)",
-                      }}
-                    >
-                      {profile.identityDocuments.aadhaarProvided ? "Number Added" : "Missing"}
-                    </b>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setAadhaarError(null);
-                        setAadhaarInput("");
-                        setAadhaarModal(true);
-                      }}
-                      style={{
-                        border: "1px solid var(--border)",
-                        background: "var(--card-bg)",
-                        color: "var(--ink)",
-                        borderRadius: "6px",
-                        padding: "4px 8px",
-                        fontSize: "10px",
-                        fontWeight: 700,
-                        cursor: "pointer",
-                      }}
-                    >
-                      {profile.identityDocuments.aadhaarProvided ? "Edit Number" : "Add Number"}
-                    </button>
-                  </div>
-                </div>
-
-                {/* Aadhaar Document File Status & Actions */}
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    paddingTop: "8px",
-                    borderTop: "1px dashed var(--border)",
-                  }}
-                >
-                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                    {profile.identityDocuments.aadhaarDocProvided ? (
-                      <>
-                        <ShieldCheck style={{ width: "14px", height: "14px", color: "var(--green)" }} />
-                        <span style={{ fontSize: "10px", color: "var(--ink)", fontWeight: 600 }}>
-                          {profile.identityDocuments.aadhaarDocFileName || "aadhaar_card.pdf"} (AES-256 Encrypted)
-                        </span>
-                      </>
-                    ) : (
-                      <>
-                        <Lock style={{ width: "13px", height: "13px", color: "var(--muted)" }} />
-                        <span style={{ fontSize: "10px", color: "var(--muted)" }}>No document file uploaded</span>
-                      </>
-                    )}
-                  </div>
-
-                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                    {profile.identityDocuments.aadhaarDocProvided && (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setUnlockError(null);
-                            setUnlockInput("");
-                            setUnlockDocModal({
-                              type: "aadhaar",
-                              label: "Aadhaar Card Document",
-                              fileName: profile.identityDocuments.aadhaarDocFileName || "aadhaar_card.pdf",
-                            });
-                          }}
-                          style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: "4px",
-                            background: "var(--badge-blue-bg)",
-                            color: "var(--badge-blue-text)",
-                            border: "1px solid var(--blue)",
-                            borderRadius: "6px",
-                            padding: "4px 8px",
-                            fontSize: "10px",
-                            fontWeight: 700,
-                            cursor: "pointer",
-                          }}
-                        >
-                          <Eye style={{ width: "12px", height: "12px" }} />
-                          Preview
-                        </button>
-                        <button
-                          type="button"
-                          onClick={handleDeleteAadhaarDoc}
-                          style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: "3px",
-                            background: "var(--badge-red-bg)",
-                            color: "var(--badge-red-text)",
-                            border: "1px solid var(--badge-red-text)",
-                            borderRadius: "6px",
-                            padding: "4px 6px",
-                            fontSize: "10px",
-                            fontWeight: 700,
-                            cursor: "pointer",
-                          }}
-                          title="Remove Aadhaar document"
-                        >
-                          <Trash2 style={{ width: "12px", height: "12px" }} />
-                        </button>
-                      </>
-                    )}
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setAadhaarDocError(null);
-                        setAadhaarDocModal(true);
-                      }}
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: "4px",
-                        background: "var(--navy)",
-                        color: "#fff",
-                        border: 0,
-                        borderRadius: "6px",
-                        padding: "4px 8px",
-                        fontSize: "10px",
-                        fontWeight: 700,
-                        cursor: "pointer",
-                      }}
-                    >
-                      <UploadCloud style={{ width: "12px", height: "12px" }} />
-                      {profile.identityDocuments.aadhaarDocProvided ? "Replace Doc" : "Upload Doc"}
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* PAN Card Box */}
-              <div
-                style={{
-                  display: "grid",
-                  gap: "10px",
-                  padding: "14px",
-                  background: "var(--surface-alt)",
-                  borderRadius: "10px",
-                  border: "1px solid var(--border)",
+                onPreview={() => {
+                  setUnlockError(null);
+                  setUnlockInput("");
+                  setUnlockDocModal({
+                    type: "aadhaar",
+                    label: "Aadhaar Card Document",
+                    fileName: profile.identityDocuments.aadhaarDocFileName || "aadhaar_card.pdf",
+                  });
                 }}
-              >
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                    <FileText style={{ width: "18px", color: "var(--orange)" }} />
-                    <div>
-                      <strong style={{ fontSize: "12px", display: "block", color: "var(--ink)" }}>
-                        PAN card
-                      </strong>
-                      <span style={{ fontSize: "11px", color: "var(--muted)" }}>
-                        {profile.identityDocuments.panMasked || (profile.identityDocuments.panProvided ? "Encrypted on file" : "Number not added")}
-                      </span>
-                    </div>
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                    <b
-                      style={{
-                        fontSize: "9px",
-                        fontWeight: 700,
-                        padding: "3px 8px",
-                        borderRadius: "6px",
-                        background: profile.identityDocuments.panProvided ? "var(--badge-green-bg)" : "var(--badge-orange-bg)",
-                        color: profile.identityDocuments.panProvided ? "var(--badge-green-text)" : "var(--badge-orange-text)",
-                      }}
-                    >
-                      {profile.identityDocuments.panProvided ? "Number Added" : "Missing"}
-                    </b>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setPanError(null);
-                        setPanInput("");
-                        setPanModal(true);
-                      }}
-                      style={{
-                        border: "1px solid var(--border)",
-                        background: "var(--card-bg)",
-                        color: "var(--ink)",
-                        borderRadius: "6px",
-                        padding: "4px 8px",
-                        fontSize: "10px",
-                        fontWeight: 700,
-                        cursor: "pointer",
-                      }}
-                    >
-                      {profile.identityDocuments.panProvided ? "Edit Number" : "Add Number"}
-                    </button>
-                  </div>
-                </div>
+                onDelete={handleDeleteAadhaarDoc}
+                onUpload={() => {
+                  setAadhaarDocError(null);
+                  setAadhaarDocModal(true);
+                }}
+              />
 
-                {/* PAN Document File Status & Actions */}
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    paddingTop: "8px",
-                    borderTop: "1px dashed var(--border)",
-                  }}
-                >
-                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                    {profile.identityDocuments.panDocProvided ? (
-                      <>
-                        <ShieldCheck style={{ width: "14px", height: "14px", color: "var(--green)" }} />
-                        <span style={{ fontSize: "10px", color: "var(--ink)", fontWeight: 600 }}>
-                          {profile.identityDocuments.panDocFileName || "pan_card.pdf"} (AES-256 Encrypted)
-                        </span>
-                      </>
-                    ) : (
-                      <>
-                        <Lock style={{ width: "13px", height: "13px", color: "var(--muted)" }} />
-                        <span style={{ fontSize: "10px", color: "var(--muted)" }}>No document file uploaded</span>
-                      </>
-                    )}
-                  </div>
+              <IdentityDocumentRow
+                title="PAN card"
+                icon={<FileText className="size-4.5 shrink-0 text-[color:var(--orange)]" />}
+                masked={profile.identityDocuments.panMasked}
+                provided={profile.identityDocuments.panProvided}
+                docProvided={Boolean(profile.identityDocuments.panDocProvided)}
+                docFileName={profile.identityDocuments.panDocFileName}
+                fallbackFileName="pan_card.pdf"
+                onEditNumber={() => {
+                  setPanError(null);
+                  setPanInput("");
+                  setPanModal(true);
+                }}
+                onPreview={() => {
+                  setUnlockError(null);
+                  setUnlockInput("");
+                  setUnlockDocModal({
+                    type: "pan",
+                    label: "PAN Card Document",
+                    fileName: profile.identityDocuments.panDocFileName || "pan_card.pdf",
+                  });
+                }}
+                onDelete={handleDeletePanDoc}
+                onUpload={() => {
+                  setPanDocError(null);
+                  setPanDocModal(true);
+                }}
+              />
 
-                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                    {profile.identityDocuments.panDocProvided && (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setUnlockError(null);
-                            setUnlockInput("");
-                            setUnlockDocModal({
-                              type: "pan",
-                              label: "PAN Card Document",
-                              fileName: profile.identityDocuments.panDocFileName || "pan_card.pdf",
-                            });
-                          }}
-                          style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: "4px",
-                            background: "var(--badge-blue-bg)",
-                            color: "var(--badge-blue-text)",
-                            border: "1px solid var(--blue)",
-                            borderRadius: "6px",
-                            padding: "4px 8px",
-                            fontSize: "10px",
-                            fontWeight: 700,
-                            cursor: "pointer",
-                          }}
-                        >
-                          <Eye style={{ width: "12px", height: "12px" }} />
-                          Preview
-                        </button>
-                        <button
-                          type="button"
-                          onClick={handleDeletePanDoc}
-                          style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: "3px",
-                            background: "var(--badge-red-bg)",
-                            color: "var(--badge-red-text)",
-                            border: "1px solid var(--badge-red-text)",
-                            borderRadius: "6px",
-                            padding: "4px 6px",
-                            fontSize: "10px",
-                            fontWeight: 700,
-                            cursor: "pointer",
-                          }}
-                          title="Remove PAN document"
-                        >
-                          <Trash2 style={{ width: "12px", height: "12px" }} />
-                        </button>
-                      </>
-                    )}
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setPanDocError(null);
-                        setPanDocModal(true);
-                      }}
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: "4px",
-                        background: "var(--navy)",
-                        color: "#fff",
-                        border: 0,
-                        borderRadius: "6px",
-                        padding: "4px 8px",
-                        fontSize: "10px",
-                        fontWeight: 700,
-                        cursor: "pointer",
-                      }}
-                    >
-                      <UploadCloud style={{ width: "12px", height: "12px" }} />
-                      {profile.identityDocuments.panDocProvided ? "Replace Doc" : "Upload Doc"}
-                    </button>
-                  </div>
-                </div>
-              </div>
+              <IdentityDocumentRow
+                title="College ID card"
+                icon={<GraduationCap className="size-4.5 shrink-0 text-[color:var(--navy)]" />}
+                masked={profile.identityDocuments.collegeIdMasked}
+                provided={profile.identityDocuments.collegeIdProvided}
+                docProvided={Boolean(profile.identityDocuments.collegeIdDocProvided)}
+                docFileName={profile.identityDocuments.collegeIdDocFileName}
+                fallbackFileName="college_id.pdf"
+                onEditNumber={() => {
+                  setCollegeIdError(null);
+                  setCollegeIdInput("");
+                  setCollegeIdModal(true);
+                }}
+                onPreview={() => {
+                  setUnlockError(null);
+                  setUnlockInput("");
+                  setUnlockDocModal({
+                    type: "college-id",
+                    label: "College ID Card Document",
+                    fileName: profile.identityDocuments.collegeIdDocFileName || "college_id.pdf",
+                  });
+                }}
+                onDelete={handleDeleteCollegeIdDoc}
+                onUpload={() => {
+                  setCollegeIdDocError(null);
+                  setCollegeIdDocModal(true);
+                }}
+              />
             </div>
           </article>
 
@@ -1395,14 +1230,22 @@ export function ProfileView({ profile }: { profile: StudentProfileViewData }) {
               )}
 
               <label style={{ fontSize: "11px", fontWeight: 700, color: "var(--muted)", display: "grid", gap: "6px" }}>
-                Enter full {unlockDocModal.type === "aadhaar" ? "12-digit Aadhaar number" : "10-character PAN"} to decrypt
+                Enter the full{" "}
+                {unlockDocModal.type === "aadhaar"
+                  ? "12-digit Aadhaar number"
+                  : unlockDocModal.type === "pan"
+                    ? "10-character PAN"
+                    : "College ID number"}{" "}
+                to decrypt
                 <input
                   type="text"
                   inputMode={unlockDocModal.type === "aadhaar" ? "numeric" : "text"}
                   autoComplete="off"
                   autoCorrect="off"
                   spellCheck={false}
-                  maxLength={unlockDocModal.type === "aadhaar" ? 12 : 10}
+                  maxLength={
+                    unlockDocModal.type === "aadhaar" ? 12 : unlockDocModal.type === "pan" ? 10 : 20
+                  }
                   value={unlockInput}
                   placeholder=""
                   onChange={(e) =>

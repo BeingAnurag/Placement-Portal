@@ -112,6 +112,11 @@ model User {
   panCardEncrypted             String?
   panCardDocUrl                String?
   panCardDocFileName           String?
+  // College ID card, stored exactly like Aadhaar and PAN: the card number is
+  // encrypted at rest and doubles as the challenge that unlocks the scan.
+  collegeIdEncrypted           String?
+  collegeIdDocUrl              String?
+  collegeIdDocFileName         String?
   class10Percent               Float?
   class12Percent               Float?
   semGPAs                      Float[]

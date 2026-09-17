@@ -406,3 +406,147 @@ export async function deletePanDocAction(): Promise<{ success?: string; error?: 
 }
 
 
+
+// ── College ID card ─────────────────────────────────────────────────────────
+// Same shape as Aadhaar and PAN: the number is encrypted at rest and is the
+// challenge that unlocks the scan. The format is deliberately permissive —
+// institutes issue anything from a roll number to a hyphenated card serial.
+const collegeIdSchema = z
+  .string()
+  .trim()
+  .toUpperCase()
+  .regex(
+    /^[A-Z0-9/-]{4,20}$/,
+    "College ID must be 4-20 letters, digits, hyphens, or slashes.",
+  );
+
+export async function updateCollegeIdAction(
+  formData: FormData,
+): Promise<{ success?: string; error?: string }> {
+  const parsed = collegeIdSchema.safeParse(formData.get("collegeId"));
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message || "Invalid College ID." };
+  }
+
+  const student = await requireStudent();
+  if (!student.user) {
+    return { error: "Sign in to update identity documents." };
+  }
+
+  try {
+    await backendFetch("/api/v1/profile/college-id", {
+      method: "PUT",
+      body: JSON.stringify({ collegeId: parsed.data }),
+    });
+  } catch (backendErr) {
+    try {
+      await db.user.update({
+        where: { id: student.user.id },
+        data: { collegeIdEncrypted: encryptSensitiveValue(parsed.data) },
+      });
+    } catch (fallbackErr) {
+      console.error("Failed to save College ID", fallbackErr || backendErr);
+      return { error: "Failed to save College ID. Please try again." };
+    }
+  }
+
+  revalidatePath("/profile");
+  revalidatePath("/dashboard");
+  return { success: "College ID saved securely." };
+}
+
+export async function uploadCollegeIdDocAction(
+  formData: FormData,
+): Promise<{ success?: string; error?: string }> {
+  const parsedNumber = collegeIdSchema.safeParse(formData.get("collegeId"));
+  if (!parsedNumber.success) {
+    return { error: parsedNumber.error.issues[0]?.message || "Invalid College ID." };
+  }
+
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) {
+    return { error: "Please select a valid PDF file." };
+  }
+  if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
+    return { error: "Only PDF files are allowed for College ID documents." };
+  }
+  if (file.size > 5 * 1024 * 1024) {
+    return { error: "File exceeds 5MB limit." };
+  }
+
+  const student = await requireStudent();
+  if (!student.user) {
+    return { error: "Sign in to continue." };
+  }
+
+  try {
+    const res = await fetch(`${backendBaseUrl()}/api/v1/profile/college-id-doc`, {
+      method: "POST",
+      body: formData,
+      headers: await backendAuthHeader(),
+    });
+    if (!res.ok) {
+      const errText = await res.text();
+      try {
+        return { error: JSON.parse(errText).detail || errText };
+      } catch {
+        return { error: errText };
+      }
+    }
+  } catch (backendErr) {
+    try {
+      const { mkdirSync, writeFileSync } = await import("node:fs");
+      const path = await import("node:path");
+      const { encryptBuffer } = await import("@/lib/encryption");
+
+      const fileBuffer = Buffer.from(await file.arrayBuffer());
+      if (!fileBuffer.subarray(0, 4).equals(Buffer.from("%PDF"))) {
+        return { error: "Uploaded file does not have a valid PDF header." };
+      }
+
+      const encryptedFile = encryptBuffer(fileBuffer);
+      const uploadsDir = process.env.UPLOADS_DIR || "./uploads";
+      const targetDir = path.join(uploadsDir, "identity_docs", student.user.id);
+      mkdirSync(targetDir, { recursive: true });
+      writeFileSync(path.join(targetDir, "college_id.enc"), encryptedFile);
+
+      await db.user.update({
+        where: { id: student.user.id },
+        data: {
+          collegeIdEncrypted: encryptSensitiveValue(parsedNumber.data),
+          collegeIdDocUrl: `identity_docs/${student.user.id}/college_id.enc`,
+          collegeIdDocFileName: file.name,
+        },
+      });
+    } catch (fallbackErr) {
+      console.error("Failed to save College ID document", fallbackErr || backendErr);
+      return { error: "Failed to upload College ID document." };
+    }
+  }
+
+  revalidatePath("/profile");
+  revalidatePath("/dashboard");
+  return { success: "College ID document encrypted and saved successfully." };
+}
+
+export async function deleteCollegeIdDocAction(): Promise<{ success?: string; error?: string }> {
+  const student = await requireStudent();
+  if (!student.user) return { error: "Unauthorized" };
+
+  try {
+    await backendFetch("/api/v1/profile/college-id-doc", { method: "DELETE" });
+  } catch (backendErr) {
+    try {
+      await db.user.update({
+        where: { id: student.user.id },
+        data: { collegeIdDocUrl: null, collegeIdDocFileName: null },
+      });
+    } catch (fallbackErr) {
+      console.error("Failed to delete College ID doc", fallbackErr || backendErr);
+      return { error: "Failed to delete College ID document." };
+    }
+  }
+
+  revalidatePath("/profile");
+  return { success: "College ID document removed." };
+}
