@@ -43,7 +43,7 @@ Important invariants:
 - `NocRequest.message` is the student's remarks and `NocRequest.adminRemarks` is the placement cell's decision remarks. A decision never writes over the student's text.
 - An `Offer` is the placement record and the only source of package figures. An application is not an offer; the two are joined by an optional, unique `applicationId`. An FTE or PPO carries `ctc`, an internship carries `stipend`, and the type the offer is not clears the other. A `DECLINED` or `REVOKED` offer stays on file but is excluded from every statistic, a rule stated once in `COUNTED_OFFER_STATUSES`. The season is the batch stored on the offer, not the student's current batch.
 - An `Announcement` is `DRAFT` or `PUBLISHED`, defaulting to `PUBLISHED`; drafts are filtered out server-side for anyone without `announcements.view`, and the single-announcement route answers 404 for them. `publishedAt` keeps the first publication date through a withdraw and re-publish. A company event may name the drive it is about in `jobProfileId`; a general notice carries neither company nor drive. Attachments are `AnnouncementAttachment` rows; their type is verified against the file's signature rather than its name, and a draft's files are as private as the draft.
-- Sensitive Aadhaar/PAN fields contain encrypted payloads, not plaintext.
+- Sensitive Aadhaar, PAN, and college-ID fields contain encrypted payloads, not plaintext. Each number doubles as the challenge that unlocks its own uploaded scan, which is itself stored AES-256-GCM encrypted on disk.
 - Destructive administrative operations require server-side admin authorization.
 
 ## Authentication and roles
@@ -80,38 +80,40 @@ The reusable eligibility rules live in `frontend/src/lib/eligibility.ts` and `ba
 ## UI system
 
 Every rule reads a semantic token declared in `frontend/src/app/globals.css`;
-literal brand hex values only belong in the `:root` token blocks. Light and
-dark mode are now two genuinely different palettes on the same token names —
-see `docs/DECISIONS.md` (2026-09-17, "Light mode moves to a neutral
-orange/teal palette; dark mode is untouched") for why, and the two entries
-above it for how the dark-mode palette came to be black-with-teal.
+literal brand hex values only belong in the `:root` token blocks. There is one
+brand colour, the institute blue `#1F3A60` — see `docs/DECISIONS.md`
+(2026-09-17, "The palette is the institute blue") for why, and the entries
+above it for the orange/teal and teal palettes it replaced.
 
-**Light mode** (the default): Zinc neutrals — `--surface` `#FAFAFA`, `--card-bg`
-`#FFFFFF`, `--ink` `#18181B`, `--border` `#E4E4E7` — with `#F64900` orange-red
-as the primary brand accent (`--navy`/`--navy-deep`: buttons, CTAs, active nav,
-a chart's primary series) and `#009689` teal as the secondary/analytics accent
-(`--blue`/`--blue-light`: links, focus rings, icon chips, a chart's secondary
-series). Status hues are separate from both: `--green` success, `--orange`
-warning/pending/interview (a true amber, `#D97706`, deliberately distinct from
-the brand orange), red error, purple shortlisted. Sidebars read the ordinary
-`--ink`/`--ink-secondary`/`--border` tokens and render as a white panel with a
+**The ramp**: `--brand-50` … `--brand-950`, all on hue 215°, with
+`--brand-800` being `#1F3A60` exactly. It is the only place literal brand hex
+values appear.
+
+**Light mode** (the default): white and grey — `--surface` `#FAFAFA`,
+`--card-bg` `#FFFFFF`, `--ink` `#18181B`, `--border` `#E4E4E7` — with
+`--navy`/`--navy-deep` (`--brand-800`/`900`) for primary fills, active nav, and
+a chart's primary series, and `--blue`/`--blue-light` (`--brand-500`/`400`) for
+links, focus rings, icon chips, and a chart's secondary series. Status hues are
+separate: `--green` success, `--orange` warning/pending/interview (a true amber,
+`#D97706`), red error, purple shortlisted. Sidebars are a white panel with a
 right border. Gradients are not used in light mode; every fill is solid.
 
-**Dark mode**: unchanged from the 2026-09-17 entries — a teal ramp
-(`--teal-50` `#DEF7F9` → `--teal-950` `#081F22`, plus `--ink-black` `#091717`
-and `--paper` `#FBFAF4`) declared alongside the light tokens, black surfaces
-(`--black-950`/`--black-900`), and `--on-brand`/`--on-brand-soft`/
-`--on-brand-muted` for text on the few surfaces that stay a solid brand fill
-regardless of theme (the login hero, welcome/profile banners) — not the
-sidebars, which are dark only in dark mode.
+**Dark mode**: black underneath, brand blue on top. `--surface` and the input
+wells are `--black-950` (`#000000`) and cards `--black-900`; `--border` is
+`--brand-800`, i.e. `#1F3A60` itself, so the brand colour is the chrome you see
+against the page. Fills are mid-ramp, not deep: `--navy` is `--brand-600` and
+`--blue` is `--brand-400`, because `#1F3A60` as a fill is 1.8:1 against black.
+`--on-brand`/`--on-brand-soft`/`--on-brand-muted` are the text on the few
+surfaces that stay a solid brand fill in both themes (the login hero,
+welcome/profile banners) — not the sidebars, which are dark only in dark mode.
 
 - `--navy`/`--navy-deep`/`--blue`/`--blue-light`/`--brown` keep the same names
-  in both themes but resolve to a different family per theme (new orange/teal
-  in light, the teal ramp in dark) — do not assume a token's hue from its name.
+  in both themes but resolve to a different rung per theme (deep on white, mid
+  on black) — do not assume a token's hue or lightness from its name.
 - `rgba()` tints must use the channel tokens (`--brand-rgb`, `--deep-rgb`,
   `--shadow-rgb`, `--warning-rgb`, `--success-rgb`, `--danger-rgb`), because
   `rgba()` cannot read a hex custom property. `--brand-rgb`/`--deep-rgb` anchor
-  to the primary accent in both themes (orange in light, teal in dark).
+  to the primary accent in both themes.
 - Rounded cards, restrained shadows, high information density, and mobile-first responsive layouts
 - Student pages use `PortalShell`; admin pages use `AdminShell`.
 - Every admin list is the shared `DataTable` (`frontend/src/components/common/data-table.tsx`) configured with columns; its pipeline lives in `frontend/src/lib/data-table.ts`. Do not hand-write another admin table, and give a column its raw `sortValue` rather than letting it sort the formatted cell.

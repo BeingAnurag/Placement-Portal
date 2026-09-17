@@ -26,7 +26,7 @@
   --color-popover: var(--card-bg);
   --color-popover-foreground: var(--ink);
 
-  /* Primary is the brand orange, secondary the analytics teal. */
+  /* Primary is the institute blue; secondary is a lighter rung of it. */
   --color-primary: var(--navy);
   --color-primary-foreground: #ffffff;
   --color-secondary: var(--surface-alt);
@@ -54,32 +54,38 @@
 
 /* Palette ramp. These are the only literal brand hex values in the repository;
    every rule reads the semantic tokens below instead. See docs/DECISIONS.md
-   (2026-09-17, teal palette) before adding a colour here. */
+   (2026-09-17, institute blue palette) before adding a colour here. */
 :root {
-  --teal-50: #def7f9;
-  --teal-200: #92dce2;
-  --teal-400: #35bdc8;
-  --teal-500: #2ca0ab;
-  --teal-600: #20808d;
-  --teal-700: #1a6872;
-  --teal-800: #114f56;
-  --teal-900: #0b363c;
-  --teal-950: #081f22;
-  --ink-black: #091717;
-  --paper: #fbfaf4;
+  /* Brand ramp, anchored on #1F3A60 at 800 — the institute blue. Every rung is
+     the same hue (215deg), so a tint and a shade of the brand never disagree.
+     These are the only literal brand hex values in the repository. */
+  --brand-50: #f3f7fc;
+  --brand-100: #e3ecf7;
+  --brand-200: #bed0ea;
+  --brand-300: #8fafdb;
+  --brand-400: #618ecc;
+  --brand-500: #3b6eb5;
+  --brand-600: #2e568e;
+  --brand-700: #254674;
+  --brand-800: #1f3a60;
+  --brand-900: #152841;
+  --brand-950: #0c1727;
 
   /* The dark theme's black base. The page and input wells are true black and
      cards sit just above it; every other dark surface, border, and header comes
-     from the deep end of the teal ramp above. `--black-900` keeps a trace of the
-     brand hue (blue channel highest) so it reads as the same palette. */
+     from the deep end of the brand ramp above. `--black-900` keeps a trace of
+     the brand hue so it reads as the same palette rather than a second grey. */
   --black-950: #000000;
-  --black-900: #0d1112;
+  --black-900: #0c1016;
+  --ink-black: #080b10;
+  /* Cool near-white: the text colour on those black surfaces. */
+  --paper: #f4f6fa;
 
-  /* Colours on top of a deep-teal surface (sidebars, banners, login story).
+  /* Colours on top of a deep-blue surface (sidebars, banners, login story).
      These stay fixed across themes because the surface under them is always dark. */
   --on-brand: #ffffff;
-  --on-brand-soft: #cfe6e8;
-  --on-brand-muted: #8fbcc0;
+  --on-brand-soft: #d5e0f0;
+  --on-brand-muted: #9db3d2;
 
   /* rgba() cannot read a hex token, so tints need the channels separately. */
   --warning-rgb: 217, 119, 6;
@@ -87,22 +93,25 @@
   --danger-rgb: 239, 68, 68;
 }
 
-/* Light palette: white/#FAFAFA neutrals, near-black type, #F64900 orange-red as
-   the primary brand accent, #009689 teal as the secondary/analytics accent.
-   See docs/DECISIONS.md (2026-09-17, neutral orange/teal palette). Dark mode
-   (below) is intentionally untouched and keeps reading the teal ramp above. */
+/* Light palette: white and grey neutrals with the institute blue as the only
+   brand colour — #1F3A60 (`--brand-800`) for primary fills and a lighter rung
+   for links and accents. Green/amber/red/purple remain, carrying state only.
+   See docs/DECISIONS.md (2026-09-17, institute blue palette). */
 :root {
-  --navy: #f64900;
-  --navy-deep: #d93e00;
-  --navy-soft-bg: #fff0e8;
-  --blue: #009689;
-  --blue-light: #2dbdb0;
+  --navy: var(--brand-800);
+  --navy-deep: var(--brand-900);
+  --navy-soft-bg: var(--brand-50);
+  /* The secondary accent is a lighter rung of the same blue, so links and
+     focus rings read as the brand without competing with a primary fill.
+     500 clears AA on white (5.1:1) where 400 would not. */
+  --blue: var(--brand-500);
+  --blue-light: var(--brand-400);
   --green: #16a34a;
   --orange: #d97706;
-  --brown: #d93e00;
+  --brown: var(--brand-700);
 
-  --brand-rgb: 246, 73, 0;
-  --deep-rgb: 217, 62, 0;
+  --brand-rgb: 31, 58, 96;
+  --deep-rgb: 21, 40, 65;
   --shadow-rgb: 24, 24, 27;
 
   --surface: #fafafa;
@@ -123,8 +132,8 @@
   --sidebar-from: #ffffff;
   --sidebar-to: #ffffff;
 
-  --badge-blue-bg: #e6f5f3;
-  --badge-blue-text: #00786e;
+  --badge-blue-bg: var(--brand-100);
+  --badge-blue-text: var(--brand-800);
   --badge-green-bg: #dcfce7;
   --badge-green-text: #15803d;
   --badge-orange-bg: #fef3c7;
@@ -135,34 +144,37 @@
   --badge-purple-text: #7e22ce;
 }
 
-/* Black-first dark theme. The page, cards, and input wells are black; teal
-   carries everything layered on top of them — borders, table headers, hover and
-   pressed states, badges, and fills. Fills are mid-ramp rather than deep,
-   because a deep teal button disappears against a black page. */
+/* Black-first dark theme. The page, cards, and input wells are black; the
+   institute blue carries everything layered on top of them — borders, table
+   headers, hover and pressed states, badges, and fills. `--border` is #1F3A60
+   itself, so the brand colour is the chrome you actually see against the black.
+   Fills are mid-ramp rather than deep, because a #1F3A60 button on a black page
+   is unreadable (1.8:1); 600 carries white text at 7.4:1 and 400 clears 6.2:1
+   as accent text directly on black, where 500 would fall to 4.1:1. */
 [data-theme="dark"],
 .dark {
-  --navy: var(--teal-600);
-  --navy-deep: var(--teal-700);
+  --navy: var(--brand-600);
+  --navy-deep: var(--brand-700);
   --navy-soft-bg: rgba(255, 255, 255, 0.14);
-  --blue: var(--teal-500);
-  --blue-light: var(--teal-400);
+  --blue: var(--brand-400);
+  --blue-light: var(--brand-300);
   --green: #4ade80;
   --orange: #fb923c;
-  --brown: var(--teal-600);
+  --brown: var(--brand-600);
 
-  --brand-rgb: 44, 160, 171;
-  --deep-rgb: 32, 128, 141;
+  --brand-rgb: 97, 142, 204;
+  --deep-rgb: 46, 86, 142;
   --shadow-rgb: 0, 0, 0;
 
   --surface: var(--black-950);
-  --surface-alt: var(--teal-950);
-  --surface-highlight: var(--teal-900);
+  --surface-alt: var(--brand-950);
+  --surface-highlight: var(--brand-900);
   --card-bg: var(--black-900);
   --ink: var(--paper);
-  --ink-secondary: #cfdadb;
-  --muted: #8ba0a2;
-  --border: var(--teal-800);
-  --border-subtle: var(--teal-900);
+  --ink-secondary: #cdd6e4;
+  --muted: #8b99ad;
+  --border: var(--brand-800);
+  --border-subtle: var(--brand-900);
   --input-bg: var(--black-950);
 
   --card-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.5), 0 2px 6px -1px rgba(0, 0, 0, 0.3);
@@ -172,8 +184,8 @@
   --sidebar-from: var(--ink-black);
   --sidebar-to: var(--black-950);
 
-  --badge-blue-bg: var(--teal-900);
-  --badge-blue-text: var(--teal-200);
+  --badge-blue-bg: var(--brand-900);
+  --badge-blue-text: var(--brand-200);
   --badge-green-bg: #0d381e;
   --badge-green-text: #86efac;
   --badge-orange-bg: #381e0d;

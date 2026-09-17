@@ -348,6 +348,21 @@ export function ProfileView({ profile }: { profile: StudentProfileViewData }) {
     });
   }
 
+  function handleUploadCollegeIdDocSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setCollegeIdDocError(null);
+    const formData = new FormData(e.currentTarget);
+    startTransition(async () => {
+      const res = await uploadCollegeIdDocAction(formData);
+      if (res.error) {
+        setCollegeIdDocError(res.error);
+      } else {
+        setCollegeIdDocModal(false);
+        router.refresh();
+      }
+    });
+  }
+
   function handleDeleteCollegeIdDoc() {
     if (!confirm("Are you sure you want to remove the uploaded College ID document?")) return;
     startTransition(async () => {
@@ -1166,6 +1181,163 @@ export function ProfileView({ profile }: { profile: StudentProfileViewData }) {
             </div>
             <footer>
               <button type="button" onClick={() => setPanDocModal(false)}>
+                Cancel
+              </button>
+              <button type="submit" disabled={isPending}>
+                <UploadCloud />
+                {isPending ? "Encrypting & Uploading..." : "Upload & Encrypt"}
+              </button>
+            </footer>
+          </form>
+        </div>
+      )}
+
+      {/* College ID number */}
+      {collegeIdModal && (
+        <div className="modal-backdrop">
+          <form className="modal" onSubmit={handleCollegeIdSubmit} style={{ maxWidth: "420px" }}>
+            <header>
+              <div>
+                <span className="eyebrow">Identity Document</span>
+                <h2>Update College ID Number</h2>
+              </div>
+              <button type="button" onClick={() => setCollegeIdModal(false)} aria-label="Close modal">
+                <X />
+              </button>
+            </header>
+            <div style={{ padding: "16px 0", display: "grid", gap: "12px" }}>
+              {collegeIdError && (
+                <div style={{
+                    color: "var(--badge-red-text)",
+                    background: "var(--badge-red-bg)",
+                    border: "1px solid var(--badge-red-text)",
+                    padding: "8px 12px",
+                    borderRadius: "8px",
+                    fontSize: "11px",
+                    fontWeight: 600,
+                  }}>{collegeIdError}</div>
+              )}
+              <label style={{ fontSize: "11px", fontWeight: 700, color: "var(--muted)", display: "grid", gap: "6px" }}>
+                College ID number
+                <input
+                  type="text"
+                  maxLength={20}
+                  value={collegeIdInput}
+                  onChange={(e) => setCollegeIdInput(e.target.value.toUpperCase())}
+                  required
+                  style={{
+                    padding: "10px",
+                    borderRadius: "8px",
+                    border: "1px solid var(--border)",
+                    background: "var(--card-bg)",
+                    color: "var(--ink)",
+                    fontSize: "13px",
+                    letterSpacing: "1px",
+                    textTransform: "uppercase",
+                  }}
+                />
+              </label>
+              <p style={{ fontSize: "10px", color: "var(--muted)", margin: 0 }}>
+                Usually your roll number as printed on the card. It is encrypted using
+                AES-256-GCM and doubles as the challenge that unlocks the scan.
+              </p>
+            </div>
+            <footer>
+              <button type="button" onClick={() => setCollegeIdModal(false)}>
+                Cancel
+              </button>
+              <button type="submit" disabled={isPending || collegeIdInput.trim().length < 4}>
+                <Save />
+                {isPending ? "Saving..." : "Save College ID"}
+              </button>
+            </footer>
+          </form>
+        </div>
+      )}
+
+      {/* Upload College ID Document File Modal */}
+      {collegeIdDocModal && (
+        <div className="modal-backdrop">
+          <form className="modal" onSubmit={handleUploadCollegeIdDocSubmit} style={{ maxWidth: "460px" }}>
+            <header>
+              <div>
+                <span className="eyebrow">Encrypted Document Upload</span>
+                <h2>Upload College ID Card</h2>
+              </div>
+              <button type="button" onClick={() => setCollegeIdDocModal(false)} aria-label="Close modal">
+                <X />
+              </button>
+            </header>
+            <div style={{ padding: "16px 0", display: "grid", gap: "14px" }}>
+              {collegeIdDocError && (
+                <div style={{
+                    color: "var(--badge-red-text)",
+                    background: "var(--badge-red-bg)",
+                    border: "1px solid var(--badge-red-text)",
+                    padding: "8px 12px",
+                    borderRadius: "8px",
+                    fontSize: "11px",
+                    fontWeight: 600,
+                  }}>{collegeIdDocError}</div>
+              )}
+              <label style={{ fontSize: "11px", fontWeight: 700, color: "var(--muted)", display: "grid", gap: "6px" }}>
+                Confirm College ID number
+                <input
+                  name="collegeId"
+                  type="text"
+                  maxLength={20}
+                  required
+                  style={{
+                    padding: "10px",
+                    borderRadius: "8px",
+                    border: "1px solid var(--border)",
+                    background: "var(--card-bg)",
+                    color: "var(--ink)",
+                    fontSize: "13px",
+                    letterSpacing: "1px",
+                    textTransform: "uppercase",
+                  }}
+                />
+              </label>
+
+              <label style={{ fontSize: "11px", fontWeight: 700, color: "var(--muted)", display: "grid", gap: "6px" }}>
+                College ID PDF Document (Max 5MB)
+                <input
+                  name="file"
+                  type="file"
+                  accept="application/pdf"
+                  required
+                  style={{
+                    padding: "8px 12px",
+                    borderRadius: "8px",
+                    border: "1px solid var(--border)",
+                    background: "var(--card-bg)",
+                    color: "var(--ink)",
+                    fontSize: "11px",
+                  }}
+                />
+              </label>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "flex-start",
+                  gap: "8px",
+                  padding: "10px",
+                  borderRadius: "8px",
+                  background: "var(--badge-blue-bg)",
+                  color: "var(--badge-blue-text)",
+                  fontSize: "10px",
+                }}
+              >
+                <ShieldCheck style={{ width: "16px", height: "16px", flexShrink: 0, marginTop: "2px" }} />
+                <span>
+                  The document file is encrypted with AES-256-GCM before saving and can only be
+                  unlocked by entering your College ID number.
+                </span>
+              </div>
+            </div>
+            <footer>
+              <button type="button" onClick={() => setCollegeIdDocModal(false)}>
                 Cancel
               </button>
               <button type="submit" disabled={isPending}>
