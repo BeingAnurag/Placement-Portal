@@ -14,17 +14,36 @@ import {
   GraduationCap,
   KeyRound,
   LogOut,
-  Menu,
   MessageSquareText,
   Settings,
   ShieldCheck,
   Users,
-  X,
 } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { handleSignOut } from "@/lib/actions/auth";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarHeader,
+  SidebarInset,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
+  SidebarProvider,
+  SidebarTrigger,
+} from "@/components/ui/sidebar";
 
 type NavLink = { label: string; href: string };
 type NavItem = {
@@ -50,12 +69,27 @@ const nav: NavItem[] = [
     label: "Companies",
     icon: Building2,
     children: [
-      { label: "Companies", href: "/admin/companies" },
-      { label: "Applications", href: "/admin/applications" },
+      { label: "All companies", href: "/admin/companies" },
+      { label: "Add company", href: "/admin/companies/add" },
+      { label: "View registrations", href: "/admin/applications" },
     ],
   },
-  { label: "Job profiles", href: "/admin/job-profiles", icon: BriefcaseBusiness },
-  { label: "Placement records", href: "/admin/placement-records", icon: Award },
+  {
+    label: "Events",
+    icon: BriefcaseBusiness,
+    children: [
+      { label: "All events", href: "/admin/events" },
+      { label: "Add event", href: "/admin/events/add" },
+    ],
+  },
+  {
+    label: "Placement records",
+    icon: Award,
+    children: [
+      { label: "View placement records", href: "/admin/placement-records" },
+      { label: "Add placement records", href: "/admin/placement-records/add" },
+    ],
+  },
   { label: "Students", href: "/admin/students", icon: GraduationCap },
   { label: "Users & RBAC", href: "/admin/users", icon: ShieldCheck },
   { label: "Feedbacks", href: "/admin/feedbacks", icon: FileQuestion },
@@ -85,155 +119,202 @@ export function AdminShell({
         : item,
     )
     .filter((item) => (item.children ? item.children.length > 0 : allowedPaths.includes(item.href!)));
-  const [open, setOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
-  // A group starts open when the current page is inside it, and the viewer can
-  // then expand or collapse any of them.
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const isOverview = path === "/admin/dashboard";
+
+  // Theme toggle and the profile/sign-out menu live in the topbar on the
+  // Overview and nowhere else on every other page, so this renders the same
+  // button and dropdown in either spot rather than keeping two copies of the
+  // sign-out form in sync. `align` only changes which corner the dropdown
+  // opens from — "down" for the topbar near the top of the screen, "up" for
+  // the sidebar footer near the bottom, so it never opens off-screen.
+  function renderProfileMenu(align: "down" | "up") {
+    return (
+      <div className="relative">
+        <button
+          onClick={() => setProfileOpen(!profileOpen)}
+          className="admin-user bg-transparent border-none p-0 text-left cursor-pointer"
+        >
+          <span>{admin.initials}</span>
+          {/* Collapsed to an icon rail, the sidebar is too narrow for a name
+              and role next to the avatar — only relevant when this renders
+              in the footer, since the topbar never shares that width. */}
+          <div className="group-data-[collapsible=icon]:hidden">
+            <strong>{admin.name}</strong>
+            <small>{admin.title || (admin.role ? admin.role.replace("_", " ") : "Administrator")}</small>
+          </div>
+        </button>
+        {profileOpen && (
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => setProfileOpen(false)} />
+            <div
+              className={
+                align === "down"
+                  ? "absolute right-0 top-full mt-3 w-48 bg-[var(--card-bg)] border border-[var(--border)] rounded-xl shadow-xl z-50 overflow-hidden animate-[fadeSlideUp_0.15s_ease]"
+                  : "absolute left-0 bottom-full mb-2 w-48 bg-[var(--card-bg)] border border-[var(--border)] rounded-xl shadow-xl z-50 overflow-hidden animate-[fadeSlideUp_0.15s_ease]"
+              }
+            >
+              <Link
+                href="/account/password"
+                onClick={() => setProfileOpen(false)}
+                className="w-full flex items-center gap-2 px-4 py-3 text-sm text-[var(--ink)] hover:bg-[var(--surface-alt)] font-semibold no-underline transition-colors"
+              >
+                <KeyRound size={16} />
+                Password
+              </Link>
+              <form action={handleSignOut}>
+                <button
+                  type="submit"
+                  className="w-full flex items-center gap-2 px-4 py-3 text-sm text-[var(--badge-red-text)] hover:bg-[var(--badge-red-bg)] font-semibold bg-transparent border-none cursor-pointer text-left transition-colors"
+                >
+                  <LogOut size={16} />
+                  Sign out
+                </button>
+              </form>
+            </div>
+          </>
+        )}
+      </div>
+    );
+  }
 
   return (
-    <div className="admin-shell">
-      <button
-        className="menu-button"
-        onClick={() => setOpen(true)}
-        aria-label="Open menu"
-      >
-        <Menu />
-      </button>
-      {open && (
-        <button
-          className="backdrop"
-          onClick={() => setOpen(false)}
-          aria-label="Close menu"
-        />
-      )}
-      <aside className={open ? "sidebar-open" : ""}>
-        <button
-          className="close-button"
-          onClick={() => setOpen(false)}
-          aria-label="Close menu"
-        >
-          <X />
-        </button>
-        <div className="admin-brand">
-          <Image
-            src="/iiitl-emblem.png"
-            alt=""
-            width={40}
-            height={32}
-            priority
-          />
-          <div>
-            <strong>T&P Admin</strong>
-            <span>IIIT Lucknow</span>
-          </div>
-        </div>
-        <nav>
-          {visibleNav.map(({ label, href, icon: Icon, children }) => {
-            if (!children) {
-              return (
-                <Link
-                  className={path === href ? "active" : ""}
-                  href={href!}
-                  key={href}
-                  onClick={() => setOpen(false)}
-                >
-                  <Icon />
-                  <span>{label}</span>
-                </Link>
-              );
-            }
-
-            const holdsCurrentPage = children.some((child) => child.href === path);
-            const expanded = collapsed[label] ?? holdsCurrentPage;
-
-            return (
-              <div className="nav-group" key={label}>
-                <button
-                  type="button"
-                  className={holdsCurrentPage ? "nav-group-toggle current" : "nav-group-toggle"}
-                  aria-expanded={expanded}
-                  onClick={() =>
-                    setCollapsed((previous) => ({ ...previous, [label]: !expanded }))
-                  }
-                >
-                  <Icon />
-                  <span>{label}</span>
-                  <ChevronDown className={expanded ? "chevron open" : "chevron"} />
-                </button>
-                {expanded ? (
-                  <div className="nav-group-links">
-                    {children.map((child) => (
-                      <Link
-                        className={path === child.href ? "active" : ""}
-                        href={child.href}
-                        key={child.href}
-                        onClick={() => setOpen(false)}
-                      >
-                        <span>{child.label}</span>
-                      </Link>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-            );
-          })}
-        </nav>
-        <Link className="student-portal-link" href="/dashboard">
-          Open student portal →
-        </Link>
-      </aside>
-      <main>
-        <header className="admin-topbar">
-          <div>
-            <span className="eyebrow">Administration</span>
-            <strong>Placement Operations</strong>
-          </div>
+    <SidebarProvider>
+      {/* Collapses to an icon rail rather than sliding away: the data grids
+          behind this are wide and regularly want the room, but an admin
+          halfway through a task should not have to reopen the whole nav to
+          move to the next screen. The rail is what makes `tooltip` below
+          worth setting. */}
+      <Sidebar collapsible="icon">
+        <SidebarHeader className="border-b border-sidebar-border px-4 py-4 group-data-[collapsible=icon]:px-2">
           <div className="flex items-center gap-3">
-            <ThemeToggle />
-            <div className="relative">
-              <button
-                onClick={() => setProfileOpen(!profileOpen)}
-                className="admin-user bg-transparent border-none p-0 text-left cursor-pointer"
-              >
-                <span>{admin.initials}</span>
-                <div>
-                  <strong>{admin.name}</strong>
-                  <small>{admin.title || (admin.role ? admin.role.replace("_", " ") : "Administrator")}</small>
-                </div>
-              </button>
-              {profileOpen && (
-                <>
-                  <div
-                    className="fixed inset-0 z-40"
-                    onClick={() => setProfileOpen(false)}
-                  />
-                  <div className="absolute right-0 mt-3 w-48 bg-[var(--card-bg)] border border-[var(--border)] rounded-xl shadow-xl z-50 overflow-hidden animate-[fadeSlideUp_0.15s_ease]">
-                    <Link
-                      href="/account/password"
-                      onClick={() => setProfileOpen(false)}
-                      className="w-full flex items-center gap-2 px-4 py-3 text-sm text-[var(--ink)] hover:bg-[var(--surface-alt)] font-semibold no-underline transition-colors"
-                    >
-                      <KeyRound size={16} />
-                      Password
-                    </Link>
-                    <form action={handleSignOut}>
-                      <button
-                        type="submit"
-                        className="w-full flex items-center gap-2 px-4 py-3 text-sm text-red-500 hover:bg-[var(--badge-red-bg)] font-semibold bg-transparent border-none cursor-pointer text-left transition-colors"
-                      >
-                        <LogOut size={16} />
-                        Sign out
-                      </button>
-                    </form>
-                  </div>
-                </>
-              )}
+            {/* The PNG already carries its own alpha channel; the white card
+                behind it (bg-white + border) was covering that up and reading
+                as an opaque tile rather than a mark. Sized up and dropped
+                onto the sidebar's own background instead. */}
+            <Image
+              className="size-12 shrink-0 object-contain group-data-[collapsible=icon]:size-8"
+              src="/iiitl-emblem.png"
+              alt=""
+              width={48}
+              height={48}
+              priority
+            />
+            <div className="min-w-0 group-data-[collapsible=icon]:hidden">
+              <strong className="block truncate text-[15px] font-semibold text-[var(--ink)]">
+                T&amp;P Admin
+              </strong>
+              <span className="block truncate text-[12px] font-medium text-[var(--muted)]">
+                IIIT Lucknow
+              </span>
             </div>
           </div>
-        </header>
+        </SidebarHeader>
+
+        <SidebarContent>
+          <SidebarGroup>
+            <SidebarMenu>
+              {visibleNav.map(({ label, href, icon: Icon, children }) => {
+                if (!children) {
+                  return (
+                    <SidebarMenuItem key={href}>
+                      <SidebarMenuButton asChild isActive={path === href} tooltip={label}>
+                        <Link href={href!}>
+                          <Icon />
+                          <span>{label}</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  );
+                }
+
+                // A group starts open when the current page is inside it. It is
+                // uncontrolled from there on, so the viewer can collapse a group
+                // they are standing in without the state fighting them back open.
+                const holdsCurrentPage = children.some((child) => child.href === path);
+
+                return (
+                  <Collapsible
+                    key={label}
+                    asChild
+                    defaultOpen={holdsCurrentPage}
+                    className="group/collapsible"
+                  >
+                    <SidebarMenuItem>
+                      <CollapsibleTrigger asChild>
+                        <SidebarMenuButton
+                          tooltip={label}
+                          className={holdsCurrentPage ? "text-[var(--navy)]" : undefined}
+                        >
+                          <Icon />
+                          <span>{label}</span>
+                          <ChevronDown className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-180" />
+                        </SidebarMenuButton>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent>
+                        <SidebarMenuSub>
+                          {children.map((child) => (
+                            <SidebarMenuSubItem key={child.href}>
+                              <SidebarMenuSubButton asChild isActive={path === child.href}>
+                                <Link href={child.href}>
+                                  <span>{child.label}</span>
+                                </Link>
+                              </SidebarMenuSubButton>
+                            </SidebarMenuSubItem>
+                          ))}
+                        </SidebarMenuSub>
+                      </CollapsibleContent>
+                    </SidebarMenuItem>
+                  </Collapsible>
+                );
+              })}
+            </SidebarMenu>
+          </SidebarGroup>
+        </SidebarContent>
+
+        {!isOverview ? (
+          <SidebarFooter className="border-t border-sidebar-border">
+            {/* The topbar drops entirely off every page but the Overview (see
+                below), so the controls it would otherwise carry — collapse,
+                theme, sign-out — live here instead. They open upward: this
+                sits at the bottom of the screen, and a menu opening downward
+                from here would run off it. Collapsed to the icon rail, the
+                rail is narrower than trigger+toggle+avatar laid out in a row,
+                so everything stacks into one column instead of overflowing
+                past the rail's edge. */}
+            <div className="flex items-center justify-between gap-2 px-2 py-3 group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:gap-2">
+              <div className="flex items-center gap-1.5 group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:gap-2">
+                <SidebarTrigger />
+                <ThemeToggle />
+              </div>
+              {renderProfileMenu("up")}
+            </div>
+          </SidebarFooter>
+        ) : null}
+      </Sidebar>
+
+      <SidebarInset>
+        {/* Overview keeps the full topbar — trigger, title, theme, profile.
+            Every other page removes it outright rather than leaving an empty
+            bar with just the trigger: those controls moved to the sidebar
+            footer above, so nothing here would be load-bearing. */}
+        {isOverview ? (
+          <header className="admin-topbar">
+            <div className="flex items-center gap-3">
+              <SidebarTrigger className="-ml-1" />
+              <div>
+                <span className="eyebrow">Administration</span>
+                <strong>Placement Operations</strong>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <ThemeToggle />
+              {renderProfileMenu("down")}
+            </div>
+          </header>
+        ) : null}
         {children}
-      </main>
-    </div>
+      </SidebarInset>
+    </SidebarProvider>
   );
 }
