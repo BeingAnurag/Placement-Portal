@@ -9,6 +9,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
 
+from app.core import cache
 from app.core.security import PERM_APPLICATIONS_UPDATE, PERM_APPLICATIONS_VIEW
 from app.dependencies import get_db, require_permission, require_student
 from app.models.db import (
@@ -18,6 +19,8 @@ from app.models.db import (
     JobProfile,
     JobStatus,
     Notification,
+    Offer,
+    OfferStatus,
     Resume,
     User,
 )
@@ -36,6 +39,36 @@ from app.services.eligibility import (
 from app.services.email import send_notification_email
 
 router = APIRouter(prefix="/applications", tags=["applications"])
+
+# Whether a candidate confirmed or declined an offer is placement-cell
+# bookkeeping, so a student's own application list shows it as SELECTED —
+# they already know what they told the office.
+_STUDENT_HIDDEN_STATUSES = {ApplicationStatus.OFFER_ACCEPTED, ApplicationStatus.OFFER_DECLINED}
+
+
+def student_facing_status(status: ApplicationStatus) -> str:
+    if status in _STUDENT_HIDDEN_STATUSES:
+        return ApplicationStatus.SELECTED.value
+    return status.value if hasattr(status, "value") else str(status)
+
+
+async def sync_linked_offer(db: AsyncSession, application: Application) -> None:
+    """Keeps a placement record's outcome in step with the application that
+    produced it, once the office has recorded one (see RecordPlacementDialog
+    on the applications screen). Nothing to do if no Offer is linked yet."""
+    if application.status not in _STUDENT_HIDDEN_STATUSES:
+        return
+
+    offer = await db.scalar(select(Offer).where(Offer.applicationId == application.id))
+    if not offer:
+        return
+
+    offer.status = (
+        OfferStatus.ACCEPTED
+        if application.status == ApplicationStatus.OFFER_ACCEPTED
+        else OfferStatus.DECLINED
+    )
+    offer.decidedAt = datetime.now(timezone.utc)
 
 
 # ============================================================================
@@ -64,7 +97,7 @@ async def list_student_applications(
             id=app.id,
             userId=app.userId,
             jobProfileId=app.jobProfileId,
-            status=app.status.value if hasattr(app.status, "value") else str(app.status),
+            status=student_facing_status(app.status),
             appliedAt=app.appliedAt,
             updatedAt=app.updatedAt,
             resumeId=app.resumeId,
@@ -141,6 +174,8 @@ async def apply_to_job(
         backlogs=profile["backlogs"],
         bans=profile["bans"],
         documents_complete=profile["documents_complete"],
+        class10_percent=profile["class10_percent"],
+        class12_percent=profile["class12_percent"],
         min_cgpa=job.minCGPA,
         job_batch=job.batch,
         allowed_branches=job.allowedBranches,
@@ -148,6 +183,8 @@ async def apply_to_job(
         allowed_genders=job.allowedGenders,
         max_backlogs=job.maxBacklogs,
         max_bans=job.maxBans,
+        min_10_percent=job.min10Percent,
+        min_12_percent=job.min12Percent,
     )
     if not is_eligible(checks):
         failed_checks = [c.label for c in checks if not c.passed]
@@ -164,6 +201,7 @@ async def apply_to_job(
         jobProfileId=job.id,
         resumeId=data.resumeId,
         status=ApplicationStatus.APPLIED,
+        updatedAt=datetime.now(timezone.utc),
     )
     db.add(app)
     await db.commit()
@@ -220,6 +258,14 @@ async def list_admin_applications(
     branch: Optional[str] = Query(None),
     batch: Optional[int] = Query(None),
     search: Optional[str] = Query(None),
+    # A bounded default rather than "everything ever applied for": this list
+    # grows with every season the portal runs, and nothing here paginates in
+    # the browser yet (see the follow-up in docs/DECISIONS.md). The cap keeps
+    # today's query cost from scaling with all historical data while that
+    # follow-up is scoped; `limit`/`offset` are exposed now so wiring real
+    # pagination through later needs no further change here.
+    limit: int = Query(500, ge=1, le=1000),
+    offset: int = Query(0, ge=0),
     admin_payload: dict = Depends(require_permission(PERM_APPLICATIONS_VIEW)),
     db: AsyncSession = Depends(get_db),
 ):
@@ -229,6 +275,7 @@ async def list_admin_applications(
             joinedload(Application.user),
             joinedload(Application.job_profile).joinedload(JobProfile.company),
             joinedload(Application.resume),
+            joinedload(Application.offer),
         )
         .order_by(Application.updatedAt.desc())
     )
@@ -241,12 +288,32 @@ async def list_admin_applications(
             stmt = stmt.where(Application.status == enum_status)
         except KeyError:
             pass
-    if (branch and branch != "ALL") or batch:
+
+    term = (search or "").strip()
+
+    if (branch and branch != "ALL") or batch or term:
         stmt = stmt.join(Application.user)
         if branch and branch != "ALL":
             stmt = stmt.where(User.branch == branch)
         if batch:
             stmt = stmt.where(User.batch == batch)
+
+    # Mirrors the free-text box on /admin/applications so the same term
+    # reaches Postgres here that the export endpoint already pushes down,
+    # rather than pulling every row and filtering it in a Python loop.
+    if term:
+        pattern = f"%{term}%"
+        stmt = stmt.join(Application.job_profile).outerjoin(JobProfile.company).where(
+            or_(
+                User.name.ilike(pattern),
+                User.email.ilike(pattern),
+                User.rollNumber.ilike(pattern),
+                JobProfile.title.ilike(pattern),
+                Company.name.ilike(pattern),
+            )
+        )
+
+    stmt = stmt.limit(limit).offset(offset)
 
     result = await db.scalars(stmt)
     apps = result.unique().all()
@@ -259,13 +326,6 @@ async def list_admin_applications(
         student_name = app.user.name or app.user.rollNumber or "Student"
         student_email = app.user.email or ""
 
-        # Filter by search string if provided
-        if search:
-            q = search.lower()
-            haystack = f"{student_name} {student_email} {app.user.rollNumber or ''} {app.job_profile.title} {app.job_profile.company.name if app.job_profile.company else ''}".lower()
-            if q not in haystack:
-                continue
-
         items.append(
             AdminApplicationItem(
                 id=app.id,
@@ -275,7 +335,12 @@ async def list_admin_applications(
                 rollNumber=app.user.rollNumber,
                 branch=app.user.branch,
                 batch=app.user.batch,
+                degree=app.user.degree,
                 cgpa=app.user.cgpa,
+                class10Percent=app.user.class10Percent,
+                class12Percent=app.user.class12Percent,
+                personalEmail=app.user.personalEmail,
+                contactNumber=app.user.contactNumber,
                 jobProfileId=app.jobProfileId,
                 jobTitle=app.job_profile.title,
                 companyId=app.job_profile.companyId,
@@ -284,6 +349,7 @@ async def list_admin_applications(
                 resumeUrl=app.resume.fileUrl if app.resume else None,
                 resumeLabel=app.resume.label if app.resume else None,
                 status=app.status.value if hasattr(app.status, "value") else str(app.status),
+                offerId=app.offer.id if app.offer else None,
                 appliedAt=app.appliedAt,
                 updatedAt=app.updatedAt,
             )
@@ -315,25 +381,32 @@ async def update_application_status(
 
     old_status = app.status
     app.status = data.status
+    await sync_linked_offer(db, app)
 
-    # In-app notification
+    # In-app notification and email. Skipped for OFFER_ACCEPTED/OFFER_DECLINED:
+    # that stage only records what the student already told the office, and
+    # showing it as anything other than SELECTED would leak an admin-only
+    # status (see student_facing_status).
     job_title = app.job_profile.title if app.job_profile else "Job"
     company_name = app.job_profile.company.name if app.job_profile and app.job_profile.company else "Company"
     status_str = data.status.value if hasattr(data.status, "value") else str(data.status)
 
-    notif = Notification(
-        id=str(uuid.uuid4()),
-        userId=app.userId,
-        title=f"Application Update: {job_title}",
-        message=f"Your application for {job_title} at {company_name} is now: {status_str}.",
-        link="/applications",
-    )
-    db.add(notif)
+    if data.status not in _STUDENT_HIDDEN_STATUSES:
+        notif = Notification(
+            id=str(uuid.uuid4()),
+            userId=app.userId,
+            title=f"Application Update: {job_title}",
+            message=f"Your application for {job_title} at {company_name} is now: {status_str}.",
+            link="/applications",
+        )
+        db.add(notif)
+
     await db.commit()
     await db.refresh(app)
+    await cache.invalidate(cache.TOPIC_ANALYTICS)
 
     # Non-blocking background email dispatch
-    if app.user and app.user.email:
+    if data.status not in _STUDENT_HIDDEN_STATUSES and app.user and app.user.email:
         background_tasks.add_task(
             send_notification_email,
             to_email=app.user.email,
@@ -390,24 +463,28 @@ async def bulk_update_application_status(
 
     for app in apps:
         app.status = data.status
+        await sync_linked_offer(db, app)
         updated_count += 1
 
         job_title = app.job_profile.title if app.job_profile else "Job"
         company_name = app.job_profile.company.name if app.job_profile and app.job_profile.company else "Company"
 
-        notif = Notification(
-            id=str(uuid.uuid4()),
-            userId=app.userId,
-            title=f"Application Update: {job_title}",
-            message=f"Your application for {job_title} at {company_name} is now: {status_str}.",
-            link="/applications",
-        )
-        db.add(notif)
+        # Skipped for OFFER_ACCEPTED/OFFER_DECLINED — see update_application_status.
+        if data.status not in _STUDENT_HIDDEN_STATUSES:
+            notif = Notification(
+                id=str(uuid.uuid4()),
+                userId=app.userId,
+                title=f"Application Update: {job_title}",
+                message=f"Your application for {job_title} at {company_name} is now: {status_str}.",
+                link="/applications",
+            )
+            db.add(notif)
 
-        if app.user and app.user.email:
-            notifications_to_send.append((app.user.email, app.user.name or "Student", job_title, company_name))
+            if app.user and app.user.email:
+                notifications_to_send.append((app.user.email, app.user.name or "Student", job_title, company_name))
 
     await db.commit()
+    await cache.invalidate(cache.TOPIC_ANALYTICS)
 
     # Dispatch background emails after successful commit
     for email, name, job_title, company_name in notifications_to_send:

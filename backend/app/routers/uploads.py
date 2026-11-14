@@ -12,14 +12,16 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
-from sqlalchemy import func, select
+from sqlalchemy import cast, func, select, String as SqlString
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.security import (
     PERM_ANNOUNCEMENTS_CREATE,
     PERM_APPLICATIONS_VIEW,
+    PERM_JOBS_CREATE,
     PERM_NOC_APPROVE,
+    PERM_NOC_VIEW,
     PERM_STUDENTS_VIEW,
     has_permission,
     is_admin_email,
@@ -36,7 +38,15 @@ from app.core.storage import (
     validate_pdf,
 )
 from app.dependencies import get_current_user, get_db, require_permission, require_student
-from app.models.db import Announcement, AnnouncementAttachment, AnnouncementStatus, NocRequest, Resume
+from app.models.db import (
+    Announcement,
+    AnnouncementAttachment,
+    AnnouncementStatus,
+    JobProfile,
+    JobStatus,
+    NocRequest,
+    Resume,
+)
 from app.schemas.student import ResumeResponse
 
 router = APIRouter(prefix="/uploads", tags=["uploads"])
@@ -116,6 +126,47 @@ async def upload_noc_document(
     return {"url": result["secure_url"]}
 
 
+# An offer letter is as likely to be a scanned image or a Word doc as a PDF,
+# unlike the placement cell's own signed certificate, which is always a PDF.
+NOC_OFFCAMPUS_PROOF_EXTENSIONS = {"pdf", "png", "jpg", "jpeg", "doc", "docx"}
+
+
+@router.post("/noc-offcampus-proof")
+async def upload_noc_offcampus_proof(
+    file: UploadFile = File(...),
+    user_payload: dict = Depends(require_student),
+):
+    """
+    Stage a student's proof of an off-campus offer before the NOC request
+    that will carry it exists yet — the same stage-before-save flow the
+    announcement composer and event form use, since the form itself calls
+    POST /noc with the returned URL once the file is up.
+    """
+    content = await file.read()
+    filename = file.filename or "offer-proof"
+
+    try:
+        extension, media_type = validate_attachment(content, filename, settings.allowed_pdf_size_mb)
+    except StorageError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    if extension not in NOC_OFFCAMPUS_PROOF_EXTENSIONS:
+        allowed = ", ".join(f".{name}" for name in sorted(NOC_OFFCAMPUS_PROOF_EXTENSIONS))
+        raise HTTPException(status_code=400, detail=f"'{filename}' is not accepted here. Allowed: {allowed}.")
+
+    result = upload_document(
+        content,
+        folder="noc_offcampus_proof",
+        public_id=f"{user_payload['sub']}_{uuid.uuid4()}",
+        extension=extension,
+    )
+    return {
+        "url": result["secure_url"],
+        "fileName": filename,
+        "mimeType": media_type,
+        "sizeBytes": len(content),
+    }
+
+
 @router.post("/admin/announcement-attachment")
 async def upload_announcement_attachment(
     file: UploadFile = File(...),
@@ -142,6 +193,46 @@ async def upload_announcement_attachment(
     result = upload_document(
         content,
         folder="announcement_docs",
+        public_id=str(uuid.uuid4()),
+        extension=extension,
+    )
+    return {
+        "url": result["secure_url"],
+        "fileName": filename,
+        "mimeType": media_type,
+        "sizeBytes": len(content),
+    }
+
+
+# Narrower than an announcement's: a company drive attaches a job description
+# or a poster, not a spreadsheet or a shortlist.
+EVENT_ATTACHMENT_EXTENSIONS = {"pdf", "png"}
+EVENT_ATTACHMENT_MAX_MB = 4
+
+
+@router.post("/admin/event-attachment")
+async def upload_event_attachment(
+    file: UploadFile = File(...),
+    token_payload: dict = Depends(require_permission(PERM_JOBS_CREATE)),
+):
+    """
+    Stage one file for a company event that may not exist yet, the same
+    stage-before-save flow the announcement composer uses.
+    """
+    content = await file.read()
+    filename = file.filename or "attachment"
+
+    try:
+        extension, media_type = validate_attachment(content, filename, EVENT_ATTACHMENT_MAX_MB)
+    except StorageError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    if extension not in EVENT_ATTACHMENT_EXTENSIONS:
+        allowed = ", ".join(f".{name}" for name in sorted(EVENT_ATTACHMENT_EXTENSIONS))
+        raise HTTPException(status_code=400, detail=f"'{filename}' is not accepted here. Allowed: {allowed}.")
+
+    result = upload_document(
+        content,
+        folder="event_docs",
         public_id=str(uuid.uuid4()),
         extension=extension,
     )
@@ -184,20 +275,41 @@ async def get_uploaded_file(
             resolved_rel = str(local_path.relative_to(LOCAL_UPLOADS_DIR.resolve()))
             is_own_resume = resolved_rel.startswith(f"resumes/{user_id}/")
             is_noc_doc = False
-            if resolved_rel.startswith("noc_docs/"):
-                # Ask whether *any* of the caller's NOC documents is this file.
-                # Loading a single arbitrary row and comparing against it 403'd
-                # a student who had more than one NOC document.
-                is_noc_doc = bool(
-                    await db.scalar(
-                        select(NocRequest.id)
-                        .where(
-                            NocRequest.userId == user_id,
-                            NocRequest.documentUrl.like(f"%{resolved_rel}"),
+            # Two NOC-related folders, same ownership/permission shape: the
+            # placement cell's signed certificate (noc_docs/) and the
+            # student's own off-campus offer proof (noc_offcampus_proof/) —
+            # only which column to match the path against differs.
+            noc_url_column = (
+                NocRequest.documentUrl
+                if resolved_rel.startswith("noc_docs/")
+                else NocRequest.offCampusProofUrl
+                if resolved_rel.startswith("noc_offcampus_proof/")
+                else None
+            )
+            if noc_url_column is not None:
+                if has_permission(token_payload, PERM_NOC_VIEW):
+                    # Anyone holding noc.view (e.g. FACULTY, who is not
+                    # `is_admin` above since that flag also implies
+                    # students.view/applications.view, broader than NOC
+                    # access alone) can read any NOC document, the same read
+                    # access the admin NOC list/detail endpoints already give
+                    # them via require_permission(PERM_NOC_VIEW).
+                    is_noc_doc = True
+                else:
+                    # Ask whether *any* of the caller's own NOC rows carries
+                    # this file. Loading a single arbitrary row and comparing
+                    # against it 403'd a student who had more than one NOC
+                    # document.
+                    is_noc_doc = bool(
+                        await db.scalar(
+                            select(NocRequest.id)
+                            .where(
+                                NocRequest.userId == user_id,
+                                noc_url_column.like(f"%{resolved_rel}"),
+                            )
+                            .limit(1)
                         )
-                        .limit(1)
                     )
-                )
 
             # An attachment is readable by any signed-in user once the
             # announcement carrying it is published, and by nobody while it is
@@ -214,7 +326,21 @@ async def get_uploaded_file(
                 )
                 is_published_attachment = owner_status == AnnouncementStatus.PUBLISHED
 
-            if not (is_own_resume or is_noc_doc or is_published_attachment):
+            # Same rule as an announcement's: visible once the drive is no
+            # longer a draft, private while it still is. `attachments` is a
+            # JSON array rather than a child table, so this is a text search
+            # over the cast column rather than a join.
+            is_visible_event_attachment = False
+            if resolved_rel.startswith("event_docs/"):
+                owner_status = await db.scalar(
+                    select(JobProfile.status).where(
+                        JobProfile.attachments.isnot(None),
+                        cast(JobProfile.attachments, SqlString).like(f"%{resolved_rel}%"),
+                    )
+                )
+                is_visible_event_attachment = owner_status is not None and owner_status != JobStatus.DRAFT
+
+            if not (is_own_resume or is_noc_doc or is_published_attachment or is_visible_event_attachment):
                 raise HTTPException(status_code=403, detail="Not authorized to access this file.")
         except ValueError:
             raise HTTPException(status_code=403, detail="Not authorized to access this file.")

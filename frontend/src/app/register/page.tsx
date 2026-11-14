@@ -1,59 +1,19 @@
-import { AlertCircle, UserPlus } from "lucide-react";
+import { UserPlus } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { studentEmailDomain } from "@/lib/auth-access";
 import { MIN_PASSWORD_LENGTH } from "@/lib/credentials-schema";
-import { isElevatedRole } from "@/lib/permissions";
+import { hasAnyAdminPermission } from "@/lib/permissions";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
-import { registerAction } from "./actions";
+import { RegisterForm } from "./register-form";
 
-function describeError(code: string | undefined, domain: string) {
-  if (!code) return null;
-  if (code === "Exists") {
-    return {
-      title: "This address already has an account",
-      body: "Sign in instead. If you have lost the password, ask the placement office to set a new one.",
-    };
-  }
-  if (code === "Domain") {
-    return {
-      title: `Use your @${domain} address`,
-      body: "Password accounts are limited to institute addresses.",
-    };
-  }
-  if (code === "Staff") {
-    return {
-      title: "Placement office accounts are created by the office",
-      body: "Ask the placement cell to create your account and give you its first password. You can change it afterwards.",
-    };
-  }
-  if (code === "Mismatch") {
-    return { title: "Passwords do not match", body: "Re-enter the same password in both fields." };
-  }
-  if (code === "Password") {
-    return {
-      title: "Choose a stronger password",
-      body: `Use at least ${MIN_PASSWORD_LENGTH} characters with at least one letter and one number.`,
-    };
-  }
-  if (code === "Email") {
-    return { title: "Enter a valid email address", body: `Your address must end in @${domain}.` };
-  }
-  return { title: "Enter your full name", body: "We show this name to the placement office." };
-}
-
-export default async function RegisterPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ error?: string }>;
-}) {
+export default async function RegisterPage() {
   const session = await auth();
-  if (session) redirect(isElevatedRole(session.user.role) ? "/admin/dashboard" : "/dashboard");
+  if (session) redirect(hasAnyAdminPermission(session.user) ? "/admin/dashboard" : "/dashboard");
 
   const domain = studentEmailDomain();
-  const problem = describeError((await searchParams).error, domain);
 
   return (
     <main className="login-page">
@@ -84,57 +44,11 @@ export default async function RegisterPage({
           <span className="eyebrow">Student portal</span>
           <h2>Create your account</h2>
           <p>
-            Register with your <strong>@{domain}</strong> address. If you used this portal before,
-            registering with the same address keeps your profile and applications.
+            Register with your <strong>@{domain}</strong> address. We&apos;ll email a code to confirm it&apos;s
+            yours. If you used this portal before, registering with the same address keeps your profile and
+            applications.
           </p>
-          {problem ? (
-            <div className="login-alert" role="alert">
-              <AlertCircle />
-              <span>
-                <strong>{problem.title}</strong>
-                {problem.body}
-              </span>
-            </div>
-          ) : null}
-          <form action={registerAction} className="login-fields">
-            <label>
-              <span>Full name</span>
-              <input type="text" name="name" autoComplete="name" required />
-            </label>
-            <label>
-              <span>Institute email</span>
-              <input
-                type="email"
-                name="email"
-                autoComplete="email"
-                placeholder={`you@${domain}`}
-                required
-              />
-            </label>
-            <label>
-              <span>Password</span>
-              <input
-                type="password"
-                name="password"
-                autoComplete="new-password"
-                minLength={MIN_PASSWORD_LENGTH}
-                required
-              />
-            </label>
-            <label>
-              <span>Confirm password</span>
-              <input
-                type="password"
-                name="confirmPassword"
-                autoComplete="new-password"
-                minLength={MIN_PASSWORD_LENGTH}
-                required
-              />
-            </label>
-            <button type="submit" className="login-submit">
-              Create account
-            </button>
-          </form>
+          <RegisterForm domain={domain} />
           <p className="login-switch">
             Already registered? <Link href="/login">Sign in</Link>
           </p>

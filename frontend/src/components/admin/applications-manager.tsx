@@ -1,14 +1,23 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState, useMemo, useTransition } from "react";
 import {
   Download,
   CheckCircle2,
+  Check,
+  ChevronsUpDown,
   Clock3,
   Users,
   Briefcase,
   FileText,
   ExternalLink,
+  Calendar,
+  Landmark,
+  Rocket,
+  SlidersHorizontal,
+  FileSpreadsheet,
+  Award,
 } from "lucide-react";
 import type { ApplicationStatus } from "@prisma/client";
 import {
@@ -21,6 +30,33 @@ import {
   type DataTableFilter,
   type DataTableView,
 } from "@/components/common/data-table";
+import {
+  ExportColumnsDialog,
+  buildDefaultExportSelection,
+  type ExportColumnDef,
+} from "@/components/admin/export-columns-dialog";
+import { RecordPlacementDialog } from "@/components/admin/record-placement-dialog";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { cn } from "cn";
+import { APPLICATION_STATUSES, APPLICATION_STATUS_LABELS, isHiredStatus } from "@/lib/application-status";
 
 export type AdminApplicationRow = {
   id: string;
@@ -30,7 +66,12 @@ export type AdminApplicationRow = {
   rollNumber: string | null;
   branch: string | null;
   batch: number | null;
+  degree: string | null;
   cgpa: number | null;
+  class10Percent: number | null;
+  class12Percent: number | null;
+  personalEmail: string | null;
+  contactNumber: string | null;
   jobProfileId: string;
   jobTitle: string;
   companyId: string;
@@ -39,6 +80,8 @@ export type AdminApplicationRow = {
   resumeUrl: string | null;
   resumeLabel: string | null;
   status: ApplicationStatus;
+  /** The linked placement record, if the office has already recorded one. */
+  offerId: string | null;
   appliedAt: string;
   updatedAt: string;
 };
@@ -46,22 +89,121 @@ export type AdminApplicationRow = {
 export type JobOption = {
   id: string;
   title: string;
+  companyId: string;
   companyName: string;
+  batch: number;
 };
 
-const ALL_STATUSES: ApplicationStatus[] = [
-  "APPLIED",
-  "SHORTLISTED",
-  "INTERVIEW",
-  "SELECTED",
-  "REJECTED",
-  "WITHDRAWN",
+const REGISTRATION_EXPORT_COLUMNS: ExportColumnDef<AdminApplicationRow>[] = [
+  { id: "sno", label: "S.No", group: "Basic", locked: true, value: (_row, index) => index + 1 },
+  { id: "rollNumber", label: "Roll Number", group: "Basic", locked: true, value: (row) => row.rollNumber ?? "" },
+  { id: "name", label: "Name", group: "Basic", locked: true, value: (row) => row.studentName },
+  { id: "instituteEmail", label: "Institute Mail ID", group: "Basic", locked: true, value: (row) => row.studentEmail },
+  { id: "contact", label: "Contact", group: "Basic", defaultSelected: true, value: (row) => row.contactNumber ?? "" },
+  { id: "personalEmail", label: "Personal Mail ID", group: "Basic", defaultSelected: true, value: (row) => row.personalEmail ?? "" },
+  { id: "resumeUrl", label: "Resume URL", group: "Basic", value: (row) => row.resumeUrl ?? "" },
+  { id: "appliedAt", label: "Applied At", group: "Basic", value: (row) => row.appliedAt },
+  { id: "batch", label: "Batch", group: "Academic", defaultSelected: true, value: (row) => row.batch ?? "" },
+  { id: "degree", label: "Degree", group: "Academic", defaultSelected: true, value: (row) => row.degree ?? "" },
+  { id: "branch", label: "Branch", group: "Academic", defaultSelected: true, value: (row) => row.branch ?? "" },
+  { id: "cgpa", label: "CGPA", group: "Academic", defaultSelected: true, value: (row) => row.cgpa ?? "" },
+  { id: "cgpa12", label: "CGPA 12th", group: "Academic", defaultSelected: true, value: (row) => row.class12Percent ?? "" },
+  { id: "cgpa10", label: "CGPA 10th", group: "Academic", defaultSelected: true, value: (row) => row.class10Percent ?? "" },
+  { id: "companyName", label: "Company", group: "Application", value: (row) => row.companyName },
+  { id: "jobTitle", label: "Role", group: "Application", value: (row) => row.jobTitle },
+  { id: "status", label: "Status", group: "Application", value: (row) => APPLICATION_STATUS_LABELS[row.status] },
 ];
+
+const ALL_STATUSES: ApplicationStatus[] = [...APPLICATION_STATUSES];
+
+/** Radix has no empty option value, so "nothing chosen yet" is a sentinel. */
+const NO_SELECTION = "__none";
+
+/** The cascading pickers keep the `.season-picker` shell as the visible
+ *  control, so each trigger is transparent inside it. */
+const FILTER_TRIGGER =
+  "h-auto w-auto gap-2 border-0 bg-transparent p-0 text-[13px] font-extrabold text-[var(--ink)] normal-case shadow-none hover:transform-none focus-visible:ring-0 data-[size=default]:h-auto";
 
 /** The filter ids the backend export understands, matched one to one below. */
 const JOB_FILTER = "job";
 const STATUS_FILTER = "status";
 const BRANCH_FILTER = "branch";
+
+/**
+ * The "Select Company" cascading picker, as a searchable combobox
+ * (`Popover` + `Command`, cmdk's own filtering) rather than a plain `Select`
+ * list — the company list can run long, and scrolling one to find a name is
+ * worse than typing it. Sits inside the same `.season-picker` shell and
+ * reads `FILTER_TRIGGER` so it stays visually identical to the season and
+ * event pickers beside it.
+ */
+function CompanyFilterCombobox({
+  options,
+  value,
+  onChange,
+  disabled,
+}: {
+  options: { id: string; name: string }[];
+  value: string | null;
+  onChange: (value: string) => void;
+  disabled?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const selected = options.find((option) => option.id === value);
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          role="combobox"
+          aria-expanded={open}
+          disabled={disabled}
+          className={cn(FILTER_TRIGGER, "hover:bg-transparent hover:text-inherit")}
+        >
+          <Landmark />
+          <span>Select Company</span>
+          <span className={cn(!selected && "text-muted-foreground")}>{selected?.name ?? "--"}</span>
+          <ChevronsUpDown className="opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[240px] p-0" align="start">
+        <Command>
+          <CommandInput placeholder="Search company..." />
+          <CommandList>
+            <CommandEmpty>No company matches.</CommandEmpty>
+            <CommandGroup>
+              <CommandItem
+                value="--"
+                onSelect={() => {
+                  onChange("");
+                  setOpen(false);
+                }}
+              >
+                <Check className={cn(!value ? "opacity-100" : "opacity-0")} />
+                --
+              </CommandItem>
+              {options.map((option) => (
+                <CommandItem
+                  key={option.id}
+                  value={option.name}
+                  onSelect={() => {
+                    onChange(option.id);
+                    setOpen(false);
+                  }}
+                >
+                  <Check className={cn(option.id === value ? "opacity-100" : "opacity-0")} />
+                  {option.name}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 export function ApplicationsManager({
   applications: initialApplications,
@@ -70,11 +212,129 @@ export function ApplicationsManager({
   applications: AdminApplicationRow[];
   jobs: JobOption[];
 }) {
+  const router = useRouter();
   const [applications, setApplications] = useState<AdminApplicationRow[]>(initialApplications);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [statusMessage, setStatusMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [isPending, startTransition] = useTransition();
   const [view, setView] = useState<DataTableView<AdminApplicationRow> | null>(null);
+
+  // --- View Registrations: season -> company -> company event ------------
+  const seasons = useMemo(
+    () => Array.from(new Set(jobs.map((job) => job.batch))).sort((a, b) => b - a),
+    [jobs],
+  );
+  const [season, setSeason] = useState<number | null>(seasons[0] ?? null);
+  const [companyId, setCompanyId] = useState<string | null>(null);
+  const [jobId, setJobId] = useState<string | null>(null);
+
+  const companiesForSeason = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const job of jobs) {
+      if (season !== null && job.batch !== season) continue;
+      map.set(job.companyId, job.companyName);
+    }
+    return Array.from(map, ([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
+  }, [jobs, season]);
+
+  const eventsForCompany = useMemo(
+    () => jobs.filter((job) => job.companyId === companyId && (season === null || job.batch === season)),
+    [jobs, companyId, season],
+  );
+
+  function handleSeasonChange(value: string) {
+    setSeason(value ? Number(value) : null);
+    setCompanyId(null);
+    setJobId(null);
+  }
+
+  function handleCompanyChange(value: string) {
+    setCompanyId(value || null);
+    setJobId(null);
+  }
+
+  const scopedApplications = useMemo(
+    () => (jobId ? applications.filter((app) => app.jobProfileId === jobId) : []),
+    [applications, jobId],
+  );
+
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [exportColumns, setExportColumns] = useState<Set<string>>(() =>
+    buildDefaultExportSelection(REGISTRATION_EXPORT_COLUMNS),
+  );
+  const [downloadingResumes, setDownloadingResumes] = useState(false);
+
+  const [placementDialogApp, setPlacementDialogApp] = useState<AdminApplicationRow | null>(null);
+
+  const registrationsFileLabel = useMemo(() => {
+    const job = jobs.find((j) => j.id === jobId);
+    return job ? `${job.companyName}_${job.title}`.replace(/[^a-z0-9]+/gi, "_") : "registrations";
+  }, [jobs, jobId]);
+
+  function handleExportExcel() {
+    if (!scopedApplications.length) return;
+    const columns = REGISTRATION_EXPORT_COLUMNS.filter(
+      (col) => col.locked || exportColumns.has(col.id),
+    );
+    const rows = scopedApplications.map((app, index) => {
+      const row: Record<string, string | number> = {};
+      for (const col of columns) row[col.label] = col.value(app, index);
+      return row;
+    });
+
+    import("xlsx").then((XLSX) => {
+      const worksheet = XLSX.utils.json_to_sheet(rows);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Registrations");
+      XLSX.writeFile(workbook, `${registrationsFileLabel}.xlsx`);
+    });
+  }
+
+  async function handleDownloadResumes() {
+    const withResumes = scopedApplications.filter((app) => app.resumeUrl);
+    if (!withResumes.length) {
+      setStatusMessage({ type: "error", text: "No resumes available for the current selection." });
+      return;
+    }
+
+    setDownloadingResumes(true);
+    setStatusMessage(null);
+    try {
+      const JSZip = (await import("jszip")).default;
+      const zip = new JSZip();
+      let failed = 0;
+
+      await Promise.all(
+        withResumes.map(async (app) => {
+          try {
+            const res = await fetch(app.resumeUrl!);
+            if (!res.ok) throw new Error("fetch failed");
+            const blob = await res.blob();
+            const safeName = (app.rollNumber || app.studentName || app.id).replace(/[^a-z0-9-_]+/gi, "_");
+            zip.file(`${safeName}.pdf`, blob);
+          } catch {
+            failed += 1;
+          }
+        }),
+      );
+
+      const content = await zip.generateAsync({ type: "blob" });
+      const url = URL.createObjectURL(content);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${registrationsFileLabel}_resumes.zip`;
+      link.click();
+      URL.revokeObjectURL(url);
+
+      setStatusMessage(
+        failed
+          ? { type: "error", text: `Downloaded ${withResumes.length - failed} resume(s); ${failed} failed.` }
+          : { type: "success", text: `Downloaded ${withResumes.length} resume(s).` },
+      );
+    } finally {
+      setDownloadingResumes(false);
+    }
+  }
 
   const branches = useMemo(() => {
     const set = new Set<string>();
@@ -174,12 +434,14 @@ export function ApplicationsManager({
   const getStatusBadgeClass = (status: ApplicationStatus) => {
     switch (status) {
       case "SELECTED":
+      case "OFFER_ACCEPTED":
         return "cell-status";
       case "SHORTLISTED":
         return "cell-status";
       case "INTERVIEW":
         return "cell-status draft";
       case "REJECTED":
+      case "OFFER_DECLINED":
         return "cell-status pending";
       case "WITHDRAWN":
         return "cell-status pending";
@@ -194,7 +456,7 @@ export function ApplicationsManager({
       {
         id: "candidate",
         header: "Candidate",
-        width: "minmax(200px, 1.5fr)",
+        width: "200px",
         hideable: false,
         sortValue: (app) => app.studentName,
         cell: (app) => (
@@ -208,28 +470,28 @@ export function ApplicationsManager({
       {
         id: "branch",
         header: "Branch",
-        width: "minmax(130px, 1fr)",
+        width: "130px",
         sortValue: (app) => app.branch,
         cell: (app) => app.branch ?? <span className="dt-muted">Not specified</span>,
       },
       {
         id: "batch",
         header: "Batch",
-        width: "90px",
+        width: "100px",
         sortValue: (app) => app.batch,
-        cell: (app) => <span className="dt-numeric">{app.batch ?? "—"}</span>,
+        cell: (app) => <span>{app.batch ?? "—"}</span>,
       },
       {
         id: "cgpa",
         header: "CGPA",
         width: "90px",
         sortValue: (app) => app.cgpa,
-        cell: (app) => <span className="dt-numeric">{app.cgpa ?? "—"}</span>,
+        cell: (app) => <span>{app.cgpa ?? "—"}</span>,
       },
       {
         id: "job",
         header: "Job & company",
-        width: "minmax(190px, 1.4fr)",
+        width: "190px",
         sortValue: (app) => `${app.companyName} ${app.jobTitle}`,
         cell: (app) => (
           <span className="dt-primary">
@@ -241,7 +503,7 @@ export function ApplicationsManager({
       {
         id: "appliedAt",
         header: "Applied",
-        width: "minmax(120px, 1fr)",
+        width: "120px",
         // `appliedAt` is already a display string from the server, so the raw
         // date is parsed here rather than compared as text.
         sortValue: (app) => new Date(app.appliedAt),
@@ -250,7 +512,7 @@ export function ApplicationsManager({
       {
         id: "resume",
         header: "Resume",
-        width: "minmax(140px, 1fr)",
+        width: "140px",
         sortValue: (app) => app.resumeLabel,
         cell: (app) =>
           app.resumeUrl ? (
@@ -274,12 +536,14 @@ export function ApplicationsManager({
         header: "Status",
         width: "130px",
         sortValue: (app) => app.status,
-        cell: (app) => <b className={getStatusBadgeClass(app.status)}>{app.status}</b>,
+        cell: (app) => (
+          <b className={getStatusBadgeClass(app.status)}>{APPLICATION_STATUS_LABELS[app.status]}</b>
+        ),
       },
       {
         id: "stage",
         header: "Stage action",
-        width: "150px",
+        width: "170px",
         hideable: false,
         cell: (app) => (
           <select
@@ -291,11 +555,37 @@ export function ApplicationsManager({
           >
             {ALL_STATUSES.map((s) => (
               <option key={s} value={s}>
-                {s}
+                {APPLICATION_STATUS_LABELS[s]}
               </option>
             ))}
           </select>
         ),
+      },
+      {
+        id: "placement",
+        header: "Placement record",
+        width: "170px",
+        hideable: false,
+        cell: (app) =>
+          isHiredStatus(app.status) ? (
+            app.offerId ? (
+              <a className="admin-external-link" href="/admin/placement-records" title="Open placement records">
+                <Award />
+                Recorded
+              </a>
+            ) : (
+              <button
+                type="button"
+                className="dt-view-button"
+                onClick={() => setPlacementDialogApp(app)}
+              >
+                <Award />
+                Record placement
+              </button>
+            )
+          ) : (
+            <span className="dt-muted">—</span>
+          ),
       },
     ],
     [isPending],
@@ -315,7 +605,7 @@ export function ApplicationsManager({
       {
         id: STATUS_FILTER,
         label: "Status",
-        options: ALL_STATUSES.map((status) => ({ value: status, label: status })),
+        options: ALL_STATUSES.map((status) => ({ value: status, label: APPLICATION_STATUS_LABELS[status] })),
         value: (app) => app.status,
       },
       {
@@ -328,24 +618,266 @@ export function ApplicationsManager({
     [jobs, branches],
   );
 
+  const registrationColumns = useMemo<DataTableColumn<AdminApplicationRow>[]>(() => {
+    const indexById = new Map(scopedApplications.map((app, index) => [app.id, index]));
+    return [
+      {
+        id: "sno",
+        header: "S.No",
+        width: "70px",
+        sticky: true,
+        hideable: false,
+        sortValue: (app) => indexById.get(app.id) ?? 0,
+        cell: (app) => <span>{(indexById.get(app.id) ?? 0) + 1}</span>,
+      },
+      {
+        id: "rollNumber",
+        header: "Roll Number",
+        width: "150px",
+        sticky: true,
+        hideable: false,
+        sortValue: (app) => app.rollNumber,
+        cell: (app) =>
+          app.rollNumber ? (
+            <span className="identifier">{app.rollNumber}</span>
+          ) : (
+            <span className="dt-muted">—</span>
+          ),
+      },
+      {
+        id: "name",
+        header: "Name",
+        width: "200px",
+        hideable: false,
+        sortValue: (app) => app.studentName,
+        cell: (app) => <strong>{app.studentName}</strong>,
+      },
+      {
+        id: "contact",
+        header: "Contact",
+        width: "140px",
+        sortValue: (app) => app.contactNumber,
+        cell: (app) => app.contactNumber ?? <span className="dt-muted">—</span>,
+      },
+      {
+        id: "instituteEmail",
+        header: "Institute Mail ID",
+        width: "300px",
+        sortValue: (app) => app.studentEmail,
+        cell: (app) => app.studentEmail,
+      },
+      {
+        id: "personalEmail",
+        header: "Personal Mail ID",
+        width: "300px",
+        sortValue: (app) => app.personalEmail,
+        cell: (app) => app.personalEmail ?? <span className="dt-muted">—</span>,
+      },
+      {
+        id: "degree",
+        header: "Degree",
+        width: "100px",
+        sortValue: (app) => app.degree,
+        cell: (app) => app.degree ?? <span className="dt-muted">—</span>,
+      },
+      {
+        id: "branch",
+        header: "Branch",
+        width: "100px",
+        sortValue: (app) => app.branch,
+        cell: (app) => app.branch ?? <span className="dt-muted">—</span>,
+      },
+      {
+        id: "batch",
+        header: "Batch",
+        width: "90px",
+        sortValue: (app) => app.batch,
+        cell: (app) => <span>{app.batch ?? "—"}</span>,
+      },
+      {
+        id: "cgpa",
+        header: "CGPA",
+        width: "90px",
+        sortValue: (app) => app.cgpa,
+        cell: (app) => <span>{app.cgpa ?? "—"}</span>,
+      },
+      {
+        id: "cgpa12",
+        header: "CGPA 12th",
+        width: "100px",
+        sortValue: (app) => app.class12Percent,
+        cell: (app) => <span>{app.class12Percent ?? "—"}</span>,
+      },
+      {
+        id: "cgpa10",
+        header: "CGPA 10th",
+        width: "100px",
+        sortValue: (app) => app.class10Percent,
+        cell: (app) => <span>{app.class10Percent ?? "—"}</span>,
+      },
+      {
+        id: "resume",
+        header: "Resume",
+        width: "120px",
+        cell: (app) =>
+          app.resumeUrl ? (
+            <a
+              href={app.resumeUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="admin-external-link"
+              title="Open attached resume"
+            >
+              <FileText />
+              {app.resumeLabel || "Resume"}
+            </a>
+          ) : (
+            <span className="dt-muted">—</span>
+          ),
+      },
+    ];
+  }, [scopedApplications]);
+
   return (
     <div className="admin-page">
+      <section className="admin-heading">
+        <div>
+          <span className="eyebrow">Registrations</span>
+          <h1>View Registrations</h1>
+          <p>Browse and export student registrations by company event.</p>
+        </div>
+      </section>
+
+      {statusMessage ? (
+        <Alert
+          variant={statusMessage.type === "success" ? "success" : "destructive"}
+          className="mt-4"
+        >
+          <AlertDescription>{statusMessage.text}</AlertDescription>
+        </Alert>
+      ) : null}
+
+      <div className="registrations-filters">
+        <div className="season-picker">
+          <Select
+            value={season === null ? "" : String(season)}
+            onValueChange={handleSeasonChange}
+            disabled={!seasons.length}
+          >
+            <SelectTrigger aria-label="Select season" className={FILTER_TRIGGER}>
+              <Calendar />
+              <span>Select Season</span>
+              <SelectValue placeholder="No seasons yet" />
+            </SelectTrigger>
+            <SelectContent>
+              {seasons.map((s) => (
+                <SelectItem key={s} value={String(s)}>
+                  {s}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="season-picker">
+          <CompanyFilterCombobox
+            options={companiesForSeason}
+            value={companyId}
+            onChange={handleCompanyChange}
+            disabled={!companiesForSeason.length}
+          />
+        </div>
+
+        <div className="season-picker">
+          <Select
+            value={jobId ?? NO_SELECTION}
+            onValueChange={(value) => setJobId(value === NO_SELECTION ? null : value)}
+            disabled={!companyId}
+          >
+            <SelectTrigger aria-label="Select company event" className={FILTER_TRIGGER}>
+              <Rocket />
+              <span>Select Company Event</span>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={NO_SELECTION}>
+                {companyId ? "--" : "Select Company First"}
+              </SelectItem>
+              {eventsForCompany.map((job) => (
+                <SelectItem key={job.id} value={job.id}>
+                  {job.companyName} — {job.title}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <DataTable
+        title="Registered Students"
+        actions={
+          <>
+            <Button type="button" variant="outline" onClick={() => setExportDialogOpen(true)}>
+              <SlidersHorizontal />
+              Customize Export
+              <Badge variant="secondary" className="rounded-full px-2">
+                {exportColumns.size}
+              </Badge>
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleDownloadResumes}
+              disabled={!jobId || !scopedApplications.length || downloadingResumes}
+            >
+              <Download />
+              {downloadingResumes ? "Preparing…" : "Download Resumes"}
+            </Button>
+            <Button
+              type="button"
+              onClick={handleExportExcel}
+              disabled={!jobId || !scopedApplications.length}
+            >
+              <FileSpreadsheet />
+              Export Excel
+            </Button>
+          </>
+        }
+        data={scopedApplications}
+        columns={registrationColumns}
+        getRowId={(app) => app.id}
+        searchText={(app) =>
+          `${app.studentName} ${app.studentEmail} ${app.personalEmail ?? ""} ${app.rollNumber ?? ""} ${app.contactNumber ?? ""} ${app.branch ?? ""} ${app.degree ?? ""} ${app.batch ?? ""}`
+        }
+        searchPlaceholder="Search..."
+        columnStorageKey="registrations"
+        minWidth={1500}
+        emptyIcon={<Users />}
+        emptyTitle={jobId ? "No matching registrations" : "Select a company event"}
+        emptyDescription={
+          jobId
+            ? "Try a different search."
+            : "Select a company event to view registrations."
+        }
+      />
+
+      {exportDialogOpen ? (
+        <ExportColumnsDialog
+          columns={REGISTRATION_EXPORT_COLUMNS}
+          selected={exportColumns}
+          onChange={setExportColumns}
+          onClose={() => setExportDialogOpen(false)}
+          onApply={() => setExportDialogOpen(false)}
+        />
+      ) : null}
+
       <section className="admin-heading">
         <div>
           <span className="eyebrow">Candidate Management</span>
           <h1>Applications</h1>
           <p>Review candidate profiles, download resumes, and manage recruitment stage progression.</p>
         </div>
-        <a href={exportHref} download title="Export CSV of filtered applications">
-          <Download /> Export CSV
-        </a>
       </section>
-
-      {statusMessage ? (
-        <div className={statusMessage.type === "success" ? "admin-success" : "admin-error"}>
-          {statusMessage.text}
-        </div>
-      ) : null}
 
       <section className="admin-metrics">
         <article>
@@ -410,27 +942,50 @@ export function ApplicationsManager({
               onClick={() => handleBulkStatusChange("INTERVIEW")}
               disabled={isPending}
             >
-              Move to Interview
+              Assessment / Interview
             </button>
             <button
               className="select"
               onClick={() => handleBulkStatusChange("SELECTED")}
               disabled={isPending}
             >
-              Select / Offer
+              Select
             </button>
             <button
               className="reject"
               onClick={() => handleBulkStatusChange("REJECTED")}
               disabled={isPending}
             >
-              Reject
+              Not Selected
+            </button>
+            <button
+              className="select"
+              onClick={() => handleBulkStatusChange("OFFER_ACCEPTED")}
+              disabled={isPending}
+            >
+              Offer Accepted
+            </button>
+            <button
+              className="reject"
+              onClick={() => handleBulkStatusChange("OFFER_DECLINED")}
+              disabled={isPending}
+            >
+              Offer Declined
             </button>
           </div>
         </div>
       )}
 
       <DataTable
+        title="Candidates"
+        actions={
+          <Button asChild variant="outline">
+            <a href={exportHref} download>
+              <Download />
+              Export CSV
+            </a>
+          </Button>
+        }
         data={applications}
         columns={columns}
         filters={filters}
@@ -469,6 +1024,18 @@ export function ApplicationsManager({
             : "Student applications submitted to active job postings will appear here."
         }
       />
+
+      {placementDialogApp ? (
+        <RecordPlacementDialog
+          application={placementDialogApp}
+          onClose={() => setPlacementDialogApp(null)}
+          onSaved={() => {
+            setPlacementDialogApp(null);
+            setStatusMessage({ type: "success", text: "Placement record saved." });
+            router.refresh();
+          }}
+        />
+      ) : null}
     </div>
   );
 }

@@ -1,122 +1,5 @@
 /* Admin Workspace Styling with Dark Theme & Left-Aligned Application Funnel */
 
-.admin-shell {
-  min-height: 100vh;
-  display: grid;
-  grid-template-columns: 240px 1fr;
-}
-
-.admin-shell > aside {
-  position: fixed;
-  inset: 0 auto 0 0;
-  width: 240px;
-  background: var(--sidebar-from);
-  color: var(--ink);
-  padding: 24px 14px;
-  display: flex;
-  flex-direction: column;
-  z-index: 30;
-  border-right: 1px solid var(--border);
-  box-shadow: none;
-}
-
-.admin-brand {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 0 6px 20px;
-  border-bottom: 1px solid var(--border);
-  margin-bottom: 14px;
-}
-
-.admin-brand > img {
-  width: 38px;
-  height: 38px;
-  object-fit: contain;
-  padding: 5px;
-  background: #fff;
-  border-radius: 10px;
-  box-shadow: none;
-  border: 1px solid var(--border);
-}
-
-.admin-brand strong, .admin-brand span { display: block; }
-.admin-brand strong { font: 800 14px var(--font-jakarta); letter-spacing: -0.01em; color: var(--ink); }
-.admin-brand span { font-size: 9px; color: var(--muted); margin-top: 1px; font-weight: 600; }
-
-.admin-shell nav { display: grid; gap: 3px; }
-.admin-shell nav a {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  color: var(--ink-secondary);
-  text-decoration: none;
-  padding: 9px 11px;
-  border-radius: 9px;
-  font-size: 12px;
-  font-weight: 600;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-}
-.admin-shell nav a svg { width: 16px; }
-.admin-shell nav a:hover {
-  background: var(--surface-alt);
-  color: var(--ink);
-}
-.admin-shell nav a.active {
-  background: var(--navy-soft-bg);
-  color: var(--navy);
-  box-shadow: inset 3px 0 var(--navy);
-}
-
-/* Expandable nav groups: one heading, several pages beneath it. */
-.nav-group { display: grid; gap: 2px; }
-.nav-group-toggle {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  border: 0;
-  background: transparent;
-  color: var(--ink-secondary);
-  padding: 9px 11px;
-  border-radius: 9px;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  text-align: left;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-}
-.nav-group-toggle svg { width: 16px; flex-shrink: 0; }
-.nav-group-toggle span { flex: 1; }
-.nav-group-toggle .chevron { width: 14px; transition: transform 0.2s ease; }
-.nav-group-toggle .chevron.open { transform: rotate(180deg); }
-.nav-group-toggle:hover { background: var(--surface-alt); color: var(--ink); }
-.nav-group-toggle.current { color: var(--navy); }
-.nav-group-links {
-  display: grid;
-  gap: 2px;
-  margin: 2px 0 6px 20px;
-  padding-left: 10px;
-  border-left: 1px solid var(--border);
-}
-.nav-group-links a { padding: 7px 10px; font-size: 11.5px; }
-.nav-group-links a.active { box-shadow: inset 2px 0 var(--navy); }
-
-.student-portal-link {
-  margin-top: auto;
-  color: var(--ink-secondary);
-  text-decoration: none;
-  font-size: 11px;
-  font-weight: 600;
-  padding: 10px 12px;
-  border-radius: 10px;
-  background: var(--surface-alt);
-  border: 1px solid var(--border);
-  transition: all 0.15s ease;
-}
-.student-portal-link:hover { color: var(--ink); background: var(--surface-highlight); border-color: var(--muted); }
-
-.admin-shell > main { grid-column: 2; min-width: 0; }
 .admin-topbar {
   height: 72px;
   background: var(--topbar-bg);
@@ -126,13 +9,18 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 4vw;
+  /* Asymmetric on purpose. The right edge still wants the generous 4vw
+     gutter for the profile cluster, but the left edge now opens on the
+     sidebar's own collapse trigger, and 4vw of empty space in front of a
+     28px icon read as the icon drifting toward the middle of the header
+     rather than sitting at its edge. */
+  padding: 0 4vw 0 20px;
   position: sticky;
   top: 0;
   z-index: 20;
   transition: background-color 0.25s ease, border-color 0.25s ease;
 }
-.admin-topbar > div:first-child strong { display: block; font: 800 14px var(--font-jakarta); letter-spacing: -0.01em; color: var(--ink); }
+.admin-topbar > div:first-child strong { display: block; font: 600 14px var(--font-plex-sans); color: var(--ink); }
 
 .admin-user {
   display: flex;
@@ -151,7 +39,7 @@
   border-radius: 50%;
   background: var(--navy);
   color: #fff;
-  font-weight: 800;
+  font-weight: 600;
   font-size: 11px;
 }
 .admin-user strong, .admin-user small { display: block; }
@@ -164,9 +52,14 @@
   padding: 35px 4vw 70px;
   animation: fadeSlideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
+/* The announcement composer's own funnel-plus-editor reads as one long
+   column at the shared 1280px, pushing "Publish to students" well below the
+   fold. Widened for this page only — every table page still wants the
+   narrower, denser 1280px. */
+.admin-page.composer-page { max-width: 1560px; }
 
 .admin-heading { display: flex; justify-content: space-between; align-items: flex-end; }
-.admin-heading h1 { font: 800 28px var(--font-jakarta); letter-spacing: -0.03em; margin: 4px 0 2px; color: var(--ink); }
+.admin-heading h1 { font: 600 28px var(--font-plex-sans); letter-spacing: -0.01em; margin: 4px 0 2px; color: var(--ink); }
 .admin-heading p { color: var(--muted); font-size: 13px; margin: 0; }
 /* The anchor is the CSV export on /admin/applications: it downloads from a
    route handler, so it has to be a link, but it reads as the same action. */
@@ -187,21 +80,38 @@
 }
 .admin-heading button:hover:not(:disabled), .admin-heading a:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(var(--deep-rgb), 0.38); }
 .admin-heading button svg, .admin-heading a svg { width: 14px; }
+/* Two ways into the same screen, one of them the lesser: placement records can
+   be added one at a time or a drive at a time, and only one can be filled. */
+.admin-heading-actions { display: flex; align-items: center; gap: 8px; }
+.admin-heading .secondary {
+  background: var(--card-bg);
+  color: var(--ink);
+  border: 1px solid var(--border);
+  box-shadow: none;
+}
+.admin-heading .secondary:hover { background: var(--surface-highlight); box-shadow: none; }
 
 /* Announcement composer: a funnel of pickers above a locked editor. Each
    choice narrows the next, so the controls read as one sequence. */
 .composer { margin-top: 18px; }
 .composer-fields { display: grid; gap: 10px; }
-.composer-row { position: relative; display: grid; gap: 10px; }
+.composer-row { position: relative; display: grid; gap: 8px; }
 .composer-row.two { grid-template-columns: 1fr 1fr; }
+/* Season, company, and event picked as one decision — the three columns
+   share the row instead of company/event stacking below on their own
+   line, which is why they run noticeably narrower than a two-up row. */
+.composer-row.three { grid-template-columns: 1fr 1fr 1fr; }
+/* The event field's dropdown anchors to this wrapper rather than the whole
+   row, now that the row holds three fields instead of one. */
+.composer-field-wrap { position: relative; min-width: 0; }
 .composer-field {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   width: 100%;
-  padding: 13px 16px;
+  padding: 9px 12px;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 9px;
   background: var(--surface-alt);
   color: var(--muted);
   font-size: 12px;
@@ -211,13 +121,60 @@
   transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .composer-field span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.composer-field svg { width: 15px; flex-shrink: 0; }
-.composer-field .tick { width: 14px; color: var(--muted); transition: transform 0.2s ease; }
+.composer-field svg { width: 13px; flex-shrink: 0; }
+.composer-field .tick { width: 12px; color: var(--muted); transition: transform 0.2s ease; }
 .composer-field .tick.open { transform: rotate(180deg); }
 .composer-field:hover:not(:disabled) { border-color: var(--blue); color: var(--ink); }
 .composer-field:disabled { opacity: 0.55; cursor: not-allowed; }
 .composer-field.filled { background: var(--card-bg); color: var(--ink); border-color: var(--border); }
 .composer-field.filled .tick { color: var(--green); }
+
+/* Rich text editor (announcement "Announcement"/"Notice" body). The toolbar
+   and shell borrow the portal's own tokens rather than a themed Tiptap
+   skin, so a bold word here looks like the rest of the admin UI. */
+.rte-shell {
+  background: var(--card-bg);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.rte-shell:focus-within {
+  border-color: var(--ring, var(--blue));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--blue) 20%, transparent);
+}
+.rte-toolbar { background: var(--surface-alt); border-radius: 6px 6px 0 0; }
+.rte-content {
+  min-height: 200px;
+  padding: 12px 14px;
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--ink);
+  outline: none;
+}
+.rte-content p { margin: 0 0 0.65em; }
+.rte-content > *:last-child { margin-bottom: 0; }
+.rte-content h2 { font-size: 1.2rem; font-weight: 700; margin: 0.7em 0 0.35em; }
+.rte-content h3 { font-size: 1.05rem; font-weight: 700; margin: 0.6em 0 0.3em; }
+.rte-content ul, .rte-content ol { margin: 0.4em 0; padding-left: 1.4em; }
+.rte-content li { margin: 0.15em 0; }
+.rte-content blockquote {
+  margin: 0.6em 0;
+  padding-left: 0.9em;
+  border-left: 3px solid var(--border);
+  color: var(--muted);
+}
+.rte-content a { color: var(--blue); text-decoration: underline; text-underline-offset: 2px; }
+.rte-content strong { font-weight: 700; }
+/* The preview modal renders the same sanitized HTML through this class for
+   consistent typography, but it is static text, not an editing surface —
+   the editor's `min-height` exists to give an empty document room to be
+   clicked into, which a short announcement here does not need. */
+.rte-content.rte-content--preview { min-height: 0; }
+.rte-content p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  color: var(--muted);
+  pointer-events: none;
+}
 
 .composer-dropdown {
   position: absolute;
@@ -267,56 +224,13 @@
   font-size: 12px;
   outline: none;
 }
-
-.composer-tags { display: flex; flex-wrap: wrap; gap: 6px; }
-.composer-tags span {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 10px;
-  font-weight: 700;
-  padding: 4px 9px;
-  border-radius: 9999px;
-  background: var(--badge-blue-bg);
-  color: var(--badge-blue-text);
-}
-.composer-tags button { border: 0; background: transparent; cursor: pointer; color: inherit; padding: 0; line-height: 1; }
-
-.composer-title {
-  width: 100%;
-  padding: 13px 16px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--card-bg);
-  color: var(--ink);
-  font-size: 13px;
-  font-weight: 600;
-}
-.composer-editor {
-  min-height: 220px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: var(--card-bg);
-  padding: 14px 16px;
-  display: grid;
-}
-.composer-editor textarea {
-  width: 100%;
-  min-height: 200px;
-  border: 0;
-  background: transparent;
-  color: var(--ink);
-  font: 400 13px/1.7 var(--font-inter, inherit);
-  resize: vertical;
-  outline: none;
-}
 .composer-editor.locked { background: var(--surface-alt); place-items: center; text-align: center; }
 .composer-editor.locked p { margin: 0; font-size: 12px; color: var(--muted); max-width: 420px; line-height: 1.7; }
 
 .composer-attachments { display: grid; gap: 8px; }
 .attachments-label {
   font-size: 10px;
-  font-weight: 800;
+  font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--muted);
@@ -406,24 +320,8 @@
 }
 .composer-note svg { width: 15px; color: var(--orange); flex-shrink: 0; margin-top: 1px; }
 .composer-note p { margin: 0; font-size: 11px; color: var(--muted); line-height: 1.6; }
-
-.composer-actions { display: flex; justify-content: flex-end; gap: 10px; }
-.composer-actions button {
-  border: 0;
-  background: var(--navy);
-  color: #fff;
-  border-radius: 10px;
-  padding: 11px 18px;
-  font-size: 11px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-}
 .composer-actions button.ghost { background: var(--surface-alt); color: var(--ink); border: 1px solid var(--border); }
-.composer-actions button:disabled { opacity: 0.45; cursor: not-allowed; }
-.composer-actions button:hover:not(:disabled) { transform: translateY(-1px); }
 
-.picker-modal { width: min(520px, 100%); }
 .picker-body { display: grid; gap: 8px; padding: 6px 0 2px; }
 .picker-list { display: grid; gap: 8px; max-height: 420px; overflow-y: auto; }
 .picker-list button {
@@ -441,6 +339,84 @@
 }
 .picker-list button:hover { border-color: var(--blue); background: var(--surface-alt); }
 .picker-list button.selected { border-color: var(--blue); background: var(--surface-highlight); }
+.picker-footer { display: grid; gap: 8px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border-subtle); }
+.picker-footer button {
+  border: 0;
+  border-radius: 10px;
+  background: var(--navy);
+  color: #fff;
+  padding: 12px 18px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.picker-footer small { font-size: 10px; color: var(--muted); line-height: 1.6; }
+  /* The picked year sits at the far end of the control, the label at the near
+   end, matching the season pickers on the announcement composers. */
+.dropdown-option { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.dropdown-option svg { width: 13px; color: var(--green); }
+  /* A year needs the width of a year, not of the card. */
+
+.switch.on { background: var(--navy); }
+.switch.on > i { transform: translateX(17px); }
+
+/* react-day-picker ships unstyled here on purpose: its own stylesheet carries
+   literal colours, and every surface in this portal reads a token. */
+.rdp-root { --rdp-day-size: 34px; }
+.rdp-month_caption { display: flex; align-items: center; justify-content: center; padding: 2px 0 10px; }
+.rdp-caption_label { font: 700 13px var(--font-plex-sans); color: var(--ink); border: 0; padding: 0; }
+/* The nav is a sibling of the month, not of the caption, so it is overlaid on
+   the caption row rather than placed in it. */
+.rdp-months { position: relative; }
+.rdp-nav {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  /* The overlay spans the caption row, so only its buttons take the pointer;
+     otherwise it would swallow clicks on the days beneath it. */
+  pointer-events: none;
+}
+.rdp-nav button { pointer-events: auto; }
+.rdp-nav button {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card-bg);
+  color: var(--ink);
+  cursor: pointer;
+}
+.rdp-nav button:disabled { opacity: 0.35; cursor: not-allowed; }
+.rdp-nav svg, .rdp-chevron { width: 13px; height: 13px; fill: currentColor; }
+.rdp-month_grid { border-collapse: collapse; }
+.rdp-weekday { font-size: 10px; font-weight: 700; color: var(--muted); padding-bottom: 4px; }
+.rdp-day { padding: 1px; }
+.rdp-day_button {
+  width: var(--rdp-day-size);
+  height: var(--rdp-day-size);
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.rdp-day_button:hover { background: var(--surface-alt); }
+.rdp-today .rdp-day_button { background: var(--surface-highlight); }
+.rdp-selected .rdp-day_button { background: var(--navy); color: #fff; }
+.rdp-outside .rdp-day_button { color: var(--muted); opacity: 0.6; }
+.rdp-disabled .rdp-day_button { color: var(--muted); opacity: 0.35; cursor: not-allowed; }
+
+@media (max-width: 720px) {
+}
 
 /* Section tabs. Used where one screen holds distinct jobs rather than one
    list under a filter, as on Announcements. */
@@ -470,7 +446,7 @@
 .admin-tabs svg { width: 14px; }
 .admin-tabs b {
   font-size: 9px;
-  font-weight: 800;
+  font-weight: 600;
   padding: 2px 7px;
   border-radius: 9999px;
   background: var(--surface-highlight);
@@ -488,7 +464,7 @@
 
 .recent-admin-link {
   font-size: 10px;
-  font-weight: 800;
+  font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--blue);
@@ -515,7 +491,7 @@
 .metric-icon.violet { background: var(--badge-purple-bg); color: var(--badge-purple-text); }
 .admin-metrics small, .admin-metrics strong, .admin-metrics b { display: block; }
 .admin-metrics small { font-size: 10px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
-.admin-metrics strong { font: 800 24px var(--font-jakarta); margin: 2px 0 1px; color: var(--ink); letter-spacing: -0.02em; }
+.admin-metrics strong { font: 600 24px var(--font-plex-sans); margin: 2px 0 1px; color: var(--ink); letter-spacing: -0.01em; }
 .admin-metrics b { font-size: 9px; color: var(--green); }
 
 .analytics-grid { display: grid; grid-template-columns: 1.3fr .7fr; gap: 16px; }
@@ -528,7 +504,7 @@
   transition: box-shadow 0.2s ease;
 }
 .analytics-grid header, .recent-admin header { display: flex; justify-content: space-between; align-items: flex-start; }
-.analytics-grid h2, .recent-admin h2 { font: 800 15px var(--font-jakarta); margin: 0; color: var(--ink); letter-spacing: -0.01em; }
+.analytics-grid h2, .recent-admin h2 { font: 600 15px var(--font-plex-sans); margin: 0; color: var(--ink); }
 .analytics-grid header p, .recent-admin header p { font-size: 10px; color: var(--muted); margin: 2px 0 0; }
 .analytics-grid header > svg { color: var(--muted); width: 18px; }
 
@@ -545,21 +521,33 @@
   gap: 8px;
   background: var(--card-bg);
   border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 8px 12px;
+  border-radius: 8px;
+  min-height: 46px;
+  padding: 0 14px;
   font-size: 10px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--muted);
   box-shadow: var(--card-shadow);
+  transition: background 0.15s, border-color 0.15s;
+}
+/* The trigger inside (a `Select` or, for a searchable picker, a `Button`)
+   is sized to fit its own content, not the whole pill, so its own hover
+   background would only ever paint a patch around the text rather than the
+   full control. The shell owns the hover feedback instead, uniformly,
+   regardless of which trigger element lives inside it. */
+.season-picker:has(button:hover:not(:disabled)),
+.season-picker:has([data-slot="select-trigger"]:hover:not(:disabled)) {
+  background: var(--surface-alt);
+  border-color: var(--blue);
 }
 .season-picker svg { width: 14px; color: var(--blue); }
 .season-picker select {
   border: 0;
   background: transparent;
   color: var(--ink);
-  font: 800 13px var(--font-jakarta);
+  font: 600 13px var(--font-plex-sans);
   cursor: pointer;
 }
 .season-picker select:disabled { cursor: not-allowed; color: var(--muted); }
@@ -586,7 +574,7 @@
   gap: 6px;
   height: 190px;
 }
-.column-chart b { font-size: 10px; font-weight: 800; color: var(--ink); }
+.column-chart b { font-size: 10px; font-weight: 600; color: var(--ink); }
 .column-chart i {
   display: block;
   width: 100%;
@@ -619,12 +607,12 @@
   box-shadow: var(--card-shadow);
 }
 .package-card header { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
-.package-card h2 { font: 800 13px var(--font-jakarta); margin: 0; color: var(--ink); }
+.package-card h2 { font: 600 13px var(--font-plex-sans); margin: 0; color: var(--ink); }
 .package-card header svg { width: 16px; color: var(--blue); }
 .package-card dl { margin: 14px 0 10px; display: grid; gap: 8px; }
 .package-card dl > div { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
 .package-card dt { font-size: 10px; color: var(--muted); font-weight: 600; }
-.package-card dd { margin: 0; font: 800 13px var(--font-jakarta); color: var(--ink); }
+.package-card dd { margin: 0; font: 600 13px var(--font-plex-sans); color: var(--ink); }
 .package-card dd.highlight { color: var(--green); }
 .package-card small { font-size: 9px; color: var(--muted); }
 
@@ -691,7 +679,7 @@
 }
 
 .funnel-count {
-  font: 800 15px var(--font-jakarta);
+  font: 600 15px var(--font-plex-sans);
   color: var(--ink);
 }
 
@@ -731,115 +719,135 @@
 .recent-admin strong { font-size: 11px; color: var(--ink); font-weight: 700; }
 .recent-admin small { font-size: 9px; color: var(--muted); margin-top: 2px; }
 
-/* Admin Toolbar & Table */
-.admin-toolbar { display: flex; gap: 10px; margin: 24px 0 14px; }
-.admin-toolbar label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: 1;
-  background: var(--card-bg);
-  border: 1px solid var(--border);
-  border-radius: 11px;
-  padding: 0 12px;
-  box-shadow: var(--card-shadow);
-  transition: all 0.2s ease;
-}
-.admin-toolbar label:focus-within { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(var(--brand-rgb), 0.15); }
-.admin-toolbar label svg { width: 16px; color: var(--muted); }
-.admin-toolbar input { width: 100%; border: 0; outline: 0; padding: 11px 0; background: transparent; color: var(--ink); font-size: 12px; }
-.admin-toolbar > button {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  border: 1px solid var(--border);
-  background: var(--card-bg);
-  color: var(--ink);
-  border-radius: 11px;
-  padding: 0 14px;
-  font-size: 11px;
-  font-weight: 700;
-  transition: all 0.15s;
-}
-.admin-toolbar > button:hover:not(:disabled) { background: var(--surface-alt); border-color: var(--blue); }
-.admin-toolbar > button svg { width: 14px; }
-.admin-toolbar > select {
-  border: 1px solid var(--border);
-  background: var(--card-bg);
-  border-radius: 11px;
-  padding: 0 14px;
-  color: var(--ink);
-  font-size: 11px;
-  font-weight: 600;
-}
-
 /* ---------------------------------------------------------------------------
    Shared admin data table. One implementation drives every admin list, so
    every rule here is generic: nothing below knows which page it is on.
    --------------------------------------------------------------------------- */
 
-.data-table { display: grid; gap: 12px; margin-top: 18px; }
+.data-table { display: grid; gap: 14px; margin-top: 18px; }
 
-.dt-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+/* Section heading row: the name of the list, the count of what is actually on
+   screen, and the buttons that act on the whole list. Outside the card, so the
+   card reads as the data and this reads as the page. */
+.dt-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.dt-title {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+/* The count is a fact about the list, not part of its name. */
+.dt-title span { margin-left: 8px; font-size: 22px; font-weight: 400; color: var(--muted); }
+.dt-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+
+/* One bordered container holds the search, the grid, and the pagination, so a
+   table is a single object on the page rather than three stacked ones. */
+.dt-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.dt-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 16px;
+  border-bottom: 1px solid var(--border-subtle);
+}
 .dt-toolbar-end { display: flex; align-items: center; gap: 8px; margin-left: auto; }
 
 .dt-search {
   display: flex;
   align-items: center;
-  gap: 8px;
-  flex: 1 1 260px;
-  max-width: 340px;
-  background: var(--card-bg);
-  border: 1px solid var(--border);
+  gap: 10px;
+  flex: 0 1 440px;
+  background: var(--surface-alt);
+  border: 1px solid transparent;
   border-radius: 10px;
-  padding: 0 12px;
-  height: 36px;
+  padding: 0 14px;
+  height: 40px;
   transition: all 0.18s ease;
 }
-.dt-search:focus-within { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(var(--brand-rgb), 0.14); }
-.dt-search svg { width: 15px; color: var(--muted); flex: none; }
+.dt-search:hover { border-color: var(--border); }
+.dt-search:focus-within {
+  background: var(--card-bg);
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px rgba(var(--brand-rgb), 0.14);
+}
+.dt-search svg { width: 16px; color: var(--muted); flex: none; }
 .dt-search input {
   width: 100%;
   border: 0;
   outline: 0;
   background: transparent;
   color: var(--ink);
-  font-size: 12px;
+  font-size: 14px;
 }
+.dt-search input::placeholder { color: var(--muted); }
 .dt-search input::-webkit-search-cancel-button { cursor: pointer; }
 
-.dt-menu { position: relative; }
+.dt-menu { position: relative; display: inline-flex; align-items: center; gap: 8px; }
 .dt-filter-button, .dt-view-button, .dt-reset {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  height: 36px;
-  padding: 0 12px;
-  border-radius: 10px;
+  gap: 7px;
+  height: 38px;
+  padding: 0 14px;
+  border-radius: 8px;
   background: var(--card-bg);
   color: var(--ink);
-  font-size: 11.5px;
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.15s ease;
 }
+/* The heading-row buttons are the page's primary actions, so they stay a
+   notch taller than the toolbar's filter chips. */
+.dt-actions .dt-view-button,
+.dt-actions button,
+.dt-actions .primary { height: 40px; font-size: 14px; }
 /* A dashed edge reads as "nothing chosen yet", which is what the filter
    buttons in the reference are saying. */
 .dt-filter-button { border: 1px dashed var(--border); }
-.dt-filter-button svg { width: 13px; color: var(--muted); }
-.dt-filter-button.active { border-style: solid; border-color: var(--blue); }
-.dt-filter-button b {
-  font-size: 9px;
-  font-weight: 800;
-  padding: 2px 6px;
+.dt-filter-button svg { width: 12px; color: var(--muted); }
+/* A filter with a value chosen reads as "on", so it takes the same filled
+   treatment as a primary action rather than just a highlighted border. */
+.dt-filter-button.active {
+  border-style: solid;
+  border-color: #0B2545;
+  background: #0B2545;
+  color: #fff;
+}
+.dt-filter-button.active svg { color: #fff; }
+.dt-filter-button.active b {
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+}
+.dt-filter-button b, .dt-view-button b {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 7px;
   border-radius: 9999px;
   background: var(--badge-blue-bg);
   color: var(--badge-blue-text);
 }
 .dt-view-button { border: 1px solid var(--border); }
-.dt-view-button svg { width: 14px; color: var(--muted); }
+.dt-view-button svg { width: 15px; color: var(--muted); }
 .dt-reset { border: 1px solid transparent; color: var(--muted); }
 .dt-filter-button:hover, .dt-view-button:hover { border-color: var(--blue); background: var(--surface-alt); }
+/* Same specificity as the plain hover rule above, so source order alone would
+   decide the winner — stated explicitly instead of relying on that. */
+.dt-filter-button.active:hover { border-color: #0B2545; background: #163a63; }
 .dt-reset:hover { color: var(--ink); background: var(--surface-alt); }
 
 .dt-popover {
@@ -855,6 +863,9 @@
   box-shadow: var(--card-hover-shadow);
 }
 .dt-popover.align-end { left: auto; right: 0; }
+/* Opens upward: this variant is for controls pinned to the bottom of the
+   card, where a downward popover would usually run past the viewport. */
+.dt-popover.align-top { top: auto; bottom: calc(100% + 6px); }
 .dt-popover-title {
   margin: 0;
   padding: 8px 10px;
@@ -909,30 +920,74 @@
 .dt-check input:disabled { cursor: not-allowed; }
 .dt-check input:disabled + span { color: var(--muted); }
 
+/* A single-select list item, e.g. one rows-per-page value. */
+.dt-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+}
+.dt-option:hover { background: var(--surface-alt); }
+.dt-option.active { font-weight: 600; }
+.dt-option svg { width: 14px; color: var(--blue); }
+
+/* The card owns the border; this owns the scrolling, in both directions. A
+   wide grid scrolls sideways rather than squeezing 20 columns into the
+   viewport, which is the whole point of a data grid over a list. */
 .dt-scroll {
-  background: var(--card-bg);
-  border: 1px solid var(--border);
-  border-radius: 14px;
   overflow: auto;
   max-height: 72vh;
-  box-shadow: var(--card-shadow);
   -webkit-overflow-scrolling: touch;
 }
-.dt-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12px; }
-.dt-caption { caption-side: top; text-align: left; padding: 12px 16px 0; font-size: 11px; color: var(--muted); }
+/* Tabular figures for the whole grid, not per column. Plex's proportional
+   digits are set to look right inside a sentence, so a 1 is narrower than a 7
+   and a column of CGPAs comes out ragged down its decimal point. Declaring it
+   on the table means a column added later is aligned without anyone having to
+   remember; the property only touches digits, so text cells are unaffected. */
+.dt-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+.dt-caption { caption-side: top; text-align: left; padding: 12px 16px 0; font-size: 13px; color: var(--muted); }
 
-/* The header stays put while a long list scrolls under it. */
+/* An identifier a reader checks character by character rather than reads:
+   a roll number, a record id. In a proportional face 2023UCS1632 and
+   2023UCS1362 have the same silhouette, and the eye slides over the swap.
+   Plex Mono is the same family, so it sits beside the rest without looking
+   pasted in; a hair smaller because monospace runs wide at a shared size. */
+.identifier {
+  font-family: var(--font-plex-mono), ui-monospace, "SFMono-Regular", Menlo, monospace;
+  font-size: 0.94em;
+  letter-spacing: 0;
+}
+
+/* A light header with dark text and a thin separator, not a coloured band:
+   the values are the subject, and the header only has to be legible. It stays
+   put while a long list scrolls under it. */
 .dt-table thead th {
   position: sticky;
   top: 0;
-  z-index: 2;
-  background: var(--surface-alt);
-  color: var(--muted);
+  z-index: 3;
+  background: var(--card-bg);
+  color: var(--ink);
   text-align: left;
-  font-size: 11px;
-  font-weight: 700;
+  font-size: 13px;
+  font-weight: 600;
   white-space: nowrap;
-  padding: 11px 16px;
+  height: 44px;
+  padding: 0 16px;
   border-bottom: 1px solid var(--border);
 }
 .dt-sort {
@@ -947,27 +1002,48 @@
   cursor: pointer;
   border-radius: 6px;
 }
-.dt-sort svg { width: 13px; opacity: 0.55; transition: transform 0.15s ease; }
+.dt-sort svg { width: 15px; opacity: 0.45; transition: transform 0.15s ease; flex: none; }
 .dt-sort:hover { color: var(--ink); }
 .dt-sort.active { color: var(--ink); }
 .dt-sort.active svg { opacity: 1; color: var(--blue); }
 .dt-sort svg.flip { transform: rotate(180deg); }
 
+/* Dense but comfortable: ~61px tall, flat white, one hairline between rows.
+   No striping and no per-row card — the whole grid is the card. */
 .dt-table tbody td {
-  padding: 12px 16px;
+  height: 61px;
+  padding: 0 16px;
   border-bottom: 1px solid var(--border-subtle);
   color: var(--ink);
   vertical-align: middle;
+  background: var(--card-bg);
 }
+/* Administrative values stay on one line and scroll rather than re-flowing a
+   roll number or an email address into two. Cells that deliberately stack a
+   second line opt out through .dt-primary. */
+.dt-table tbody td { white-space: nowrap; }
+.dt-table tbody td:has(.dt-wrap), .dt-table tbody td .dt-wrap { white-space: normal; }
 .dt-table tbody tr:last-child td { border-bottom: 0; }
 .dt-table tbody tr:hover td { background: var(--surface-alt); }
 .dt-table tbody td .admin-empty { padding: 44px 24px; }
 .dt-table tbody tr:hover td .admin-empty { background: transparent; }
 
-.dt-skeleton-row td { padding: 14px 16px; }
+/* Pinned columns: kept legible over the scrolling ones by carrying their own
+   background and a hairline on the trailing edge. The header cell of a pinned
+   column is sticky in both directions at once, hence the higher layer. */
+.dt-sticky {
+  position: sticky;
+  z-index: 2;
+  background: var(--card-bg);
+  border-right: 1px solid var(--border-subtle);
+}
+.dt-table thead th.dt-sticky { z-index: 4; }
+.dt-table tbody tr:hover td.dt-sticky { background: var(--surface-alt); }
+
+.dt-skeleton-row td { padding: 0 16px; }
 .dt-skeleton {
   display: block;
-  height: 11px;
+  height: 14px;
   border-radius: 6px;
   background: linear-gradient(90deg, var(--surface-alt) 25%, var(--surface-highlight) 50%, var(--surface-alt) 75%);
   background-size: 200% 100%;
@@ -986,30 +1062,43 @@
   flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
-  gap: 14px;
-  font-size: 11.5px;
+  gap: 16px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border-subtle);
+  font-size: 13px;
   color: var(--muted);
 }
 .dt-rows-per-page { display: flex; align-items: center; gap: 8px; font-weight: 600; }
-.dt-rows-per-page select {
-  height: 32px;
+.dt-rows-per-page label { color: var(--muted); }
+/* Custom, not a native `<select>`: a native popup is drawn by the OS and
+   carries its own accent colour (a red hover ring on macOS), which clashes
+   with the rest of this table's hand-styled dropdowns. */
+.dt-rows-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 10px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--card-bg);
   color: var(--ink);
-  font-size: 11.5px;
+  font-size: 13px;
   font-weight: 600;
-  padding: 0 8px;
   cursor: pointer;
+  transition: all 0.15s ease;
 }
+.dt-rows-button svg { width: 14px; color: var(--muted); }
+.dt-rows-button:hover { border-color: var(--blue); background: var(--surface-alt); }
+.dt-rows-per-page .dt-popover { min-width: 96px; }
 .dt-page-label { display: flex; align-items: baseline; gap: 8px; font-weight: 700; color: var(--ink); }
 .dt-page-label small { font-weight: 600; color: var(--muted); }
-.dt-page-buttons { display: flex; gap: 4px; }
+.dt-page-buttons { display: flex; gap: 6px; }
 .dt-page-buttons button {
   display: grid;
   place-items: center;
-  width: 32px;
-  height: 32px;
+  width: 34px;
+  height: 34px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--card-bg);
@@ -1017,7 +1106,7 @@
   cursor: pointer;
   transition: all 0.15s ease;
 }
-.dt-page-buttons svg { width: 15px; }
+.dt-page-buttons svg { width: 14px; }
 .dt-page-buttons button:hover:not(:disabled) { background: var(--surface-alt); border-color: var(--blue); }
 .dt-page-buttons button:disabled { opacity: 0.4; cursor: not-allowed; }
 
@@ -1067,10 +1156,10 @@
 
 /* Cells that carry a name with a secondary line under it. */
 .dt-primary { display: grid; gap: 2px; min-width: 0; }
-.dt-primary strong { font-weight: 700; color: var(--ink); }
-.dt-primary small { color: var(--muted); font-size: 10.5px; }
+.dt-primary strong { font-weight: 600; color: var(--ink); }
+.dt-primary small { color: var(--muted); font-size: 13px; }
 .dt-muted { color: var(--muted); }
-.dt-numeric { font-variant-numeric: tabular-nums; }
+/* Tabular figures so a column of numbers lines up on its digits. */
 
 .data-table :focus-visible,
 .dt-check input:focus-visible {
@@ -1078,10 +1167,18 @@
   outline-offset: 2px;
 }
 
+/* A data grid stays a data grid on a small screen: it scrolls sideways with
+   its first columns pinned, rather than becoming a stack of cards. Only the
+   controls around it reflow, and the body text never shrinks below 14px. */
 @media (max-width: 720px) {
-  .dt-search { max-width: none; }
+  .dt-search { flex: 1 1 100%; }
   .dt-toolbar-end { margin-left: 0; }
   .dt-pagination { justify-content: space-between; }
+  .dt-title { font-size: 22px; }
+  .dt-title span { font-size: 18px; }
+  .dt-table { font-size: 14px; }
+  .dt-table thead th { font-size: 13px; }
+  .dt-actions { width: 100%; }
 }
 
 .cell-status { font-size: 9px; padding: 4px 8px; border-radius: 9999px; background: var(--badge-green-bg); color: var(--badge-green-text); font-weight: 700; }
@@ -1091,11 +1188,19 @@
 .cell-status.offered { background: var(--badge-blue-bg); color: var(--badge-blue-text); }
 .cell-status.declined, .cell-status.revoked { background: var(--badge-red-bg); color: var(--badge-red-text); }
 
+/* A neutral chip, for a value that classifies a row without ranking it. A
+   company category is not a state, so it must not borrow the green/orange
+   reading of `.cell-status`. */
+.cell-tag { font-size: 9px; padding: 4px 8px; border-radius: 9999px; background: var(--surface-highlight); color: var(--ink); font-weight: 700; }
+
 .row-actions { display: flex; gap: 6px; }
 .row-actions form { display: inline; }
-.row-actions button, .admin-heading button:disabled { cursor: not-allowed; opacity: .35; }
-.row-actions button { border: 0; background: var(--surface-alt); border-radius: 8px; color: var(--muted); padding: 6px; transition: all 0.15s; }
-.row-actions button:hover:not(:disabled) { background: var(--surface-highlight); color: var(--ink); }
+.row-actions button:disabled, .admin-heading button:disabled { cursor: not-allowed; opacity: .35; }
+.row-actions button, .row-actions a { border: 0; background: var(--surface-alt); border-radius: 8px; color: var(--muted); padding: 6px; transition: all 0.15s; }
+/* An edit action is a link where it opens its own page, a button where it
+   opens a dialog; both read as the same control. */
+.row-actions a { display: grid; place-items: center; cursor: pointer; opacity: 1; }
+.row-actions button:hover:not(:disabled), .row-actions a:hover { background: var(--surface-highlight); color: var(--ink); }
 .row-actions button:last-child { color: var(--badge-red-text); }
 .row-actions button:last-child:hover:not(:disabled) { background: var(--badge-red-bg); }
 .row-actions svg { width: 14px; }
@@ -1103,22 +1208,17 @@
 /* Admin Empty & Status banners */
 .admin-empty { text-align: center; padding: 48px 24px; color: var(--muted); }
 .admin-empty > svg { width: 32px; height: 32px; color: var(--muted); margin: auto; }
-.admin-empty h2 { margin: 10px 0 6px; color: var(--ink); font: 800 16px var(--font-jakarta); }
+.admin-empty h2 { margin: 10px 0 6px; color: var(--ink); font: 600 16px var(--font-plex-sans); }
 .admin-empty p { margin: 0; font-size: 12px; line-height: 1.6; }
 .admin-empty.compact { padding: 28px 12px; }
 .admin-empty.compact > svg { width: 24px; height: 24px; }
-
-.admin-success, .admin-error, .admin-info { margin-top: 16px; border-radius: 11px; padding: 11px 14px; font-size: 11px; font-weight: 700; }
-.admin-success { background: var(--badge-green-bg); border: 1px solid var(--green); color: var(--badge-green-text); }
-.admin-error { background: var(--badge-red-bg); border: 1px solid var(--badge-red-text); color: var(--badge-red-text); }
-.admin-info { background: var(--badge-blue-bg); border: 1px solid var(--blue); color: var(--badge-blue-text); }
 
 .company-admin-name { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .company-admin-name > i { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px; background: var(--badge-blue-bg); color: var(--blue); flex: none; }
 .company-admin-name > i svg { width: 18px; }
 .company-admin-name strong, .company-admin-name small { display: block; }
 .company-admin-name strong { color: var(--ink); font-weight: 700; }
-.company-admin-name small { margin-top: 2px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px; }
+.company-admin-name small { margin-top: 2px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 260px; }
 
 .admin-external-link { display: inline-flex; align-items: center; gap: 4px; color: var(--blue); text-decoration: none; font-weight: 600; }
 .admin-external-link svg { width: 12px; }
@@ -1139,7 +1239,7 @@
   padding: 26px;
   box-shadow: var(--card-shadow);
 }
-.admin-profile-banner h1 { font: 800 26px var(--font-jakarta); letter-spacing: -0.03em; margin: 4px 0 2px; }
+.admin-profile-banner h1 { font: 600 26px var(--font-plex-sans); letter-spacing: -0.01em; margin: 4px 0 2px; }
 .admin-profile-banner p { margin: 0; color: var(--on-brand-soft); font-size: 12px; }
 .admin-profile-banner > strong { font-size: 11px; background: rgba(255, 255, 255, 0.2); border-radius: 10px; padding: 10px 14px; }
 
@@ -1147,7 +1247,7 @@
 .admin-profile-grid > article, .admin-detail-section { background: var(--card-bg); border: 1px solid var(--border); border-radius: 16px; padding: 22px; box-shadow: var(--card-shadow); }
 .admin-profile-grid article > header, .admin-detail-section > header { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
 .admin-profile-grid header > svg, .admin-detail-section header > svg { box-sizing: content-box; width: 18px; padding: 8px; border-radius: 10px; background: var(--badge-blue-bg); color: var(--blue); }
-.admin-profile-grid h2, .admin-detail-section h2 { font: 800 15px var(--font-jakarta); margin: 0; color: var(--ink); }
+.admin-profile-grid h2, .admin-detail-section h2 { font: 600 15px var(--font-plex-sans); margin: 0; color: var(--ink); }
 .admin-profile-grid header p, .admin-detail-section header p { font-size: 10px; color: var(--muted); margin: 2px 0 0; }
 .admin-profile-grid dl { margin: 0; display: grid; gap: 10px; }
 .admin-profile-grid dl > div { display: grid; grid-template-columns: 1fr 1.4fr; gap: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--border-subtle); font-size: 11px; }
@@ -1179,6 +1279,12 @@
   border: 1px solid rgba(var(--success-rgb), 0.3);
 }
 
+.badge-faculty {
+  background: var(--badge-orange-bg);
+  color: var(--badge-orange-text);
+  border: 1px solid rgba(var(--warning-rgb), 0.3);
+}
+
 .badge-student {
   background: var(--surface-alt);
   color: var(--muted);
@@ -1192,7 +1298,7 @@
   height: 38px;
   border-radius: 12px;
   font-size: 13px;
-  font-weight: 800;
+  font-weight: 600;
   flex-shrink: 0;
 }
 
@@ -1227,6 +1333,32 @@
   overflow-y: auto;
 }
 
+/* Season/company/event pickers above the registrations table. Reuses the
+   dashboard's season-picker look so every cascading filter in the admin
+   portal reads the same way. */
+.registrations-filters { display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0; }
+.registrations-filters .season-picker select:disabled { opacity: 0.6; }
+
+/* The one filled button a table's heading row is allowed, for the action that
+   produces something: an export. Everything beside it stays outlined. */
+.dt-actions .dt-view-button:disabled,
+.dt-actions .primary:disabled { opacity: 0.5; cursor: not-allowed; }
+.dt-actions .primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--navy);
+  color: var(--on-brand);
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(var(--deep-rgb), 0.28);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.dt-actions .primary:hover:not(:disabled) { transform: translateY(-1px); }
+.dt-actions .primary svg { width: 17px; }
+
 .permission-categories-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -1245,7 +1377,7 @@
 }
 
 .permission-category-box h3 {
-  font: 800 12px var(--font-jakarta);
+  font: 600 12px var(--font-plex-sans);
   margin: 0;
   color: var(--ink);
   text-transform: uppercase;
@@ -1306,12 +1438,10 @@
   .permission-categories-grid { grid-template-columns: 1fr; }
 }
 @media(max-width:760px){
-  .admin-shell { display: block; }
-  .admin-shell > aside { transform: translateX(-105%); transition: .25s cubic-bezier(0.4, 0, 0.2, 1); }
-  .admin-shell > aside.sidebar-open { transform: none; }
-  .admin-shell > main { min-width: 0; }
-  .admin-topbar { padding-left: 68px; }
-  .admin-topbar > div:first-child { display: none; }
+  /* No drawer rules here any more: shadcn's Sidebar becomes a Sheet below its
+     own breakpoint. The topbar keeps its heading and its normal left padding,
+     because the trigger is laid out beside the heading rather than floating
+     over that corner. */
   .admin-page { padding: 26px 16px; }
   .admin-heading { display: block; }
   .admin-heading button, .admin-heading a { margin-top: 14px; }
@@ -1319,7 +1449,6 @@
   .admin-profile-banner { display: block; }
   .admin-profile-banner > strong { display: inline-block; margin-top: 14px; }
   .admin-profile-grid { grid-template-columns: 1fr; }
-  .admin-toolbar > select { padding: 10px; }
   .job-profile-modal, .permission-matrix-modal { max-height: calc(100vh - 20px); }
 }
 @media(max-width:480px){

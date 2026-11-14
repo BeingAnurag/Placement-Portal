@@ -139,7 +139,7 @@ Refines the *UI system* section of `docs/PROJECT_CONTEXT.md` and the 2026-08-21 
 
 - **Material UI** was rejected: it ships an Emotion CSS-in-JS runtime, the Material Design visual language, and its own `ThemeProvider`, which would run in parallel with the CSS-custom-property theme system from 2026-08-25 and fight it.
 - **HeroUI** was rejected: it is configured as a Tailwind plugin through `tailwind.config.js`, and this repo runs Tailwind 4 with CSS-first config and no JS config file.
-- **shadcn/ui** was not adopted wholesale, but is the right choice if a kit is ever wanted, because it copies source into the repository rather than adding a dependency. `cmdk` is the primitive its `Command` component wraps, so adopting shadcn later does not invalidate this.
+- **shadcn/ui** was not adopted wholesale, but is the right choice if a kit is ever wanted, because it copies source into the repository rather than adding a dependency. `cmdk` is the primitive its `Command` component wraps, so adopting shadcn later does not invalidate this. *(Superseded on 2026-09-18: shadcn now owns the admin forms and dialogs. `cmdk` survives underneath its `Command`, exactly as anticipated here.)*
 
 Components remain styled with repository-owned semantic CSS in `globals.css` using the existing logo-derived tokens; `cmdk` is unstyled and contributes behaviour (filtering, keyboard navigation, `aria-selected`) only. Do not add a component kit without a new entry here.
 
@@ -355,3 +355,1364 @@ Supersedes *2026-09-17 — Light mode moves to a neutral orange/teal palette; da
 - **Status hues survive again.** Green, amber, red, and purple still carry meaning only. The amber deadline banner reads `--warning-rgb` and is genuinely a warning; the multi-hue metric chips are a categorical set, matching the reference screenshots the cell supplied.
 - **shadcn inherits all of this for free.** The `@theme inline` bridge added alongside shadcn maps `--color-primary`, `--color-border`, `--color-ring` and friends onto these same semantic tokens, so the migrated identity-document rows changed colour with the rest of the portal and needed no edit.
 - Verified by screenshotting `/login`, `/dashboard`, and `/profile` in both themes against the running stack, and by reading the computed tokens back out of the document.
+
+## 2026-09-18 — Add Company gets its own page, and a company carries a round
+
+Extends the events pass to the recruiter record. The modal in the companies list has been replaced by a page, for the same reason the event modal was: the cell reads a company out in a fixed order and the dialog could not hold the fields.
+
+- **`/admin/companies` lists, `/admin/companies/add` composes, `/admin/companies/[id]/edit` edits.** One `company-form.tsx` serves both write screens; the list's edit action is now a link. The sidebar group gained *All companies* alongside the *Add company* and *View registrations* that the 2026-09-17 navigation refactor put there — the reference design has no list link at all, but a list holding the only delete control has to be reachable.
+- **The actions enforce `companies.create`/`companies.update`/`companies.delete`.** They asked only for an admin session before, so any admin-portal account could register or remove a recruiter. Which grant is checked depends on whether an id was posted, because creating and correcting are separate permissions.
+- **Category is a closed list of two: Dream and First Round.** The reference screen shows *Dream* and *A++*; the cell asked for the dream/first-round distinction instead, and it is a real rule rather than a label — a dream-round company stays open to a student who already holds an offer. Nothing consumes `Company.category` yet, so eligibility does not act on it; the column records the intent that a later eligibility change can read.
+- **`placementSession` is the season the record was raised for.** The same idea as `JobProfile.placementYear`, named for the label this screen uses. It is nullable, unlike `placementYear`, because a company predating the column has no honest value and a backfill from `createdAt` would invent one.
+- **Turnover is free text.** Companies state it in their own currency and unit ("USD 4.2 billion", "₹300 crore"); a number column would have to invent both. The same rule `cap`, `companyBond`, and `duration` follow on an event.
+- **Company info is now required.** `description` stays nullable in the database for the rows that predate this, but the form refuses a bare name, because a company with no description renders as "No company info" everywhere a student sees it.
+- **Website and logo are no longer editable, by request.** The reference card does not carry them, so the form omits them; the columns and the data stay, and `saveCompany` deliberately omits both from its write payload so editing a seeded company does not erase them. This does mean the logo that students see on the dashboard feed and their applications can no longer be set from the portal — a real regression, taken knowingly, and listed as the next work on the companies row in `FEATURE_STATUS.md`.
+- **The duplicate-check acknowledgement gates creation only.** The server already refuses a case-insensitive duplicate name; the checkbox is what stops a second record being raised for a company spelled slightly differently, which the server cannot catch. It is absent when editing, where the record demonstrably exists.
+
+## 2026-09-17 — Job profiles become Events, composed on their own page
+
+Renames the surface the 2026-08-20 boundary calls "admin job profiles". `JobProfile` remains the table and `jobs.*` remains the permission family; only the screens and the routes change, because the placement cell calls these company events and the old modal could not hold the fields they actually read out.
+
+- **`/admin/events` lists, `/admin/events/add` composes, `/admin/events/[id]/edit` edits.** The sidebar carries an expandable `Events` group with *All events* and *Add event*, the same shape Announcements has. `/admin/job-profiles` stays as a `permanentRedirect` and stays registered in `ROUTE_PERMISSIONS`, so older links still resolve for an account that only holds `jobs.view`.
+- **One form serves add and edit.** `frontend/src/components/admin/event-form.tsx` replaces the modal in the old manager; the list's edit action is now a link to a page rather than a dialog. A second, divergent editor was the thing worth avoiding.
+- **The actions enforce `jobs.create`/`jobs.update`, and `jobs.publish` on top when the status is `ACTIVE`.** Previously `saveJobProfile` asked only for admin session, so any admin-portal account could publish a drive. Drafting an event is not publishing one, the rule announcements already follow.
+- **Placement year is now a column of its own.** `JobProfile.placementYear` is the season the drive runs in; `batch` stays the graduating cohort it recruits. They were one field, which is wrong for an internship that recruits the batch below its own season. Existing rows were backfilled from `batch`, which is the only faithful guess.
+- **Category is a closed list of four: Tech, NonTech, Management, Marketing.** `jobCategory` was free text. "Core" was deliberately left out of the list — the cell does not run core-engineering drives — so it is refused at the schema boundary, not just absent from the buttons. Rows written before this — including everything the demo seed still creates — carry legacy strings and are shown as-is on the list; editing one forces a choice from the four.
+- **Cap, company bond, and duration are free text, not parsed figures.** They are quoted from the company ("2 years bond", "6 months") and the office needs them to read back exactly as stated. A numeric `cap` would have to invent a unit.
+- **Degrees and branches are offered from the roster, not a hardcoded list.** `frontend/src/lib/event-options.ts` reads the distinct degree/branch pairs held by student accounts and groups branches under their degree, so eligibility can never name a cohort that does not exist. A drive being edited keeps any value the roster no longer explains, grouped under *Other*, rather than silently dropping it.
+- **`react-day-picker` is the second behavioural UI dependency, after `cmdk`.** The deadline is a day and a time, and `datetime-local` gives neither a month grid nor quarter-hour slots. Its own stylesheet is *not* imported, because it carries literal colours; the `rdp-*` classes are styled in `admin.css` from the semantic tokens, the same rule `cmdk` follows.
+- **Not built, and visible in the reference design: the per-event question builder, the attachment uploader, and a point of contact.** `JobProfile.attachments` and the `Coordinator` table exist but nothing writes them, and custom questions would need answer storage on `Application`. Rendering any of the three would have been a control that describes persistence the portal does not have.
+
+## 2026-09-18 — shadcn/ui owns the admin forms and dialogs
+
+Supersedes the shadcn bullet in *2026-09-15 — cmdk for the company picker*, which recorded that no kit had been adopted. shadcn was already installed — `components.json`, the Radix and `cva` dependencies, six primitives, and the `@theme inline` bridge — but only `identity-document-row.tsx` used it. This pass adopts it for the admin write surfaces.
+
+- **The token bridge stays the boundary.** shadcn utilities keep pointing at the repository's semantic tokens rather than shadcn's zinc palette, so a migrated control inherits the institute blue and both themes with no per-component edit. Nothing here changes the 2026-08-25 colour decision.
+- **Migrated: both composer forms and all twenty admin dialogs.** `company-form.tsx` and `event-form.tsx` are Card/Label/Input/Textarea/Checkbox/Switch/Select/ToggleGroup/Popover/Command. Every `.modal-backdrop` dialog under `components/admin` plus the two shared pickers now render through Radix.
+- **`components/common/admin-dialog.tsx` is the one dialog shell.** Each manager previously hand-rolled a backdrop, a close button, and a mousedown-to-dismiss handler, and **none of them trapped focus or closed on Escape**. Radix supplies the focus trap, Escape, scroll lock, and portal. `CompanyPicker` additionally loses a hand-rolled `createPortal` that existed only to escape a parent's `backdrop-filter` containing block.
+- **Semantics improved where the old markup faked a control.** Category pills were `<button>`s and are now a radio group; the duplicate-check acknowledgement was a `<button>` with an `<i className="box">` and is now a real checkbox; the degree and branch lists likewise. This was the migration's main non-visual gain.
+- **Alert carries the status hues.** shadcn's `Alert` has only `default` and `destructive`, both neutral-backed, which would have flattened a "saved" banner to grey. `success` and `info` variants were added to the primitive reading `--badge-green-bg`/`--green` and `--badge-blue-bg`/`--blue`, because green, amber, and blue carry meaning here.
+- **The missing `@layer base` rule was the real bug this uncovered.** shadcn components ask for a bare `border`, whose colour in Tailwind is `currentColor`; without shadcn's own base layer, every card, input, and dialog drew a near-white hairline in dark mode and a near-black one in light. `globals.css` now carries `@layer base { * { @apply border-border outline-ring/50 } }`. It is layered, so the unlayered hand-written rules still win wherever they name a colour.
+- **A select cannot hold an empty value.** Radix rejects `SelectItem value=""`, so the two genuinely clearable pickers — an announcement's company and a placement record's drive — use a `__none` sentinel and post the real empty string through state or a hidden input. Server action payloads are unchanged; the full list of posted field names was diffed against the pre-migration files.
+- **Not migrated, deliberately: the student portal.** `profile-view.tsx` alone holds ten dialogs, and `forms-view`, `dashboard-feed`, and `interview-experiences-view` hold more. They still use `.modal-backdrop`, which is why that CSS survives. Admin list *tables* are also untouched: `data-table.tsx` stays bespoke, so shadcn's `Table` is not in the repo.
+- **Known cosmetic regression.** Radix renders a select's value on the client, so the Placement Year and Batch triggers paint blank for one frame before hydration where a native `<select>` showed the value immediately.
+
+## 2026-09-18 — The admin data grid follows the reference portal's structure, not its palette
+
+Every admin list already rendered through one `DataTable`, so standardising the
+portal was a restyle rather than a migration. The grid now follows the NSUT
+reference layout: a section heading carrying the live row count, right-aligned
+list actions beside it, and one bordered card holding the 440x44 search, the
+grid, and the pagination. The metrics are the reference's — a 50px light header
+at 15px/600, 61px rows at 15px, a 12px card radius, no zebra striping and no
+shadow.
+
+The reference's own colours were not adopted. Its pink-red accent (#FF1744),
+#111111 ink and #FFFFFF page have no rung in the ramp this portal fixed on
+2026-09-17, and a literal accent would have had nothing to say in dark mode.
+The grid therefore reads its colours from the existing tokens, which is why the
+same markup renders as white-on-white in light mode and near-black with navy
+chrome in dark mode. Only the structure, density and type scale were copied.
+
+Two smaller decisions came out of the same pass:
+
+- Pinned columns measure their offsets instead of deriving them. A column's
+  declared `width` is a minimum that padding and content routinely exceed, so
+  accumulating declared widths put every column after the first at too small an
+  offset and they overlapped by the difference. The offsets are now read from
+  the rendered header widths through a `ResizeObserver`.
+- 56 column `width` values were `minmax(120px, 1fr)`, a CSS Grid function that
+  is invalid on a table cell and had always been dropped. They are now the px
+  minimum each one already named, which is also what makes pinning possible.
+
+Plus Jakarta Sans is gone; a single typeface carries the portal, headings
+included. That was Inter at the time, and is IBM Plex Sans since 2026-09-20.
+
+## 2026-09-18 — One Makefile is the operational entry point, and Docker is the only prerequisite
+
+Running the portal used to take a documented sequence: copy `.env.example`,
+generate two secrets by hand, `docker compose up --build`, then a handful of
+`npm run db:*` commands that needed Node 20, an installed workspace, and a
+`DATABASE_URL` pointing at localhost rather than at the `db` service. The
+database tooling was the only part of the stack that was not containerised, so
+the commands that populate a database could not be run by someone who had only
+Docker.
+
+A root `Makefile` is now the entry point. `make up` builds, starts, and blocks
+until every container reports healthy; `make seed` applies migrations and loads
+administrators, the student roster, and the demonstration dataset in a
+single container run. Everything else is a subcommand of those two, and
+`make help` is generated from the `##` comment on each target, so the list
+cannot drift from the file.
+
+Three things made that possible:
+
+- **A `tools` service**, sharing the `migrate` image and its environment through
+  a YAML anchor, gated behind a Compose profile so `up` never starts it. Every
+  `make db-*` target is `docker compose run --rm tools <script>`, which puts the
+  script on the stack's network with the in-cluster `DATABASE_URL` already set.
+  `database/seed-data/students.json` is copied into that image as part of
+  `database/`, since the roster import reads it from there.
+- **`.env` is a Make file target**, not a documented step. Any target that needs
+  configuration depends on `.env`, so a first-time contributor gets one written
+  from `.env.example` with a fresh `AUTH_SECRET` and `ENCRYPTION_KEY` instead of
+  a missing-variable error from Compose.
+- **`make admin EMAIL=…` edits `ADMIN_EMAILS` and reseeds.** Administrator
+  access still has exactly one source, and the address still comes from the
+  person running the command; the Makefile only removes the hand-editing step.
+  Nothing in it defaults to an address.
+
+Two targets deliberately stay on the host. `make db-pack-demo` writes
+`seed-data.zip` back into the working tree, and `make check` runs the npm
+scripts a contributor already has installed; containerising either would trade
+a real benefit for a bind mount and a slower loop.
+
+## 2026-09-18 — Placement records can be entered a drive at a time, and an offer states its own role
+
+A season's outcome arrives as a list: one company, one package, one status,
+and forty roll numbers. Entering that through the single-record dialog meant
+re-selecting the company and re-typing the package forty times, with the
+student picker holding the whole roster on every open.
+
+`/admin/placement-records/add` sets the configuration once and applies it to a
+pasted list of roll numbers. The single-record dialog stays on the list page:
+correcting one row is still the common case, and the bulk screen is the wrong
+shape for it.
+
+Three decisions inside that:
+
+- **Roll numbers, not ids.** The office pastes a column out of a spreadsheet,
+  so the screen accepts commas, spaces, tabs, newlines and semicolons, upper-
+  cases, and de-duplicates while keeping the entered order. `parseRollNumbers`
+  is the single definition of that, shared by the chips in the browser and the
+  server action, so the two can never disagree about what was entered.
+- **A partial result, not all-or-nothing.** One mistyped roll number in a paste
+  of forty must not discard the other thirty-nine. `POST /api/v1/offers/bulk`
+  writes what it can and returns every roll number it could not record with a
+  reason: no such student, not a student account, or already holding that
+  record for the season. The last one is what makes a re-submitted paste safe.
+  The amount rule is unchanged — a bulk run is still refused without the CTC or
+  stipend its type requires, because recording forty rows at once is not a
+  looser kind of recording.
+- **`Offer.jobTitle` is a real column.** The role used to be read from the
+  linked drive, which leaves an off-portal offer with no role at all and cannot
+  express an offer for a role the drive was not named after. The column is
+  nullable and reads fall back to `jobProfile.title`, so every row written
+  before it keeps showing the role it always showed, and no backfill freezes a
+  title the drive can still be renamed to.
+
+The type and status vocabularies were left alone. The reference portal names
+its own — Placement, Summer Internship, Winter Internship, PPO against
+Offered, Accepted, Rejected, Withdrawn, Upgraded to PPO — but `OfferType` and
+`OfferStatus` already carry meanings the dashboard aggregates on, and renaming
+`DECLINED` to "Rejected" would have moved which party gave the offer up. The
+new screen therefore uses the same two dropdowns as the rest of the portal.
+
+## 2026-09-18 — The hand-written stylesheets sit in `@layer components`
+
+`globals.css` and `admin.css` were unlayered, so every rule in them beat every
+Tailwind utility regardless of specificity: an unlayered declaration outranks
+anything in a layer. shadcn components carry their variants as utilities, so a
+converted control kept whatever the old stylesheet painted and the migration
+was skin deep wherever the two met. It also produced workarounds that read as
+noise — `h-auto` on the auth controls to release a height the component had
+already set, `!`-flagged utilities in the NOC view, legacy classes kept on tab
+strips and filter pills purely to win the cascade.
+
+Both stylesheets now sit in `components`, which the Tailwind import orders
+before `utilities`, so a utility at the call site wins. `admin.css` is layered
+at its `@import` rather than by wrapping the file. Element resets moved to
+`base`: unlayered, `button, input, select, textarea { font: inherit }` was
+overriding the `text-sm` a shadcn Button carries, so the component's own type
+scale had never applied anywhere.
+
+The consequence to know about: a legacy rule and a utility that name the same
+property now resolve the other way round. Where the legacy rule was the
+intended design, say so with a utility at the call site — the auth inputs now
+carry `h-11` instead of inheriting 44px from a `.login-fields input` rule that
+has been deleted. Reach for `!` only when a third party owns the element.
+
+## 2026-09-18 — `allowedDevOrigins` covers both loopback spellings
+
+The dev server runs in a container published on `0.0.0.0`, so it is reached by
+whichever host name the developer types. Next refuses to serve dev chunks to an
+origin it was not told about, and the refusal is silent in the browser: the
+page server-renders and then never hydrates, so nothing on it responds to a
+click and the application looks broken rather than misconfigured. Both
+loopback spellings are listed so that failure mode cannot recur.
+
+## 2026-09-18 — A database table browser sits at `/admin` on the backend
+
+The placement office needed to correct a row the admin portal has no screen
+for, and the alternatives were a psql prompt or Prisma Studio on a second
+port. `sqladmin` mounts over the SQLAlchemy models already in
+`backend/app/models/db.py`, so this is a view of the existing data layer and
+not the third one `AGENTS.md` prohibits. A column added by a Prisma migration
+and mirrored into those models appears here without a third edit.
+
+Two `/admin` paths now exist and they are different things. The frontend's is
+the product surface and is bound by the RBAC catalog in
+`app/core/security.py`. The backend's reads and writes every column of every
+table, including `passwordHash` and the AES-256-GCM identity ciphertexts,
+consulting no role at all. It has no key, so it shows ciphertext and never
+plaintext; the rule about never returning a raw Aadhaar or PAN still holds.
+
+Because it goes around RBAC, the password is the whole boundary:
+
+- `DB_ADMIN_PASSWORD` empty is the off switch. A deployment that has not heard
+  of this feature is not serving it.
+- Under 16 characters, the mount is refused. Guessing rights over every row is
+  worth a long password.
+- In production it may not equal `AUTH_SECRET`, which would put the
+  session-signing token into a form field and a browser's history.
+- A refusal logs and leaves the API alone. A weak password should cost the
+  operator the screen, not the portal.
+
+It is allowed in production deliberately, so the office can fix live data. The
+operator's job is keeping port 8000 off the public internet. The session
+cookie is its own (`tnp_db_admin`), signed by a key derived from `AUTH_SECRET`
+rather than being it, expires in two hours, and is `Secure` in production.
+
+Portal accounts are deliberately not accepted. Their passwords are bcrypt
+hashes written by `frontend/src/lib/password.ts`, and checking one here would
+be a second implementation of that comparison on the service designed never to
+see a password.
+
+Two details follow from Prisma owning the schema. `cuid()` runs in the Prisma
+client and the migrations give `id` no database default, so a row created here
+generates its own key — ordered by time, random-tailed, opaque as every id in
+the portal already is. And a primary key that carries meaning, like
+`SystemSetting.key`, is asked for rather than invented.
+
+It has a dark mode, keyed on the `tnp-theme` value the portal's own theme
+provider already writes. The bundled Tabler 1.4 carries a full dark palette
+behind `[data-bs-theme]` but never sets it and does not read
+`prefers-color-scheme`, so the templates in `backend/app/admin/templates/`
+choose the value in an inline head script — before the first paint, because
+setting it later shows a white page that snaps to black. The two vendored
+widgets that are not Tabler's, select2 and flatpickr, ship light-only
+stylesheets and are restyled from Tabler's own variables rather than from a
+second palette. Those templates extend sqladmin's through its
+`sqladmin_original/` prefix instead of replacing them, so an upgrade that
+changes their markup still reaches us. The storage key is shared with the
+portal deliberately: the two are separate origins today and the value does not
+actually carry across, but one project should not hold two spellings of the
+same preference.
+
+## 2026-09-20 — IBM Plex Sans, and a heading weight the portal can't shout with
+
+The complaint was that the portal looked generated, and the typeface was only
+part of it. Every heading in both stylesheets — 41 of 42 — was `font: 800`,
+from a 64px login headline down to 12px table labels, and fourteen of them
+also pulled the letters together with tracking as tight as `-0.05em`. Inter at
+ExtraBold with heavy negative tracking is the house style of the AI-generated
+landing page, so changing only the family would have kept the feel.
+
+IBM Plex Sans replaces Inter. It was drawn for interfaces dense with data
+rather than for marketing pages, which is what these screens are, and it has a
+neutral institutional voice that suits a placement office. Its heaviest weight
+is 700, so the ExtraBold-everything look is no longer reachable by accident.
+
+The treatment changed with it:
+
+- Headings are 600. The hierarchy here was always carried by size rather than
+  weight, so lightening every heading by the same amount keeps the structure
+  and drops the shouting.
+- Negative tracking is a display-type technique and now only applies above
+  24px: `-0.02em` at 32px and up, `-0.01em` from 24px, and nothing below,
+  where it was only making letters collide. The positive tracking on the
+  uppercase eyebrow labels is correct and stayed.
+- The data grid declares `font-variant-numeric: tabular-nums` on `.dt-table`
+  rather than per column. Plex's proportional digits are drawn to sit in a
+  sentence, so a column of CGPAs came out ragged down its decimal point. At
+  the table level a column added later is aligned without anyone remembering,
+  which the 14 hand-tagged `.dt-numeric` cells demonstrably could not manage;
+  that class is gone.
+- IBM Plex Mono is loaded for one job, `.identifier`: roll numbers and record
+  ids. `2023UCS1632` and `2023UCS1362` share a silhouette in a proportional
+  face, and a roll number is the one string a reader compares character by
+  character.
+
+Both faces are self-hosted through `next/font` with only the weights the
+stylesheets use, since Plex is not a variable font on Google Fonts.
+
+One trap is worth recording. The `next/font` variables are named
+`--font-plex-sans` and `--font-plex-mono`, not `--font-sans`/`--font-mono`,
+and `@theme inline` maps Tailwind's keys onto them. Naming them after the
+theme keys directly does not work: `@theme inline` substitutes values into
+generated utilities instead of emitting custom properties, so a hand-written
+`var(--font-sans)` resolves to nothing — and an invalid `var()` inside a
+`font` shorthand voids the whole declaration rather than falling through to
+the next family in the list, which renders the entire portal in the browser's
+default serif. The mapping exists so that a shadcn component reaching for
+`font-sans` gets Plex rather than the system UI font.
+
+## 2026-09-20 — Both shells run on shadcn's Sidebar, at a readable size
+
+The two navigation rails were hand-rolled and nearly identical: a fixed
+`aside`, a CSS-transform drawer below a breakpoint, a floating hamburger, a
+close button and a backdrop, written once in `globals.css` for students and
+again in `admin.css` for staff. 173 lines of CSS between them, two places to
+fix anything, and no keyboard affordance.
+
+Both now render `components/ui/sidebar`, which brings the drawer, the
+focus trap, the `Cmd/Ctrl+B` shortcut and the cookie-persisted open state with
+it. The admin groups use `Collapsible` with `SidebarMenuSub`, so the
+permission filtering that decides which children an account sees is unchanged
+— it still runs over `allowedPaths` before the menu is built.
+
+Three deliberate departures from what `shadcn add sidebar` generates:
+
+- **Type size.** Rows are 15px on 40px, sub-rows 14px on 36px, against the
+  generator's 14px on 32px. The nav this replaced was 12px with 11.5px
+  children, which is what made it look cramped. The width went to 17.5rem so
+  that "Interview experiences" still sits on one line.
+- **Colour.** The generator writes eight literal `hsl()` values for
+  `--sidebar-*` and a `.dark` block to match, which would be the only colours
+  in the project not derived from the brand ramp. They are aliases onto the
+  existing tokens instead — `--sidebar` is `--sidebar-from`, `--sidebar-accent`
+  is `--surface-alt`, and so on. Every one of those already has a dark value,
+  so a single declaration covers both themes and there is no `.dark` override
+  to keep in step.
+- **The active row.** `data-[active=true]` is the institute blue on
+  `--navy-soft-bg` with a bold navy label, carried over from the old
+  stylesheet. The generator's `bg-sidebar-accent` is the same grey as hover,
+  which tells a reader where the pointer is rather than where they are. It
+  first shipped with a left-edge inset-shadow marker too, dropped 2026-09-20
+  after it read as a stray blue sliver rather than a boundary; the tint and
+  the bold label carry "current" on their own.
+
+`collapsible="icon"`, so collapsing leaves a rail rather than nothing: the
+data grids behind these screens are wide and regularly want the room, but an
+admin mid-task should not have to reopen the whole nav to reach the next
+screen. That is also what makes the `tooltip` on each row reachable.
+
+Two bugs in the generated code were fixed rather than suppressed, because the
+repository's `react-hooks` rules reject both:
+
+- `SidebarMenuSkeleton` picked its width with `Math.random()` inside a
+  `useMemo`. Beyond the purity rule, the server and the client roll different
+  numbers, so every skeleton row was a hydration mismatch. It hashes `useId()`
+  now, which keeps the varied widths and is stable across both.
+- `useIsMobile` set state synchronously inside an effect. It is
+  `useSyncExternalStore` now, with `false` as the server snapshot, which is
+  the shape React added that hook for: a media query is an external store.
+
+## 2026-09-20 — Announcements and events are cached in Redis, keyed by who is asking
+
+The student dashboard and the company-events list are the two screens every
+signed-in student loads, and both rebuilt the same rows from Postgres on every
+request. They are now read through `GET /api/v1/announcements` and
+`GET /api/v1/jobs`, which sit behind a Redis cache in `app/core/cache.py`.
+
+**Cached in the API, and the hot reads moved there to meet it.** Putting the
+cache behind the FastAPI endpoints is where `AGENTS.md` says data access
+belongs, but those two pages queried Prisma directly and so would not have
+touched it. Caching the Prisma calls where they stood would have been quicker
+and would have deepened the dependency the data layer is trying to shed, so
+the reads moved instead. This is the migration the project was already
+committed to, done for the two pages that most justify it.
+
+**The viewer is part of the key.** `announcements.view` decides whether a list
+includes drafts. A cache keyed only by the query string would let whoever
+asked first decide what everyone else sees, so `get_or_set` takes a mapping
+that names the visibility alongside the filters. Per-viewer results are not
+cached at all: `GET /api/v1/jobs/{id}` caches the drive and recomputes
+eligibility on every request, because eligibility is a statement about the
+caller.
+
+**One hash per topic, not one key per query.** Each topic is a single Redis
+hash whose fields are the parameter combinations. Invalidating is `DEL` on one
+key — atomic, no `SCAN`, and no way to miss a combination of filters that was
+never enumerated. The cost is that expiry is per topic; `EXPIRE NX` keeps the
+window running from the first write so a busy topic still rebuilds.
+
+**Searches are not cached.** A search term is typed once. Caching it would
+fill the hash with entries nobody reads twice and evict the lists that every
+page load depends on.
+
+**Writes invalidate; the TTL is only a backstop.** Announcement writes through
+the API drop the topic themselves. Event writes still happen through Prisma in
+the Next.js process and cannot reach this cache, so `POST /api/v1/cache/invalidate`
+exists for them to call: the frontend names a topic, and key layout stays in
+one place. Retire it when those writes move to the API. `CACHE_TTL_SECONDS`
+(300) then covers only what neither path sees — a row changed through the
+table browser at `/admin`, or psql.
+
+**A cache outage costs latency and nothing else.** Every failure — no
+`REDIS_URL`, a refused connection, a timeout, a value JSON will not take —
+falls through to the loader and returns the same answer. An empty `REDIS_URL`
+is the same code path, so "off" is a state the tests exercise rather than an
+untried one. The client is given a 250 ms timeout and no retries, because a
+Redis slower than that is slower than the query it stands in front of.
+
+## 2026-09-20 — Announcement content is sanitized HTML, not plain text
+
+`Announcement.content` moves from a plain string to sanitized HTML, so the
+composer can offer formatting (bold, headings, lists, links) instead of a
+bare `<textarea>`. No schema migration: the Prisma column was already an
+unbounded `String`, and existing plain-text rows remain valid HTML (a plain
+string with no tags).
+
+- The editor (`frontend/src/components/ui/rich-text-editor.tsx`) is a Tiptap
+  instance wrapped in the portal's own shadcn primitives (`Toggle`, `Button`,
+  `Popover`, `Separator`) rather than a themed third-party toolbar or a
+  registry component — no such component exists in the shadcn registry as of
+  this date (`npx shadcn view editor` 404s).
+- `frontend/src/lib/rich-text.ts` and `backend/app/core/rich_text.py` each
+  carry the same closed tag/attribute allow-list (`p, br, strong, em, u, s,
+  h2, h3, ul, ol, li, blockquote, a[href|target|rel]`) and run it through
+  DOMPurify (frontend) or bleach (backend). Both the Zod schema
+  (`announcementFormSchema`) and the Pydantic schema (`AnnouncementCreate` /
+  `AnnouncementUpdate`) sanitize on the way in, and every render site
+  (`announcements-manager.tsx`, `dashboard-feed.tsx`) sanitizes again on the
+  way out, so a row written before this allow-list existed, or by a caller
+  that bypassed one schema, still renders safely.
+- The 2-10,000 character bounds on `content` now apply to the sanitized
+  text (tags stripped), not the raw HTML, since formatting overhead has
+  nothing to do with "too long". The raw field still carries a generous
+  hard ceiling (50,000 characters server-side) as a byte-size backstop.
+- Search indexing and one-line table previews strip tags back to plain text
+  first (`stripHtmlToText`); nothing searches or truncates raw HTML.
+
+## 2026-09-20 — `DataTable` moves onto shadcn, in place, for all twelve screens
+
+Answers the question the 2026-09-18 grid entry left open — shadcn `Table` +
+`DropdownMenu`, not a second hand-rolled CSS pass — and does it once for
+every table rather than as a per-screen migration.
+
+- **A pilot was tried first and abandoned.** `/admin/announcements` was
+  briefly rebuilt as its own TanStack Table v8 component
+  (`frontend/src/components/admin/announcements-table/`), separate from
+  `common/data-table.tsx`. Converting each of the other eleven screens the
+  same way would have meant rewriting every column/filter definition across
+  roughly 6,000 lines in ten files — including the bulk-select checkbox and
+  sticky columns on Applications, the RBAC-sensitive Users and Team screens,
+  and every screen's exports and dialogs — for no behavioural gain over
+  restyling the one component they already share. That pilot folder is
+  deleted; nothing references it.
+- **The actual change is entirely inside `frontend/src/components/common/data-table.tsx`.**
+  `DataTableColumn<T>`, `DataTableFilter<T>`, `DataTableProps<T>`, and the
+  `applyTablePipeline`/`nextSortState` search-sort-filter-paginate pipeline in
+  `frontend/src/lib/data-table.ts` are unchanged. Only the render layer moved:
+  `table`/`thead`/`tr`/`th`/`tbody`/`td` become shadcn's `Table` family; the
+  filter popover becomes `Popover` + `Command` (`frontend/src/components/ui/command.tsx`,
+  already installed for the recruiter picker); column visibility becomes a
+  `DropdownMenu` (new: `frontend/src/components/ui/dropdown-menu.tsx`); rows-per-page
+  becomes the existing `Select`; every button in the table's own chrome
+  becomes `Button`. Because the props contract didn't change, none of the
+  eleven consuming manager files needed an edit — they inherit the new look
+  by rebuilding.
+- **No new runtime dependency.** `@tanstack/react-table` (added and pinned to
+  `8.21.3` for the abandoned pilot, since installing it bare pulls the
+  incompatible `9.x` `TableFeatures` API) was removed again once the pipeline
+  reuse made it unnecessary. `DropdownMenu` needed no new package either — the
+  unified `radix-ui` package already in `package.json` ships it, the same way
+  every other primitive in `components/ui` reads it.
+- **shadcn's own defaults read this portal's tokens, not a shadcn palette.**
+  `bg-muted`, `text-muted-foreground`, and friends resolve through the
+  `@theme inline` bridge in `globals.css` onto `--surface-alt`/`--muted` etc.,
+  the same tokens `admin.css` already used — so a shadcn `TableRow`'s built-in
+  hover state lands on the same colour the hand-rolled one did, in both
+  themes, with no per-component override.
+- **Every filter gets a search box now, not just ones with more than six
+  options.** The old `FilterMenu` added a search input only past a six-option
+  threshold, which is why the Company filter (six seeded rows) rendered with
+  none. `Command` ships an input and filters its own items, so every filter
+  chip across all twelve tables gets one for free.
+- **Rows-per-page is a `Select` now, not a native `<select>`.** A native
+  select's popup is drawn by the OS and carried its own accent colour (a red
+  hover ring on macOS) that didn't match anything else on the page.
+- **The header row and toolbar buttons are shadcn's own (smaller) sizes now**,
+  not the 50px/15px-600 header and 44-46px buttons the 2026-09-18 entry fixed
+  — sort triggers are `Button variant="ghost" size="sm"`, filter/view chips
+  are `Button variant="outline" size="sm"`, matching what shadcn's own
+  data-table examples ship.
+- `admin.css`'s `.dt-*` rules were not deleted. `.dt-header`/`.dt-card`/`.dt-toolbar`/
+  `.dt-scroll`/`.dt-table` (sizing, sticky offsets, `tabular-nums`)/`.dt-pagination`/
+  `.admin-empty`/`.dt-primary`/`.dt-muted`/`.dt-skeleton` still apply — they are
+  layout and cell-content helpers the ten untouched manager files' own `cell`
+  renderers still use, not the interactive chrome that moved to shadcn. Some
+  of the old interactive-chrome rules (`.dt-filter-button`, `.dt-popover*`,
+  `.dt-check`, `.dt-sort`, `.dt-rows-*`, `.dt-page-buttons`) are now dead and
+  can be pruned in a follow-up pass; left in place for now since an unused
+  CSS rule is not a correctness risk.
+
+## 2026-09-20 — Node moves to 22 everywhere, because the rich-text sanitizer requires it
+
+`isomorphic-dompurify` and its `jsdom` dependency, added by the "Implement
+rich text editor for announcements with HTML sanitization" change, each
+declare `"engines": { "node": "^22.22.2 || ^24.15.0 || >=26.0.0" }`. Every
+image in the repository was still `node:20-alpine` — `frontend/Dockerfile`,
+`frontend/Dockerfile.dev`, `database/Dockerfile`, and `node-version: 20` in
+`.github/workflows/ci.yml` — which is outside that range entirely. `npm
+install` does not hard-fail on an engine mismatch, only warns, so the module
+installed anyway and crashed the first time it actually ran: `Failed to load
+external module jsdom-<hash>: TypeError: webidl.util.markAsUncloneable is
+not a function`, thrown from `frontend/src/lib/rich-text.ts` on module
+evaluation. Every announcement write path imports it — saving, deleting, and
+`setAnnouncementStatusAction` (publish/withdraw) — so all three failed on
+Node 20, in every environment including production, not only in local
+Docker. `next build` never caught it because bundling a server action does
+not execute it; the crash only fires when jsdom's native bindings actually
+load at request time.
+
+All four pins move to `node:22-alpine` / `node-version: 22`, the nearest LTS
+line that clears the floor. Not `node:24-alpine`: 22 is a smaller version
+jump off the LTS the project already had, and this fix is about clearing the
+engine floor, not about picking the newest available runtime. Revisit if a
+future dependency needs 24 or later.
+
+## 2026-09-20 — An event's additional questions are authored, not yet answered
+
+The 2026-09-17 events entry listed the per-event question builder as
+deliberately not built. This builds the authoring half only — a company's
+extra screening questions (a cover letter, a portfolio link, "why us") on
+top of the resume every applicant already attaches.
+
+- **`JobProfile.questions Json?`** is the first `Json` column in the schema
+  (migration `20260920120458_add_job_profile_questions`, nullable and
+  additive, no backfill). Each element is
+  `{ id, type: "TEXT" | "MCQ" | "CHECKBOX" | "FILE", question, options? }`;
+  `options` only applies to MCQ and Checkbox. A JSON array was chosen over a
+  child table because nothing needs to query *into* individual questions —
+  the whole list is read and written together, once, by the one form that
+  owns it — and a child table would need its own migration for something
+  that is still just draft-shaped. Revisit if per-question analytics or
+  reordering-with-history is ever asked for.
+- **`Prisma.JsonNull`, not a bare `null`.** Prisma cannot tell a SQL `NULL`
+  from the JSON literal `null` unless told which one is meant; passing a
+  bare `null` for a `Json?` field is a type error for exactly this reason.
+  `frontend/src/app/admin/events/actions.ts` writes `Prisma.JsonNull` when
+  the office removes every question, so an event that used to carry
+  questions and now carries none stores SQL `NULL`, not `[{}]`-shaped noise.
+- **No student answer is stored anywhere.** Collecting one needs its own
+  column on `Application`, plus apply-flow UI to render the right control
+  per question type and validate a required one was answered — deliberately
+  separate work, so the schema doesn't grow past what has a consumer yet.
+  `backend/app/schemas/job.py` and the FastAPI job router are untouched for
+  the same reason: nothing reads `questions` there yet.
+- `backend/app/models/db.py` mirrors the column as `JSONB` per the standing
+  rule, even though the only writer is the Prisma-direct admin action, so a
+  future FastAPI reader does not have to catch the mirror up first.
+- The builder (`EventQuestionBuilder`) is plain shadcn — `Select`, `Input`,
+  `Button`, `Label` — reusing the same "controlled state, `FormData` on
+  submit" pattern the rest of `event-form.tsx` already follows, so it needed
+  no new state-management approach. A question missing its text, or an
+  MCQ/Checkbox short of two non-empty options, joins the form's existing
+  "Still needed: …" hint and blocks Save, the same validation UX every other
+  required field on this form already uses — no separate error-styling
+  pattern was introduced.
+
+## 2026-09-20 — The event composer widens, and Job Description becomes rich text
+
+Two changes to `/admin/events/add` and `/admin/events/[id]/edit`, on request.
+
+- **`admin-page` gains the `composer-page` class**, the same 1560px widening
+  `/admin/announcements/company-event` and `/admin/announcements/general`
+  already use, for the same reason: a long single-column form reads better
+  with more room than the 1280px every table page wants. No new CSS — the
+  rule already existed for exactly this case.
+- **`Description` is now `RichTextEditor`, not a plain `Textarea`.** The
+  sanitizer the announcement composer already used was generalized rather
+  than duplicated: `sanitizeAnnouncementHtml` in `frontend/src/lib/rich-text.ts`
+  is renamed `sanitizeRichText` (the allow-list and `stripHtmlToText` were
+  already feature-agnostic; only the name was announcement-specific), and
+  every caller — `announcement-schema.ts`, `announcements-manager.tsx`,
+  `dashboard-feed.tsx`, the test file — moved with it in the same change.
+  `job-profile-schema.ts`'s `description` field now sanitizes on the way in
+  and checks its length against the stripped text, the same rule
+  `Announcement.content` follows. No column migration: `JobProfile.description`
+  was already an unbounded `String?`, and an old plain-text row is still
+  valid HTML (a plain string with no tags), exactly as the announcement
+  migration noted for the same reason.
+- **Every render site was found and fixed, not just the editor.** The only
+  other place `JobProfile.description` reaches a screen is
+  `/company-events/[id]`'s "Opening overview" section, which used to print
+  it as an escaped plain string. It now renders sanitized HTML through
+  `.rte-content` (dangerouslySetInnerHTML) when `openingOverview` — a
+  separate, still-plain-text field — is absent. The admin events list does
+  not show `description` anywhere, so nothing else needed a fix.
+- `EventQuestionBuilder`'s validation check for an empty description
+  (`event-form.tsx`'s `missing` list) moved from `description.trim()` to
+  `stripHtmlToText(description)`, because an empty Tiptap document
+  serializes to `<p></p>`, which `.trim()` alone would have read as filled in.
+
+## 2026-09-20 — An event can carry attachments, and `JobProfile.attachments` becomes JSON
+
+The event composer's attachment uploader — the other half of the 2026-09-17
+"not built" list, alongside the question builder — is now built, on the same
+stage-before-save pattern the announcement composer's uploader already uses.
+
+- **`JobProfile.attachments` moved from `String[]` to `Json?`**
+  (migration `20260920124455_job_profile_attachments_json`), storing
+  `{ fileName, fileUrl, mimeType, sizeBytes }[]` — the same fields
+  `AnnouncementAttachment` carries as columns, as an inline array instead of
+  a child table, for the same reason `questions` is one: a handful of files
+  read and written together by the one form that owns them. The migration
+  drops and recreates the column; every row was confirmed empty first
+  (`SELECT COUNT(*) FILTER (WHERE array_length(attachments,1) > 0)` returned
+  0 of 8), so there was nothing to lose. `backend/app/models/db.py` mirrors
+  it as `JSONB`.
+- **A narrower type list than an announcement's: `.pdf` and `.png` only, 4 MB
+  each, 5 files.** A drive attaches a job description or a poster, not a
+  shortlist spreadsheet — `EVENT_ATTACHMENT_EXTENSIONS`/`EVENT_ATTACHMENT_MAX_MB`
+  in `backend/app/routers/uploads.py`, mirrored in
+  `frontend/src/lib/job-profile-schema.ts`. The new
+  `POST /uploads/admin/event-attachment` endpoint calls the same
+  `validate_attachment()` the announcement endpoint does (magic-byte checked,
+  not just the extension) and then narrows the result to that pair, rather
+  than forking the validator.
+- **`GET /uploads/files/{path}` gained a matching visibility rule for
+  `event_docs/`**: readable once the owning `JobProfile.status` is not
+  `DRAFT`, private while it still is — the same rule an announcement
+  attachment follows, checked with a cast-to-text `LIKE` over the JSON
+  column since there is no child table to join here.
+- **The dropzone (`EventAttachmentUploader`) is plain shadcn/Tailwind**, not
+  a port of the announcement composer's hand-rolled `.dropzone`/
+  `.composer-attachments` CSS — a dashed-border div, `Label`, and native
+  drag/drop handlers, matching the rest of this session's shadcn work rather
+  than the composer's older, not-yet-migrated styling.
+- Not built: an attachment's own permission story beyond "visible once
+  published" — there is no separate grant for who may see a drive's
+  attachments versus the drive itself, matching how an announcement's
+  attachments already work.
+
+## 2026-09-20 — Optional eligibility gains a 10th/12th percentage floor, and CGPA moves into it
+
+Two decisions the office made when asked, before this was built: minimum CGPA
+moves from its own always-visible field into "Optional Eligibility Criteria"
+(relabelled "Graduation GPA" there) rather than gaining a second, separate
+field; and the new 10th/12th percentage minimums are real eligibility
+criteria, not informational-only text fields.
+
+- **New nullable `JobProfile.min10Percent`/`min12Percent`**
+  (migration `20260920153218_job_profile_percent_minimums`), following
+  `minCGPA`'s own convention: unset means no floor, not zero — a `Float?`
+  rather than reusing `minCGPA`'s `@default(0)`, since 0 is itself a
+  meaningful minimum here (a job could conceivably ask for "any 10th
+  percentage, but not literally negative"), and null is the only
+  unambiguous "not asked" value.
+- **Wired into both eligibility engines, not just stored.** `evaluate_eligibility`
+  (Python) and `evaluateEligibility` (TypeScript) each gained two criteria and
+  now thread `min10Percent`/`min12Percent` through every call site that
+  builds a job's criteria — `backend/app/routers/{applications,jobs}.py`,
+  `backend/app/services/student_flags.py`, `frontend/src/app/dashboard/page.tsx`,
+  `frontend/src/app/company-events/actions.ts`, and
+  `frontend/src/app/company-events/[id]/page.tsx` — the same "every criterion
+  is a named argument" discipline the existing ones already follow, so a call
+  site that forgets one gets a compiler or `KeyError` failure instead of a
+  silently-skipped check. `toEligibilityProfile`/`to_eligibility_profile`
+  gained `class10Percent`/`class12Percent` from the `User` row, which already
+  carried both columns for profile-completion percentage and needed no new
+  fetch.
+- **An unset floor passes everyone; a set floor fails a student whose profile
+  cannot answer it** — the same rule an unrestricted branch/degree/gender list
+  already follows, applied here via a small `meetsPercentFloor`/
+  `_meets_percent_floor` helper in each engine rather than inlining the
+  three-way null check at each of the two new criteria.
+- **A live regression from the attachments change earlier in this session was
+  caught and fixed while touching this file's neighbour.**
+  `backend/app/schemas/job.py`'s `JobBase.attachments` was still typed
+  `list[str]`, unchanged since the `String[]` days, so `GET /api/v1/jobs`
+  would have failed Pydantic validation against every row the moment
+  `JobProfile.attachments` became a JSON array of objects. Added a
+  `JobAttachment` model and moved `attachments` out of the plain
+  `empty_when_null` list-of-strings validator into its own call. Confirmed
+  fixed by validating `JobResponse` against every real row in the dev
+  database, not just the mocked test fixtures.
+- **`event-form.tsx`'s "Optional Eligibility Criteria" block now resets CGPA
+  and both percentages to "no minimum" when the toggle is switched off**,
+  matching how `allowedGenders`/`maxBans` already behaved — before this,
+  CGPA sat outside the toggle entirely and was never reset, which is exactly
+  why moving it inside without also gating its submitted value would have
+  been a silent behaviour change (a value typed once would keep applying
+  after the section was collapsed).
+- Not changed: `allowedGenders`'s control stays the existing multi-select
+  `ToggleGroup`, not a single dropdown, despite the reference image showing
+  one. Converting it would have dropped the ability to allow two genders
+  while excluding a third, which nothing asked for.
+
+## 2026-09-21 — The real roster replaces `students_data.json`, and the demo dataset attaches to it directly
+
+The placement cell supplied the actual 668-row student roster (roll number,
+name, branch, degree, graduation year, and a shared default password) and it
+now lives at `database/seed-data/students.json` — the path the *synthetic*
+demo roster used to occupy before this entry. Two scripts needed to change
+because of where that file now lives and what it now means:
+
+- **`database/scripts/import-students.ts`** reads the roster from
+  `database/seed-data/students.json` instead of a root `students_data.json`
+  (removed), and from the roster's own column names (`Institute Email ID`,
+  `Full Name`, `Roll Number`, `Graduation Year`, `Branch`, `Degree`,
+  `Password`) instead of the old lowercase/underscore ones. It now also sets
+  `passwordHash` from the roster's `Password` column on every run, the same
+  as `branch`/`degree`/`batch`/`personalEmail` already were — this is
+  deliberately an overwrite, not a fill-the-gap, because the production
+  workflow this exists for is: the placement cell rotates a student's
+  password by editing their row in the roster, reseeds, and emails them the
+  new password from the same row. A "only if empty" rule would silently keep
+  the old password live after that email went out. Rows that share a
+  password (every row does today, in the local development dataset) still
+  only pay bcrypt's hashing cost once, since the hash is cached by plaintext
+  value within a single run. One consequence worth stating plainly: an
+  individual password set through `/admin/users` (the documented path for
+  recovering one student's forgotten password) is overwritten the next time
+  `db:import-students` runs, if that student's roster row was not updated to
+  match. Bulk rotation belongs in the roster; one-off recovery between
+  rotations does not survive the next import.
+- **`database/scripts/seed-demo-data.ts`** no longer creates a small set of
+  synthetic `demo-user-*` accounts for its dummy companies, job profiles,
+  applications, offers, feedback, and NOC requests to point at. It looks up
+  real accounts by roll number instead (`loadStudentsByRollNumber`, which
+  fails loudly if `db:import-students` has not run yet) and every
+  `studentSlug` field across `database/seed-data/{applications,offers,
+  feedback,noc-requests}.json` and `personal-activity.json` is now
+  `studentRollNumber`. `database/seed-data/students.json` is no longer one of
+  the zip's entries — it is real data, not demo data, and
+  `pack-demo-data.ts` now excludes it by name so it never lands in
+  `seed-data.zip`.
+
+Chosen over keeping the two rosters (real accounts + a small synthetic one for
+demo activity) separate, which was the only alternative considered: it stays
+truer to the stated goal of a portal that already looks populated for actual
+students the moment `make seed` finishes, at the cost of `make db-remove-demo`
+no longer being a full undo of `make db-seed-demo` — the applications, offers,
+feedback, and NOC rows it created are removed as before (they keep their
+`demo-` ids), but the real accounts they were attached to, and any profile
+fields `db:import-students` filled on them, are not, because removing a real
+student account was never on the table.
+
+`JobRecord.batch` also changed from `currentYear + batchOffset` to a literal
+graduating year (2027 or 2028 in the current dataset). The old relative-offset
+scheme kept the synthetic roster from going stale as real time passed, but a
+job now has to match the fixed graduating year of the real students it
+targets, which does not move just because the calendar did. Registration
+deadlines and every other date in the dataset are still offsets from the seed
+run, so they stay evergreen.
+
+## 2026-09-21 — A fifth role, FACULTY: read-only NOC, placement records, and the overview; ranked between STUDENT and PLACEMENT_VOLUNTEER
+
+Requested directly: faculty need to see NOC requests (including the signed
+PDF) and placement records, and the placement dashboard overview, without any
+ability to change them, create them, or apply to a drive — ranked below
+`PLACEMENT_VOLUNTEER` and above `STUDENT`.
+
+- **`Role` gains `FACULTY`** in `database/prisma/schema.prisma` (migration
+  `20260921095322_add_faculty_role`, an `ALTER TYPE ... ADD VALUE`, so it is
+  additive and non-destructive) and its hand-maintained mirror in
+  `backend/app/models/db.py`.
+- **Its default permission set is exactly three keys** —
+  `analytics.view`, `noc.view`, `placement_records.view` — added as
+  `FACULTY_DEFAULTS`/`_FACULTY_DEFAULTS` in `frontend/src/lib/permissions.ts`
+  and `backend/app/core/security.py`, the two files that already had to stay
+  identical for every other role. No create/update/delete/approve permission
+  is granted, and `applications.apply` is not only withheld but structurally
+  unreachable: `require_student` in the backend gates applying on the literal
+  `STUDENT` role, not on a permission key, so no combination of custom
+  permissions could ever let a FACULTY account apply.
+- **Ranked by `ROLE_METADATA[...].tier`**, a display/sort-only field (see the
+  2026-09-17-era permission catalog) — `STUDENT` 1, `FACULTY` 2,
+  `PLACEMENT_VOLUNTEER` 3, `PLACEMENT_TEAM` 4, `SUPER_ADMIN` 5. Tier has never
+  driven authorization; that's entirely `ROLE_DEFAULT_PERMISSIONS` and
+  `ROUTE_PERMISSIONS`, both of which this entry's permission set already
+  determines.
+- **Deliberately excluded from `isElevatedRole`/`is_elevated_role`.** That
+  function is a broader shortcut than a permission check — "trust this role
+  for anything not explicitly permission-gated" — used inside
+  `hasAnyAdminPermission`'s fallback, `canAccessAdminRoute`'s fallback for a
+  path with no `ROUTE_PERMISSIONS` entry, and (backend)
+  `get_current_user`'s domain/role gate. Including FACULTY there would have
+  been the one-line fix for every symptom below, at the cost of granting
+  faculty implicit access to any future admin route nobody remembered to add
+  to `ROUTE_PERMISSIONS` — the opposite of "read-only, exactly these three
+  screens." Both functions carry a comment now explaining the omission is
+  intentional, not a gap. Faculty still reach the admin portal correctly:
+  `hasAnyAdminPermission`'s permission-based branch already treats any
+  non-student-scoped permission as administrative, and `noc.view`/
+  `placement_records.view`/`analytics.view` are not in
+  `STUDENT_SCOPED_PERMISSIONS`.
+- **Three call sites had to stop using `isElevatedRole` for the post-login
+  landing page**, because that decision — `/admin/dashboard` vs `/dashboard`
+  — was the one place in the app that read the role literal directly instead
+  of asking a permission question, and a non-elevated FACULTY account would
+  have landed on the empty student dashboard after every sign-in.
+  `frontend/src/app/login/page.tsx`, `frontend/src/app/register/page.tsx`,
+  and `frontend/src/app/account/password/page.tsx` now call
+  `hasAnyAdminPermission(session.user)`, the function the rest of the app
+  already uses for this exact question (`proxy.ts`, `admin-session.ts`).
+- **The NOC PDF has its own gate, separate from the JSON list/detail
+  endpoints, and it was missing `noc.view`.** `backend/app/routers/uploads.py`'s
+  `get_uploaded_file` — the generic local-file server also behind resumes,
+  identity documents, and announcement/event attachments — decided
+  `is_admin` from `is_elevated_role`, `is_admin_email`, `students.view`, or
+  `applications.view`, none of which a view-only FACULTY account holds. Fixed
+  narrowly, not by broadening `is_admin` (which would have hit every file
+  type this endpoint serves): inside the existing `noc_docs/`-prefixed
+  branch, a caller holding `noc.view` is now authorized for that document
+  without the per-row ownership query, the same read access the admin NOC
+  list/detail endpoints already give them via `require_permission(PERM_NOC_VIEW)`.
+  Covered by a new test in `backend/tests/test_storage.py`.
+- **`/admin/placement-records` had no read-only UI mode; this exposed that as
+  a real, pre-existing gap, not just a FACULTY-shaped one.** The Add/Edit/Delete
+  controls in `placement-records-manager.tsx` rendered unconditionally for
+  anyone who could reach the page at all — server actions were correctly
+  permission-gated, but `PLACEMENT_VOLUNTEER` (which has only
+  `placement_records.view`, same as FACULTY) already saw an enabled "Add
+  record" button and per-row Edit/Delete icons that would 403 on submission.
+  `placement-records/page.tsx` now computes `canCreate`/`canUpdate`/`canDelete`
+  from the three separate permission keys and passes them down; the manager
+  hides each control it lacks the grant for, and omits the Actions column
+  entirely rather than rendering it empty when neither grant is held — the
+  same pattern `noc-requests-manager.tsx`'s `canDecide` already established
+  for Approve/Reject.
+- **`/admin/users`'s and `/admin/settings`'s role-count tiles silently
+  miscounted, or omitted, FACULTY.** `users-manager.tsx` computed its stats
+  client-side with an `else students++` catch-all that had been correct only
+  because the four roles before this one were all explicitly branched — a
+  FACULTY account would have been counted as a student. Fixed by adding an
+  explicit branch and a `faculty` count, folded into the existing "Placement
+  Cell" tile (renamed "Placement Cell & Faculty") alongside team/volunteer
+  counts, since `FACULTY` and `PLACEMENT_VOLUNTEER` are the same shape of
+  role — read access, cannot change it. `admin/settings/page.tsx`'s
+  server-side counts got the same `FACULTY` query and the same tile treatment
+  in `settings-manager.tsx`, for the same reason.
+- Not changed: the self-demotion guards in `admin/users/actions.ts` and
+  `backend/app/routers/users.py` (`update_user_role`) only special-case
+  demoting to `STUDENT` or `PLACEMENT_VOLUNTEER` today — they already didn't
+  cover self-demotion to `PLACEMENT_TEAM` either, so leaving `FACULTY` out is
+  consistent with that existing scope rather than a new gap.
+
+## 2026-09-21 — NOC requests gain an offer source, an off-campus proof document, an independent verification mark, and a no-review path; FACULTY narrows to APPROVED only
+
+Four requests bundled together, plus a consequence of the FACULTY role from
+the entry above. Two decisions were confirmed directly rather than assumed,
+because both change workflow semantics in a way that's hard to walk back
+once students start relying on it:
+
+- **A "no NOC required" submission is auto-recorded, never queued for
+  review.** `NocRequest.nocRequired: Boolean @default(true)` — when false,
+  `create_noc` sets `status` straight to `APPROVED` instead of `PENDING`, so
+  the row never appears in anyone's decision queue and no PENDING→APPROVED
+  transition is logged for something nobody decided. The alternative
+  (still landing in PENDING so the placement cell acknowledges it) was
+  explicitly turned down: it would add busywork for entries that by
+  definition need no decision. Modeled as a boolean, not a fourth
+  `NocStatus` value — the exhaustiveness risk of a new enum member across
+  every `status === "PENDING"`-shaped conditional in both frontend and
+  backend (cancel eligibility, row-action gating, the metrics tiles, the
+  status filter) was worse than one extra column. The UI derives what it
+  shows from this flag, not from `status`: `displayStatus()` in
+  `noc-requests-manager.tsx` and the equivalent inline check in
+  `forms-view.tsx` render "Not required" instead of "Approved" whenever
+  `nocRequired` is false, so nobody reads an unreviewed row as a real
+  approval. `get_noc_metrics` counts these rows separately (`notRequired`)
+  from `approved`, for the same reason.
+- **The "verified by placement team" toggle never gates Approve/Reject.**
+  `NocRequest.verifiedByPlacementTeam: Boolean @default(false)`, set via the
+  new `PATCH /noc/admin/{id}/verify` (`require_permission(PERM_NOC_APPROVE)`,
+  the same grant `canDecide` already checks — no new permission key). It is
+  purely a record that someone on the placement team looked at the student's
+  off-campus proof document; approving or rejecting the request never checks
+  it. The alternative (blocking Approve until verified) was explicitly
+  turned down as an unrequested hard workflow dependency.
+- **Off-campus offers carry their own proof document, submitted by the
+  student, separate from the placement cell's signed certificate.** New
+  `NocSource` enum (`ON_CAMPUS` | `OFF_CAMPUS`, defaulting `ON_CAMPUS` so
+  every pre-existing row reads the way it always implicitly was) and
+  `NocRequest.offCampusProofUrl`, staged before the request exists via the
+  new student-facing `POST /uploads/noc-offcampus-proof` (the same
+  stage-before-save pattern the announcement and event composers already
+  use), then attached when `POST /noc` is called with the returned URL.
+  `NocCreate.validate_offcampus_proof` rejects an `OFF_CAMPUS` submission
+  with no proof URL — the whole point was giving the placement cell
+  something to confirm the offer is real before proceeding. Uses
+  `validate_attachment`/`upload_document` (pdf/png/jpg/jpeg/doc/docx), not
+  the PDF-only `validate_pdf`/`upload_pdf` the signed certificate uses,
+  since an offer letter is as likely to be a scanned image as a PDF.
+  Read access for both the JSON fields and the file bytes is symmetric with
+  the existing signed-certificate path: `frontend/src/app/api/
+  noc-offcampus-proof/[id]/route.ts` mirrors `noc-documents/[id]/route.ts`,
+  and `backend/app/routers/uploads.py`'s `get_uploaded_file` gained a second
+  `noc_offcampus_proof/`-prefixed branch alongside `noc_docs/`, both
+  resolved by the same `has_permission(PERM_NOC_VIEW)`-or-ownership check.
+- **FACULTY (added in the entry above) only ever sees APPROVED NOC
+  requests.** `list_admin_nocs` force-filters to `NocStatus.APPROVED` for
+  that role regardless of the `status_filter` query param — not merely
+  defaulted, so a FACULTY caller cannot ask for PENDING/REJECTED explicitly
+  either. `get_admin_noc_detail` 404s (not 403s) on a non-approved row for
+  the same role, so a pending or rejected request cannot be told apart from
+  one that doesn't exist. `get_noc_metrics` suppresses the pending/rejected
+  counts for FACULTY for the identical leak reason — an admin dashboard
+  tile reading "Pending Review: 3" for requests the role can't open would
+  itself be a disclosure. A not-required row is stored `APPROVED` (see
+  above), so FACULTY does see those too — they're a settled record with
+  nothing left to decide, the same category as a real approval from this
+  role's point of view.
+- Verified live via direct API calls against the running dev stack with
+  hand-signed JWTs for a real student, a FACULTY account, an unrelated
+  student, and an admin: the off-campus-without-proof submission 422s, a
+  `nocRequired: false` submission lands at `APPROVED` immediately, the
+  verify toggle flips independently of a still-`PENDING` status, FACULTY's
+  list/metrics never surface a non-approved row, a FACULTY detail fetch on
+  a `PENDING` row 404s, an unrelated student is refused the proof PDF's
+  bytes while the owning student and a `noc.view` holder are not.
+
+## 2026-09-22 — CGPA and backlogs are no longer student-editable; `students.update` gets its first route
+
+A security review found that a student could `PATCH /profile` their own
+`cgpa` and `backlogs` to any value inside the schema's numeric range, with
+no cross-check against an official record. Both fields are load-bearing:
+`backend/app/services/eligibility.py` / `frontend/src/lib/eligibility.ts`
+evaluate them directly against a drive's `minCGPA`/`maxBacklogs`, and the
+admin applications screen shows them to recruiters as the candidate's
+record. A student with a 6.2 CGPA and 2 backlogs could self-report 9.5 and
+0, pass eligibility for a drive that should have rejected them, and have
+the fabricated number displayed to the recruiter reviewing the application.
+
+- **`cgpa` and `backlogs` are removed from `StudentProfileUpdate`
+  (`backend/app/schemas/student.py`) and `studentProfileSchema`
+  (`frontend/src/lib/profile-schema.ts`)**, the same way roster fields
+  (name, roll number, branch, degree, batch) were already excluded — by
+  omission from the schema that is the actual write boundary, not by a
+  runtime check. `frontend/src/components/profile/profile-view.tsx` locks
+  both inputs the same way it already locked the roster fields
+  (`ACADEMIC_LOCKED_FIELDS`, folded into the existing `LOCKED_FIELDS` set),
+  with its own tooltip pointing the student at the placement office rather
+  than implying a roster import owns the value.
+- **A new schema, `StudentAcademicCorrection`, is the only way to write
+  either field now**, bound to a new route,
+  `PATCH /students/admin/{id}/academic`
+  (`backend/app/routers/students.py`), guarded by `students.update` — a
+  permission that has existed in the 49-entry catalog since the RBAC
+  redesign (2026-09-17) with exactly this description ("Update roster
+  fields, backlogs, and placement bans") but had no route or admin screen
+  behind it until now. Both fields are independently optional on the
+  correction schema, so a placement-cell member can fix just the CGPA or
+  just the backlog count without having to know the other value.
+- **The admin student detail page
+  (`frontend/src/components/admin/student-profile-detail.tsx`) gained a
+  "Correct CGPA / backlogs" action**, shown only when the viewer holds
+  `students.update` (checked server-side in
+  `frontend/src/app/admin/students/[id]/page.tsx` via `hasPermission`, the
+  same pattern `/admin/placement-records` already uses to gate its
+  create/update/delete buttons). The action is a `PortalDialog` form
+  (`student-academic-correction-dialog.tsx`) that posts through a new
+  `"use server"` action, `updateStudentAcademicAction`
+  (`frontend/src/app/admin/students/actions.ts`), which re-validates with
+  `studentAcademicCorrectionSchema` before calling the backend — the
+  browser is not trusted any more here than it is anywhere else in the
+  portal.
+- **No Prisma fallback was added for the new write.** Every other
+  student-directory screen still reads through Prisma directly pending the
+  broader FastAPI migration, but this is a new route with no legacy
+  behavior to preserve, and adding a second write path for the exact value
+  this decision restricts would have undercut the fix.
+
+## 2026-09-22 — Registration requires an email-OTP before anything is written to `User`
+
+A security review found that `/register`'s "claim an existing account"
+path — added in the 2026-09-17 entry below, once Google sign-in stopped
+proving mailbox ownership — let anyone who could type an institute address
+set its password. Both 2026-09-17 entries said as much explicitly: *"With
+no verified provider and no verification mail, whoever registers an unused
+institute address owns it... A verification link at registration is still
+the single change that would fix this."* Institute addresses are commonly
+roll-number-shaped and therefore guessable, so this was a real
+account-takeover path against any student who had not yet registered,
+reaching their applications, resumes, NOC requests, and profile PII. This
+entry is that change.
+
+- **Registration is now two steps.** `requestRegistrationOtpAction`
+  (`frontend/src/app/register/actions.ts`) validates the form, runs the
+  same eligibility checks the old single-step `registerAction` did
+  (domain, not an `ADMIN_EMAILS` address, not already claimed by an
+  active password, not a `TeamMember` row), hashes the password, and
+  stages `{ name, passwordHash }` — **not** the plaintext password — for
+  the address. `verifyRegistrationOtpAction` only writes to `User`, by
+  claim or by create, once the caller types back the code that was
+  emailed to that exact address. `RegisterForm`
+  (`frontend/src/app/register/register-form.tsx`) is the client component
+  that drives the two steps; `register/page.tsx` is back to a thin server
+  wrapper.
+- **The dormant `VerificationToken` table holds the pending state**, not a
+  new table. It was scaffolded for Auth.js's email provider and has been
+  unwritten since Google sign-in was removed (2026-09-17); it is exactly
+  shaped for this — `identifier` the email, `token` now `sha256(code)` so
+  the code itself is never at rest, `expires` a 10-minute TTL. It gained
+  one column, `payload Json?`, for the staged `{ name, passwordHash }` —
+  `database/prisma/migrations/20260922175701_add_verification_token_payload`.
+  A request deletes any row already pending for that address before
+  writing a fresh one, so a resend invalidates whatever code came before
+  it, and a successful or failed-out verify deletes the row too — a code
+  is single-use on every exit path. `frontend/src/lib/registration-otp.ts`
+  owns all of this and is the only code that reads or writes the table.
+- **Two independent throttles, not one.** Requesting a code and guessing
+  one are different abuse shapes — one spends a victim's inbox (and
+  Resend's bill), the other spends the 6-digit space — so each gets its
+  own limit and lockout, both a generalization of the existing
+  `login-throttle.ts` pulled out into `frontend/src/lib/rate-limit.ts`
+  (`createThrottle`) so the two throttles and the pre-existing login one
+  share the sliding-window/lockout logic rather than three copies of it.
+  `login-throttle.ts`'s own exported names and behavior are unchanged —
+  it is now a five-line instantiation. Same accepted caveat as before:
+  in-process, resets on deploy, not shared across replicas.
+- **The email itself is sent by the backend, authorized by a new
+  purpose-scoped token, not a shared static secret.** The frontend already
+  owns `User`/`VerificationToken` via Prisma and generates the code, but
+  the only real mailer in the system is `send_notification_email`
+  (`backend/app/services/email.py`, Resend). Rather than duplicating a
+  second Resend integration into the frontend, `registration-otp.ts` mints
+  a two-minute HS256 JWT — `{ purpose: "register-otp-email", email, code
+  }`, signed with the same `AUTH_SECRET` a real session JWT uses — and a
+  new endpoint, `POST /auth/internal/send-registration-otp`
+  (`backend/app/routers/auth.py`), verifies it and relays the send.
+  `require_internal_purpose_token`/`_decode_internal_purpose_token`
+  (`backend/app/core/security.py`) are what make this safe to sign with
+  the same secret as a session: the `purpose` claim means neither token
+  is ever valid as the other, so a lifted session cannot be replayed
+  against this endpoint and this token is useless anywhere a session is
+  expected. This endpoint is unreachable by a browser — nothing gives a
+  browser `AUTH_SECRET` to sign with — so it is not the open mail relay it
+  would be if it trusted its caller on request shape alone.
+- **`is_email_delivery_configured()` (`backend/app/services/email.py`) is
+  a new, small public wrapper around the existing placeholder-key check**,
+  so the OTP endpoint can tell a genuinely unconfigured mailer apart from
+  a real send it should attempt. When Resend is not configured — every
+  local and demo environment today, since `RESEND_API_KEY` ships empty —
+  the endpoint logs the code at `WARNING` instead of silently discarding
+  it the way `send_notification_email` already does for every other
+  email. Without this, registration would have been unusable outside a
+  deployment with a real Resend key.
+- **`User.emailVerified`, an Auth.js-standard column that nothing has
+  ever written since the adapter was removed, is now stamped** on a
+  successful claim or create. Nothing reads it yet; it is there for
+  whatever needs "was this address ever OTP-verified" next, such as the
+  forgot-password flow both 2026-09-17 entries still call outstanding.
+- **Verified live** against the running dev stack (containers rebuilt to
+  pick up the change): registering a fresh address stages the hash and
+  emails nothing to `User` — confirmed with a direct query between the two
+  steps — logs the code (`RESEND_API_KEY` is unset locally), rejects a
+  wrong code with the row still intact, and accepts the right one, at
+  which point the row appears with `emailVerified` set, the
+  `VerificationToken` row is gone, and the session signs in and lands on
+  `/dashboard`.
+
+## 2026-09-22 — Three unthrottled password checks get a shared, Redis-backed brake
+
+A security review found two gaps the portal's own login throttle
+(`frontend/src/lib/login-throttle.ts`) had never covered. First, the
+`/admin` table-browser login (`backend/app/admin/auth.py`) and the
+identity-document unlock challenge (`backend/app/routers/profile.py`'s
+three `*-doc/unlock` routes) had no attempt limit at all — a timing-safe
+comparison stops a response from leaking anything, but nothing stopped
+unlimited guessing. Second, the login throttle that did exist was an
+in-process `Map`: correct for one container, but silently stopped
+coordinating the moment the frontend ran as more than one replica, since
+each would keep its own count of the same address's failures.
+
+- **`backend/app/core/rate_limit.py` is a new module**, a `Throttle` class
+  shaped like `frontend/src/lib/rate-limit.ts`'s `createThrottle`: `name`
+  namespaces a throttle's keys, `is_locked_out`/`record_attempt`/`clear`
+  are its whole surface, and it fails open on any Redis error — the
+  opposite direction from `app.core.cache`, and deliberately so: a cache
+  miss falls through to a slower, still-correct answer, but a throttle has
+  no equivalent path when it cannot be read, and refusing a request because
+  Redis is down would turn one incident into two. It keeps its own client
+  rather than sharing `cache.py`'s, because the two fail toward opposite
+  defaults and mixing them would make a shared failure path a lie for one
+  of them.
+- **The `/admin` login is now five attempts per source address, then a
+  15-minute lock** — tighter than the portal's own eight, because this
+  password is not one person's, so only whoever locks themselves out pays
+  for it. A locked-out attempt returns `False` exactly like a wrong
+  password: sqladmin's own failure flash is the only thing either produces,
+  so a locked address never learns that from the response, the same
+  reasoning `login-throttle.ts` already applied to `authorize()`.
+- **Each identity document's unlock challenge is now eight wrong numbers
+  per (student, document type), then a 15-minute lock.** Keyed per document
+  type so a wrong Aadhaar guess does not also lock out a correct PAN in the
+  same sitting; keyed per student because the caller is already
+  authenticated (`require_student`), so there is an identity to throttle by
+  rather than only a source address.
+- **`frontend/src/lib/rate-limit.ts` moved from an in-process `Map` to the
+  same Redis the backend's read-through cache already uses**, wired to the
+  frontend for the first time (`REDIS_URL: redis://cache:6379/0` added to
+  the frontend service in `docker-compose.yml`, matching the backend's own
+  entry; `.env.example`'s comment above it updated to say both services
+  read it now, not only the backend). `login-throttle.ts` is now a five-line
+  instantiation, and `registration-otp.ts`'s two throttles (added in the
+  entry above) moved to the same backing store in the same change, since
+  they shared the old in-process implementation and would otherwise have
+  kept its single-replica limitation on their own.
+- **`createThrottle` takes an optional, injectable `redis` client**
+  (`RedisLike`, the narrow slice of the `ioredis` surface it actually
+  calls) rather than always reaching for the shared production client.
+  Omitting it resolves the real one, but only through a dynamic `import()`
+  inside each method — never a static import at the top of the file. A
+  static import of `redis-client.ts` (which is marked `server-only` and
+  connects to `ioredis` eagerly) would execute the moment anything imports
+  `rate-limit.ts` at all, including `rate-limit.test.ts`, and the real
+  `server-only` package throws unconditionally outside Next.js's bundler —
+  it has no way to know a plain `node:test` run isn't a browser bundle. The
+  dynamic import is only reached when a caller omits `redis` entirely;
+  `rate-limit.test.ts` always supplies its own in-memory fake, so it never
+  touches Redis, `ioredis`, or `server-only` and needs no Redis to run.
+  `login-throttle.test.ts` is retired for the same reason it can no longer
+  exist as written: its assertions depended on passing an explicit `now`
+  to a synchronous, in-process counter, and there is no equivalent for a
+  wall-clock, async, Redis-backed one. The algorithm it exercised is the
+  same `createThrottle` `rate-limit.test.ts` now covers directly, with an
+  in-memory fake's own fake clock standing in for real Redis TTLs.
+- **`server-only` became a real dependency** (`frontend/package.json`)
+  rather than the implicit one it always was. Every file that already
+  imported it — `db.ts`, `admin-session.ts`, and others — worked only
+  because Next.js's bundler special-cases the string `"server-only"`
+  regardless of whether the package resolves; a plain Node `require` never
+  had that leniency, it simply never had to make the call before, since no
+  test file transitively imported one of those modules until this change.
+- **Verified live** against the rebuilt dev stack: five wrong `/admin`
+  passwords from one address lock it out (a sixth, correct, attempt still
+  fails while locked), `redis-cli` shows the corresponding
+  `tnp:throttle:db-admin-login:*` keys with TTLs, and a locked-out frontend
+  login address is rejected the same way across requests regardless of
+  which login attempt is checked against — confirmed by reading the
+  `tnp:throttle:login:*` keys directly out of the shared `cache` Redis
+  rather than only by observing one process's behavior.
+
+## 2026-09-23 — CGPA and backlogs become student-editable again, alongside the admin correction path
+
+Supersedes *2026-09-22 — CGPA and backlogs are no longer student-editable;
+`students.update` gets its first route*, on explicit product direction, not
+a reversal of the finding that decision responded to. The placement office
+stated the actual requirement: this is a prototype deployment with no
+complete academic record for every student yet, so a student must be able
+to enter and update their own CGPA and active-backlog count through the
+normal profile flow. The Training & Placement team verifies values
+manually, outside the system, and corrects a wrong one from the admin
+side — which the 2026-09-22 change had already built and which stays
+exactly as it was. The two decisions are not in tension: that entry's
+`StudentAcademicCorrection` route and its admin dialog were never the
+disputed part, and neither one gained a new column, a verification flag, or
+an approval state, per instruction — self-report and admin correction are
+two writers of the same `cgpa`/`backlogs` columns, nothing more.
+
+- **`cgpa` and `backlogs` are back on `StudentProfileUpdate`**
+  (`backend/app/schemas/student.py`) and `studentProfileSchema`
+  (`frontend/src/lib/profile-schema.ts`), with the same range and
+  precision rules `StudentAcademicCorrection`/
+  `studentAcademicCorrectionSchema` already enforced for the admin path —
+  0–10 for CGPA capped at two decimal places, 0–20 for backlogs. `PATCH
+  /profile` needed no code change to accept them again: the route already
+  applies `model_dump(exclude_unset=True)` field-by-field, so restoring
+  the schema fields was the entire boundary change, the same way removing
+  them was the whole change yesterday.
+- **`frontend/src/components/profile/profile-view.tsx`'s
+  `ACADEMIC_LOCKED_FIELDS` is gone**; `LOCKED_FIELDS` is back to only the
+  roster fields (name, roll number, branch, degree, batch) a student could
+  never edit even before any of this. CGPA and backlogs render as
+  ordinary editable inputs again, through the same "Edit profile" /
+  "Save changes" flow every other field already uses — no new UI, no new
+  state.
+- **The admin side is untouched in behavior.** `StudentAcademicCorrection`,
+  `PATCH /students/admin/{id}/academic`, the `students.update` permission
+  gate, and the "Correct CGPA / backlogs" dialog on the admin student
+  profile all still exist and still work exactly as built on 2026-09-22.
+  Only the comments describing them changed, from "the only write path"
+  to "a second writer of the same columns" — an admin correction still
+  simply overwrites whatever the student last saved, the same as it did
+  when it was the sole writer; nothing tracks which write was more recent
+  or which one "counts."
+- **No new database column, flag, or state was added**, on explicit
+  instruction: no `verifiedBy`, no `lastCorrectedBy`, no `isVerified`, no
+  audit table. A student's self-reported value and an admin's corrected
+  value are stored identically and indistinguishably in `User.cgpa` /
+  `User.backlogs` — the schema cannot tell which kind of write produced
+  the current value, by design, because that distinction was explicitly
+  out of scope for this stage.
+- **The residual risk this reopens is accepted, not overlooked.** A
+  student can still self-report a CGPA/backlog count that eligibility and
+  recruiter-facing screens treat as fact, exactly as the 2026-09-22 finding
+  described. What changed is the product's answer to it: rather than
+  blocking self-report outright, the placement team's manual verification
+  process plus the admin correction path already built are the accepted
+  mitigation for this prototype stage. A future stage that wants a
+  systematic guarantee (e.g. a verified/unverified distinction visible to
+  recruiters) is new scope, not implied by this entry.
+- **Tests updated, not just reverted.** `test_student_profile_schema.py`
+  and `profile-schema.test.ts` again assert `StudentProfileUpdate`/
+  `studentProfileSchema` accept `cgpa`/`backlogs` (precision, range, and
+  the roster-fields-only exclusion), while keeping every
+  `StudentAcademicCorrection`/`studentAcademicCorrectionSchema` test from
+  2026-09-22 unchanged — both schemas are independently correct, and nothing
+  about the admin path needed re-verifying.
+
+## 2026-09-23 — The last-active-super-admin guard actually runs now
+
+`backend/app/routers/users.py`'s role-change, deactivate, and delete
+endpoints each compared `user.role` against `(Role.SUPER_ADMIN,
+Role.ADMIN)` — `Role.ADMIN` has never existed on the `Role` enum
+(`STUDENT`, `FACULTY`, `PLACEMENT_VOLUNTEER`, `PLACEMENT_TEAM`,
+`SUPER_ADMIN`; see `docs/DECISIONS.md`, 2026-09-17). Accessing a
+nonexistent enum member raises `AttributeError` the moment Python
+evaluates the tuple, so all three guards 500'd on every attempt to act on
+a `SUPER_ADMIN` account, not only the ones that should have been blocked.
+The action never happened either way (an unhandled exception aborts the
+request before the commit), so this was never an escalation path — but it
+did mean a legitimate super-admin demotion, deactivation, or deletion was
+simply broken, and the guard itself had never actually been exercised.
+
+- **`Role.ADMIN` is gone from all three call sites**; the comparison is
+  `user.role == Role.SUPER_ADMIN`, the only tier this guard was ever
+  written to protect (the docstring already said "superadmin," singular
+  tier, before this fix).
+- **The three near-identical blocks collapsed into one pure predicate,
+  `_blocks_last_active_super_admin(remaining_active_super_admins,
+  target_email)`, plus one query helper,
+  `_remaining_active_super_admins(db, excluding)`.** The predicate takes
+  an already-known count rather than a database session specifically so
+  it can be unit tested without one — this test suite has no
+  database-backed test harness anywhere (see `test_cache.py`'s and
+  `test_rate_limit.py`'s fake-client pattern for the nearest equivalent),
+  so a guard that could only be exercised through a live query was
+  never going to get real coverage. `backend/tests/test_users_guardrails.py`
+  now covers it directly, including the bootstrap-`ADMIN_EMAILS` exemption
+  (such an address regains `SUPER_ADMIN` automatically on its next
+  sign-in, per `auth.ts`'s `signIn` callback, so it is never actually "the
+  last one" this guard needs to stop).
+- **Verified live**: with the dev stack's three real `SUPER_ADMIN` rows
+  left untouched, three throwaway `SUPER_ADMIN` test rows were demoted,
+  deactivated, and deleted through the actual endpoints — each returned
+  200 where every one of the three previously 500'd unconditionally,
+  confirming the fix addresses exactly the reported failure. The blocking
+  branch itself is covered by the new unit tests rather than by touching
+  real administrator accounts to reproduce a zero-remaining-admins state.
+
+## 2026-09-23 — Bounding the admin applications/students lists, and caching analytics by season
+
+A performance review found the admin applications list and the student
+directory had no `LIMIT`/`take` at all — every load fetched every row a
+season, or the portal, had ever accumulated, and the search box filtered
+that full set in a Python loop instead of reaching SQL, unlike its sibling
+`/admin/export` endpoint. Separately, `/analytics/admin/overview` recomputed
+its season's package/degree/branch aggregates on every request with no cache,
+the one analytics-adjacent endpoint that had skipped the Redis pass
+`announcements`/`events` already got.
+
+Fixed this pass, scoped deliberately to what could ship without touching the
+shared `DataTable` component's fetch contract (used by roughly a dozen other
+admin tables) — that rework is real work with its own risk and stays a
+separate, explicitly deferred item:
+
+- **Two missing index pairs, added via Prisma migration
+  `20260922194813_add_application_jobprofile_indexes`**:
+  `Application(jobProfileId)`, `Application(status)`,
+  `JobProfile(status)`, `JobProfile(registrationDeadline)` — exactly the
+  columns the admin filters query on, none of which the existing
+  `@@unique([userId, jobProfileId])` (leading column `userId`) covered.
+  `backend/app/models/db.py` mirrors them with `index=True` for
+  documentation; Prisma remains the only thing that runs the DDL.
+- **`GET /api/v1/applications/admin` now pushes `search` into SQL as
+  `ILIKE`** (matching the `or_()` pattern `/admin/export` already used),
+  instead of filtering the fetched rows in Python. It also gained
+  `limit`/`offset` query params — default `limit=500`, capped at `1000` —
+  so a request that specifies neither still gets a bounded, ordered result
+  rather than every application ever recorded. The frontend does not pass
+  `search`/`limit`/`offset` yet; wiring `ApplicationsManager`'s search box
+  and pagination controls through to these params, and rebuilding
+  `DataTable` to support a server-driven fetch, is the deferred item.
+- **`admin/students/page.tsx`'s Prisma query gained `take: 1000`.** Its
+  search box still filters client-side over whatever that returns — the
+  same server-side search push-down decided against here, since this page
+  has no existing search-parameter contract to extend without the same
+  `DataTable` rework, and a cap alone already removes the "every student
+  this portal has ever registered" cost without changing the page's UX.
+- **`/analytics/admin/overview` is now cached under a new `analytics` Redis
+  topic, keyed by `{"season": ...}`.** Unlike `announcements`/`events`,
+  there is no viewer dimension in the key: the response is identical for
+  every caller who holds `analytics:view`, admin or student (it is in
+  `STUDENT_SCOPED_PERMISSIONS`). Invalidated explicitly by the backend's own
+  offer writes (`offers.py`'s create/bulk-create/update/delete) and
+  application-status writes (`applications.py`'s admin status/bulk-status),
+  since those are the changes an admin is most likely to check the
+  dashboard immediately after; a Prisma-side job-status write from
+  `admin/events/actions.ts` invalidates it too, as a second, independent
+  `invalidateBackendCache("analytics")` call — kept separate from the
+  existing `invalidateBackendCache("events")` call because the API checks a
+  different permission per topic (`placement_records:update` for
+  `analytics`, `jobs:update` for `events`), and one request naming both
+  would fail closed on the whole thing for a caller holding only one. Every
+  other write that could move the payload (a new student registering, a
+  company being added) is left to the existing `CACHE_TTL_SECONDS` (300s)
+  backstop — the same class of trade-off `cache.py` already documents for
+  invalidation misses elsewhere.
+- **The underlying Python-side aggregation
+  (`placement_stats.summarize_amounts`/`counts_by_label`) was left as
+  Python, not rewritten as `AVG`/`PERCENTILE_CONT`/`GROUP BY` SQL.** The
+  review that raised this flagged it "bounded (hundreds of rows/season) so
+  not urgent" in the same breath as raising it; caching removes the
+  repeated-computation cost this pass, and the SQL rewrite is available as
+  future work if a season's offer count ever makes hundreds of rows a real
+  cost.
+- **Deferred, and scoped as its own change**: rebuilding `DataTable`
+  (`frontend/src/components/common/data-table.tsx`) to support a
+  server-driven fetch (page/pageSize/sort/search as request parameters
+  rather than a full array), and wiring `ApplicationsManager` and
+  `StudentsManager` through it. This is the one fix from the review that
+  touches a component every other admin table also depends on, and doing
+  it alongside the index/cache work risked regressing tables that are
+  working correctly today for no gain to them.
+- **Verified**: `make test-backend` (233 passed, including new
+  `test_applications_admin_list.py` — asserting `ILIKE` and the exact
+  `LIMIT`/`OFFSET` appear in the compiled statement, and are absent when a
+  search term isn't given — and `test_analytics_cache.py`, asserting the
+  overview endpoint reads through `cache.get_or_set` under the `analytics`
+  topic keyed by season). `npm run lint`, `npm run type-check` (one
+  pre-existing, unrelated failure — `redis-client.ts` importing `ioredis`,
+  which is not installed in this environment; untouched by this change),
+  and `npm test` (152 passed) all ran clean otherwise. The four new indexes
+  were applied to the running dev database and confirmed present via
+  `\d "Application"` / `\d "JobProfile"`; the backend image was rebuilt and
+  confirmed to start healthy.
+
+## 2026-09-23 — A failed registration OTP email now reports failure
+
+- **The bug being fixed**: registrations were "sending" a verification code
+  that never reached the inbox, with no error and no visible cause. The
+  root cause is configuration, not logic — `RESEND_API_KEY` is empty in
+  this deployment's `.env`, so `is_email_delivery_configured()`
+  (`backend/app/services/email.py`) is `False` and the code is only logged
+  to the backend console (confirmed live: a probe request logged `[DEV]
+  Email delivery is not configured; registration OTP for ... is ...`
+  instead of calling Resend). Setting a real `RESEND_API_KEY` and verifying
+  a sending domain that matches `EMAIL_FROM` with Resend is what actually
+  fixes delivery; `.env.example`/`.env` now say so next to the variable.
+- **The gap this pass also closed**: independent of whether a real key is
+  configured, `POST /api/v1/auth/internal/send-registration-otp`
+  (`backend/app/routers/auth.py`) always answered `{"sent": true}` even
+  when it *was* configured and Resend's own call failed (invalid key, an
+  unverified sending domain, an outage) — the send ran as a
+  `BackgroundTasks` entry, scheduled to run only after the response had
+  already gone out, so nothing the send could raise ever reached the
+  caller. The endpoint now `await`s the send (off the event loop, via
+  `asyncio.to_thread`, since `resend.Emails.send` is a blocking call) and
+  answers `502` when it returns `None`, which
+  `frontend/src/lib/registration-otp.ts`'s existing `res.ok` check already
+  turns into "Could not send the verification email. Please try again."
+  instead of silently believing a code was sent.
+- **Not changed**: the unconfigured-mailer path is deliberately left as
+  logging the code and answering success — see the existing comment on
+  `is_email_delivery_configured` and the 2026-09-22 entry that introduced
+  registration OTPs; a `RESEND_API_KEY`-less local/demo environment is
+  still meant to keep registration usable via the server log, not treat
+  every registration attempt as a hard failure.
+- **Verified**: new `backend/tests/test_auth_registration_otp.py` (5
+  cases: unconfigured mailer still answers success and logs the code;
+  configured mailer with a successful send; configured mailer with a
+  failed send now answers 502 instead of `{"sent": true}`; wrong-purpose
+  token rejected; malformed code rejected) plus the full suite —
+  `docker compose run --rm backend pytest` — 238 passed. Reproduced
+  end-to-end against the running dev stack: minted the same
+  purpose-scoped internal token the Next.js server mints, posted it to the
+  live backend, and confirmed the `[DEV] Email delivery is not configured`
+  log line fires for the actual deployment's actual (empty) config.

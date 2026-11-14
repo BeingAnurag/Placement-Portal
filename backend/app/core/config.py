@@ -45,6 +45,25 @@ class Settings(BaseSettings):
     # Environment
     environment: str = "development"
 
+    # Database table browser at /admin. It reaches every row in every table,
+    # around the portal's RBAC, so it stays off until a password is set: an
+    # empty value is the "not enabled" state, not a blank password. The
+    # password is its own, because portal passwords are bcrypt-hashed in the
+    # frontend and that hashing must not be duplicated here.
+    db_admin_password: str = ""
+    db_admin_min_password_length: int = 16
+
+    # Read-through cache for announcements and events. An empty URL turns
+    # caching off entirely, which is the same code path the endpoints take
+    # when Redis is configured but unreachable, so "off" is a tested state
+    # rather than an untried one.
+    redis_url: str = ""
+    # How long a cached list may be served before it is rebuilt. Writes
+    # invalidate explicitly, so this is the backstop for the one case
+    # invalidation cannot cover: a row changed by something outside the
+    # portal, such as the table browser at /admin or a psql session.
+    cache_ttl_seconds: int = 300
+
     @field_validator("database_url", mode="before")
     @classmethod
     def fix_database_url(cls, v: Any) -> str:

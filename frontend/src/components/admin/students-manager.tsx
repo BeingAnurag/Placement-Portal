@@ -8,6 +8,7 @@ import {
   type DataTableColumn,
   type DataTableFilter,
 } from "@/components/common/data-table";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export type AdminStudentListItem = {
   id: string;
@@ -38,7 +39,7 @@ export function StudentsManager({ students }: { students: AdminStudentListItem[]
       {
         id: "student",
         header: "Student",
-        width: "minmax(220px, 1.6fr)",
+        width: "220px",
         sortValue: (student) => student.name,
         hideable: false,
         cell: (student) => (
@@ -56,11 +57,15 @@ export function StudentsManager({ students }: { students: AdminStudentListItem[]
       {
         id: "academic",
         header: "Academic profile",
-        width: "minmax(200px, 1.6fr)",
+        width: "200px",
         sortValue: (student) => student.rollNumber,
         cell: (student) => (
           <span>
-            {student.rollNumber ?? "Roll not added"}
+            {student.rollNumber ? (
+              <span className="identifier">{student.rollNumber}</span>
+            ) : (
+              "Roll not added"
+            )}
             <br />
             <small>
               {student.branch ?? "Branch not added"}
@@ -74,19 +79,19 @@ export function StudentsManager({ students }: { students: AdminStudentListItem[]
         header: "CGPA",
         width: "100px",
         sortValue: (student) => student.cgpa,
-        cell: (student) => <span className="dt-numeric">{student.cgpa ?? "Not added"}</span>,
+        cell: (student) => <span>{student.cgpa ?? "Not added"}</span>,
       },
       {
         id: "applications",
         header: "Applications",
         width: "130px",
         sortValue: (student) => student.applicationCount,
-        cell: (student) => <span className="dt-numeric">{student.applicationCount}</span>,
+        cell: (student) => <span>{student.applicationCount}</span>,
       },
       {
         id: "followUp",
         header: "Follow-up",
-        width: "minmax(180px, 1.4fr)",
+        width: "180px",
         sortValue: (student) => student.missedStreak,
         cell: (student) =>
           student.missedStreak >= 3 ? (
@@ -168,21 +173,21 @@ export function StudentsManager({ students }: { students: AdminStudentListItem[]
       </section>
 
       {flaggedCount > 0 && (
-        <div
-          className="notice warning"
-          style={{ marginBottom: "16px", display: "flex", alignItems: "center", gap: "10px" }}
-        >
-          <AlertTriangle size={18} />
-          <div>
-            <strong>
-              {flaggedCount} student{flaggedCount === 1 ? "" : "s"} {flaggedCount === 1 ? "needs" : "need"} follow-up.
-            </strong>{" "}
-            They were eligible for 3 or more companies in a row but did not apply to any of them.
-          </div>
-        </div>
+        <Alert className="mt-4 mb-4 border-[var(--badge-orange-text)] bg-[var(--badge-orange-bg)] text-[var(--badge-orange-text)]">
+          <AlertTriangle />
+          <AlertDescription className="text-current">
+            <p>
+              <strong>
+                {flaggedCount} student{flaggedCount === 1 ? "" : "s"} {flaggedCount === 1 ? "needs" : "need"} follow-up.
+              </strong>{" "}
+              They were eligible for 3 or more companies in a row but did not apply to any of them.
+            </p>
+          </AlertDescription>
+        </Alert>
       )}
 
       <DataTable
+        title="Student Records"
         data={visible}
         columns={columns}
         getRowId={(student) => student.id}

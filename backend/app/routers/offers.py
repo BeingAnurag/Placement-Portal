@@ -17,10 +17,11 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core import cache
 from app.core.security import (
     PERM_ANALYTICS_VIEW,
     PERM_PLACEMENT_RECORDS_CREATE,
@@ -37,12 +38,16 @@ from app.models.db import (
     Company,
     JobProfile,
     Offer,
+    OfferSource,
     OfferStatus,
     OfferType,
     Role,
     User,
 )
 from app.schemas.offer import (
+    OfferBulkCreate,
+    OfferBulkRejection,
+    OfferBulkResult,
     OfferCompanySummary,
     OfferCreate,
     OfferResponse,
@@ -87,6 +92,16 @@ def _parse_status(value: str) -> OfferStatus:
         )
 
 
+def _parse_source(value: str) -> OfferSource:
+    try:
+        return OfferSource(value.strip().upper())
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid offer source '{value}'. Allowed: {[s.value for s in OfferSource]}",
+        )
+
+
 def _to_response(offer: Offer) -> OfferResponse:
     student = None
     if offer.user:
@@ -106,9 +121,12 @@ def _to_response(offer: Offer) -> OfferResponse:
         companyId=offer.companyId,
         jobProfileId=offer.jobProfileId,
         applicationId=offer.applicationId,
-        jobTitle=offer.job_profile.title if offer.job_profile else None,
+        # The recorded role wins; the drive's title is the fallback, which is
+        # what every row written before the column existed relies on.
+        jobTitle=offer.jobTitle or (offer.job_profile.title if offer.job_profile else None),
         type=offer.type.value if hasattr(offer.type, "value") else str(offer.type),
         status=offer.status.value if hasattr(offer.status, "value") else str(offer.status),
+        source=offer.source.value if hasattr(offer.source, "value") else str(offer.source),
         batch=offer.batch,
         ctc=offer.ctc,
         stipend=offer.stipend,
@@ -152,6 +170,7 @@ async def list_offers(
     batch: Optional[int] = Query(None, description="Placement season (graduating batch year)"),
     type_filter: Optional[str] = Query(None, alias="type"),
     status_filter: Optional[str] = Query(None, alias="status"),
+    source_filter: Optional[str] = Query(None, alias="source"),
     company_id: Optional[str] = Query(None, alias="companyId"),
     search: Optional[str] = Query(None, description="Student name, roll number, email, or company"),
     limit: int = Query(200, ge=1, le=500),
@@ -167,6 +186,8 @@ async def list_offers(
         stmt = stmt.where(Offer.type == _parse_type(type_filter))
     if status_filter and status_filter != "ALL":
         stmt = stmt.where(Offer.status == _parse_status(status_filter))
+    if source_filter and source_filter != "ALL":
+        stmt = stmt.where(Offer.source == _parse_source(source_filter))
     if company_id and company_id != "ALL":
         stmt = stmt.where(Offer.companyId == company_id)
 
@@ -265,6 +286,7 @@ async def create_offer(
 ):
     offer_type = _parse_type(data.type)
     offer_status = _parse_status(data.status)
+    offer_source = _parse_source(data.source)
     await _require_amount_for_type(offer_type, data.ctc, data.stipend)
 
     student = await db.scalar(select(User).where(User.id == data.userId))
@@ -313,6 +335,8 @@ async def create_offer(
         applicationId=data.applicationId,
         type=offer_type,
         status=offer_status,
+        source=offer_source,
+        jobTitle=(data.jobTitle or "").strip() or None,
         batch=data.batch,
         ctc=data.ctc,
         stipend=data.stipend,
@@ -326,12 +350,153 @@ async def create_offer(
         joiningDate=data.joiningDate,
         remarks=(data.remarks or "").strip() or None,
         createdById=caller.get("sub") or caller.get("id"),
+        updatedAt=datetime.now(timezone.utc),
     )
     db.add(offer)
     await db.commit()
+    await cache.invalidate(cache.TOPIC_ANALYTICS)
 
     saved = await db.scalar(_loaded(select(Offer)).where(Offer.id == offer_id))
     return _to_response(saved)
+
+
+@router.post("/bulk", response_model=OfferBulkResult, status_code=status.HTTP_201_CREATED)
+async def create_offers_in_bulk(
+    data: OfferBulkCreate,
+    caller: dict = Depends(require_permission(PERM_PLACEMENT_RECORDS_CREATE)),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Record one drive's outcome for a list of roll numbers.
+
+    A partial result rather than all-or-nothing: a single mistyped roll number
+    in a paste of forty should not throw away the other thirty-nine, so every
+    roll number that cannot be recorded comes back with its reason and the rest
+    are written. The caller is expected to show both.
+    """
+    offer_type = _parse_type(data.type)
+    offer_status = _parse_status(data.status)
+    offer_source = _parse_source(data.source)
+    await _require_amount_for_type(offer_type, data.ctc, data.stipend)
+
+    company = await db.scalar(select(Company).where(Company.id == data.companyId))
+    if not company:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Company not found.")
+
+    if data.jobProfileId:
+        job = await db.scalar(select(JobProfile).where(JobProfile.id == data.jobProfileId))
+        if not job:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Job profile not found."
+            )
+
+    # Roll numbers are stored upper-cased by the roster import, but a paste from
+    # a spreadsheet is whatever the sheet held. Order is preserved so the result
+    # reads in the order the office entered them.
+    requested: list[str] = []
+    seen: set[str] = set()
+    for raw in data.rollNumbers:
+        roll = (raw or "").strip().upper()
+        if not roll or roll in seen:
+            continue
+        seen.add(roll)
+        requested.append(roll)
+
+    if not requested:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Enter at least one roll number."
+        )
+
+    students = (
+        await db.scalars(
+            select(User).where(func.upper(User.rollNumber).in_(requested))
+        )
+    ).all()
+    by_roll = {(s.rollNumber or "").strip().upper(): s for s in students}
+
+    # One query for the offers that already exist, so a re-submitted paste is
+    # reported as already recorded instead of doubling every row.
+    existing_pairs: set[str] = set()
+    if by_roll:
+        existing = (
+            await db.scalars(
+                select(Offer).where(
+                    Offer.userId.in_([s.id for s in by_roll.values()]),
+                    Offer.companyId == data.companyId,
+                    Offer.batch == data.batch,
+                    Offer.type == offer_type,
+                )
+            )
+        ).all()
+        existing_pairs = {offer.userId for offer in existing}
+
+    created_ids: list[str] = []
+    skipped: list[OfferBulkRejection] = []
+    decided_at = (
+        datetime.now(timezone.utc)
+        if offer_status in (OfferStatus.ACCEPTED, OfferStatus.DECLINED)
+        else None
+    )
+    offered_at = data.offeredAt or datetime.now(timezone.utc)
+    recorder = caller.get("sub") or caller.get("id")
+
+    for roll in requested:
+        student = by_roll.get(roll)
+        if not student:
+            skipped.append(OfferBulkRejection(rollNumber=roll, reason="No student with this roll number."))
+            continue
+        if student.role != Role.STUDENT:
+            skipped.append(
+                OfferBulkRejection(rollNumber=roll, reason="Not a student account.")
+            )
+            continue
+        if student.id in existing_pairs:
+            skipped.append(
+                OfferBulkRejection(
+                    rollNumber=roll, reason="Already has this record for the same season."
+                )
+            )
+            continue
+
+        offer_id = f"cuid_{uuid.uuid4().hex[:20]}"
+        db.add(
+            Offer(
+                id=offer_id,
+                userId=student.id,
+                companyId=data.companyId,
+                jobProfileId=data.jobProfileId,
+                type=offer_type,
+                status=offer_status,
+                source=offer_source,
+                jobTitle=(data.jobTitle or "").strip() or None,
+                batch=data.batch,
+                ctc=data.ctc,
+                stipend=data.stipend,
+                location=(data.location or "").strip() or None,
+                offeredAt=offered_at,
+                decidedAt=decided_at,
+                joiningDate=data.joiningDate,
+                remarks=(data.remarks or "").strip() or None,
+                createdById=recorder,
+                updatedAt=datetime.now(timezone.utc),
+            )
+        )
+        created_ids.append(offer_id)
+
+    if created_ids:
+        await db.commit()
+        await cache.invalidate(cache.TOPIC_ANALYTICS)
+
+    saved = (
+        (await db.scalars(_loaded(select(Offer)).where(Offer.id.in_(created_ids)))).all()
+        if created_ids
+        else []
+    )
+    return OfferBulkResult(
+        created=len(saved),
+        offers=[_to_response(offer) for offer in saved],
+        skipped=skipped,
+    )
 
 
 @router.patch("/{offer_id}", response_model=OfferResponse)
@@ -347,6 +512,8 @@ async def update_offer(
 
     if data.type is not None:
         offer.type = _parse_type(data.type)
+    if "jobTitle" in data.model_fields_set:
+        offer.jobTitle = (data.jobTitle or "").strip() or None
     if data.batch is not None:
         offer.batch = data.batch
     if "ctc" in data.model_fields_set:
@@ -385,9 +552,13 @@ async def update_offer(
             offer.decidedAt = None
         offer.status = new_status
 
+    if data.source is not None:
+        offer.source = _parse_source(data.source)
+
     await _require_amount_for_type(offer.type, offer.ctc, offer.stipend)
     offer.updatedAt = datetime.now(timezone.utc)
     await db.commit()
+    await cache.invalidate(cache.TOPIC_ANALYTICS)
 
     saved = await db.scalar(_loaded(select(Offer)).where(Offer.id == offer_id))
     return _to_response(saved)
@@ -405,6 +576,7 @@ async def delete_offer(
 
     await db.delete(offer)
     await db.commit()
+    await cache.invalidate(cache.TOPIC_ANALYTICS)
     return {"message": "Offer deleted successfully."}
 
 

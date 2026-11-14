@@ -25,7 +25,7 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
-from sqlalchemy.dialects.postgresql import ARRAY
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -37,6 +37,7 @@ from app.core.database import Base
 
 class Role(str, enum.Enum):
     STUDENT = "STUDENT"
+    FACULTY = "FACULTY"
     PLACEMENT_VOLUNTEER = "PLACEMENT_VOLUNTEER"
     PLACEMENT_TEAM = "PLACEMENT_TEAM"
     SUPER_ADMIN = "SUPER_ADMIN"
@@ -61,6 +62,8 @@ class ApplicationStatus(str, enum.Enum):
     INTERVIEW = "INTERVIEW"
     SELECTED = "SELECTED"
     REJECTED = "REJECTED"
+    OFFER_ACCEPTED = "OFFER_ACCEPTED"
+    OFFER_DECLINED = "OFFER_DECLINED"
     WITHDRAWN = "WITHDRAWN"
 
 
@@ -74,6 +77,11 @@ class NocStatus(str, enum.Enum):
     PENDING = "PENDING"
     APPROVED = "APPROVED"
     REJECTED = "REJECTED"
+
+
+class NocSource(str, enum.Enum):
+    ON_CAMPUS = "ON_CAMPUS"
+    OFF_CAMPUS = "OFF_CAMPUS"
 
 
 class AnnouncementCategory(str, enum.Enum):
@@ -97,6 +105,12 @@ class OfferStatus(str, enum.Enum):
     ACCEPTED = "ACCEPTED"
     DECLINED = "DECLINED"
     REVOKED = "REVOKED"
+
+
+class OfferSource(str, enum.Enum):
+    ON_CAMPUS = "ON_CAMPUS"
+    OFF_CAMPUS = "OFF_CAMPUS"
+    HACKATHON = "HACKATHON"
 
 
 class InterviewExperienceStatus(str, enum.Enum):
@@ -186,6 +200,9 @@ class Company(Base):
     logoUrl: Mapped[str | None] = mapped_column(String, nullable=True)
     website: Mapped[str | None] = mapped_column(String, nullable=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    category: Mapped[str | None] = mapped_column(String, nullable=True)
+    placementSession: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    turnover: Mapped[str | None] = mapped_column(String, nullable=True)
     createdAt: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     jobs: Mapped[list["JobProfile"]] = relationship(back_populates="company", cascade="all, delete-orphan")
@@ -204,6 +221,8 @@ class JobProfile(Base):
     ctcStipend: Mapped[float | None] = mapped_column(Float, nullable=True)
     ctcStipendInfo: Mapped[str | None] = mapped_column(String, nullable=True)
     minCGPA: Mapped[float] = mapped_column(Float, default=0)
+    min10Percent: Mapped[float | None] = mapped_column(Float, nullable=True)
+    min12Percent: Mapped[float | None] = mapped_column(Float, nullable=True)
     maxBacklogs: Mapped[int] = mapped_column(Integer, default=0)
     maxBans: Mapped[int] = mapped_column(Integer, default=0)
     allowedBranches: Mapped[list[str]] = mapped_column(ARRAY(String), default=list)
@@ -211,11 +230,22 @@ class JobProfile(Base):
     allowedGenders: Mapped[list[str]] = mapped_column(ARRAY(String), default=list)
     jobCategory: Mapped[str | None] = mapped_column(String, nullable=True)
     batch: Mapped[int] = mapped_column(Integer)
-    registrationDeadline: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-    status: Mapped[JobStatus] = mapped_column(Enum(JobStatus, name="JobStatus"), default=JobStatus.DRAFT)
+    placementYear: Mapped[int] = mapped_column(Integer)
+    # `index=True` on these two is descriptive, matching the 20260922194813
+    # migration — Prisma owns the DDL, this model never runs `create_all()`.
+    registrationDeadline: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    status: Mapped[JobStatus] = mapped_column(Enum(JobStatus, name="JobStatus"), default=JobStatus.DRAFT, index=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     openingOverview: Mapped[str | None] = mapped_column(Text, nullable=True)
-    attachments: Mapped[list[str]] = mapped_column(ARRAY(String), default=list)
+    cap: Mapped[str | None] = mapped_column(String, nullable=True)
+    companyBond: Mapped[str | None] = mapped_column(String, nullable=True)
+    duration: Mapped[str | None] = mapped_column(String, nullable=True)
+    redirectUrl: Mapped[str | None] = mapped_column(String, nullable=True)
+    # `{ fileName, fileUrl, mimeType, sizeBytes }[]`.
+    attachments: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    # `{ id, type: "TEXT" | "MCQ" | "CHECKBOX" | "FILE", question, options? }[]`.
+    # No student answer is stored anywhere yet — see the schema.prisma comment.
+    questions: Mapped[list | None] = mapped_column(JSONB, nullable=True)
     createdAt: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     createdById: Mapped[str] = mapped_column(String, ForeignKey("User.id"))
 
@@ -233,8 +263,12 @@ class Application(Base):
 
     id: Mapped[str] = mapped_column(String, primary_key=True)
     userId: Mapped[str] = mapped_column(String, ForeignKey("User.id", ondelete="CASCADE"))
-    jobProfileId: Mapped[str] = mapped_column(String, ForeignKey("JobProfile.id", ondelete="CASCADE"))
-    status: Mapped[ApplicationStatus] = mapped_column(Enum(ApplicationStatus, name="ApplicationStatus"), default=ApplicationStatus.APPLIED)
+    # `index=True` here is descriptive, not prescriptive: Prisma owns the
+    # actual DDL (see the 20260922194813 migration), and this model never
+    # runs `create_all()`. It exists so the mapping matches what is really
+    # on the table for anyone reading this file instead of the schema.
+    jobProfileId: Mapped[str] = mapped_column(String, ForeignKey("JobProfile.id", ondelete="CASCADE"), index=True)
+    status: Mapped[ApplicationStatus] = mapped_column(Enum(ApplicationStatus, name="ApplicationStatus"), default=ApplicationStatus.APPLIED, index=True)
     appliedAt: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updatedAt: Mapped[datetime] = mapped_column(DateTime(timezone=True), onupdate=func.now(), server_default=func.now())
     resumeId: Mapped[str | None] = mapped_column(String, ForeignKey("Resume.id", ondelete="SET NULL"), nullable=True)
@@ -269,6 +303,12 @@ class Offer(Base):
     status: Mapped[OfferStatus] = mapped_column(
         Enum(OfferStatus, name="OfferStatus"), default=OfferStatus.OFFERED
     )
+    source: Mapped[OfferSource] = mapped_column(
+        Enum(OfferSource, name="OfferSource"), default=OfferSource.ON_CAMPUS
+    )
+    # Role as recorded, which may differ from the linked drive's title. Reads
+    # fall back to jobProfile.title when this is null.
+    jobTitle: Mapped[str | None] = mapped_column(String, nullable=True)
     # Placement season, held as the graduating batch year.
     batch: Mapped[int] = mapped_column(Integer)
     # Annual CTC in rupees for FTE and PPO offers.
@@ -319,7 +359,13 @@ class Announcement(Base):
     job_profile: Mapped["JobProfile | None"] = relationship(back_populates="announcements")
     created_by: Mapped["User"] = relationship(back_populates="created_announcements")
     attachments: Mapped[list["AnnouncementAttachment"]] = relationship(
-        back_populates="announcement", cascade="all, delete-orphan"
+        back_populates="announcement",
+        cascade="all, delete-orphan",
+        # Upload order, so a set of files keeps the sequence the author added
+        # them in rather than whatever the planner returns. Unordered, the
+        # same announcement can list its attachments differently on each read,
+        # which also makes the cached copy differ from the uncached one.
+        order_by="AnnouncementAttachment.uploadedAt",
     )
 
 
@@ -373,6 +419,17 @@ class NocRequest(Base):
     # or rejecting never overwrites what the student wrote.
     adminRemarks: Mapped[str | None] = mapped_column(Text, nullable=True)
     documentUrl: Mapped[str | None] = mapped_column(String, nullable=True)
+    source: Mapped[NocSource] = mapped_column(Enum(NocSource, name="NocSource"), default=NocSource.ON_CAMPUS)
+    # The student's own proof of an off-campus offer, required when source is
+    # OFF_CAMPUS. Separate from documentUrl, which is the placement cell's
+    # signed certificate issued after a decision.
+    offCampusProofUrl: Mapped[str | None] = mapped_column(String, nullable=True)
+    # An independent marker, never a gate on approve/reject.
+    verifiedByPlacementTeam: Mapped[bool] = mapped_column(Boolean, default=False)
+    # False means this row only records an internship's company and dates for
+    # the placement cell — no decision is made and status goes straight to
+    # APPROVED. See create_noc.
+    nocRequired: Mapped[bool] = mapped_column(Boolean, default=True)
     createdAt: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updatedAt: Mapped[datetime] = mapped_column(DateTime(timezone=True), onupdate=func.now(), server_default=func.now())
 

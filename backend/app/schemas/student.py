@@ -35,6 +35,14 @@ class StudentProfileUpdate(BaseModel):
     # office's roster import and are deliberately absent here: this schema is
     # the boundary the student-facing PATCH /profile route validates against,
     # so a field that doesn't exist on it can never be set by a student.
+    #
+    # cgpa and backlogs ARE part of this schema, on purpose (see the
+    # 2026-09-23 decision): this is a prototype deployment without complete
+    # academic records for every student, so a student must be able to enter
+    # and update their own values. The placement team verifies them manually
+    # and can override either one from StudentAcademicCorrection below if a
+    # self-reported value is wrong — same two columns, two write paths, no
+    # separate "verified" state.
     personalEmail: Optional[str] = None
     contactNumber: Optional[str] = None
     altContactNumber: Optional[str] = None
@@ -59,6 +67,40 @@ class StudentProfileUpdate(BaseModel):
                 f"Use at most {MAX_PERCENT_DECIMALS} decimal places."
             )
         return value
+
+
+class StudentAcademicCorrection(BaseModel):
+    """
+    The admin-side counterpart to the same cgpa/backlogs a student can
+    already set on their own profile above. Bound to
+    `PATCH /students/admin/{id}/academic`, guarded by `students.update` —
+    not a more authoritative state, just another writer of the same two
+    columns, for when the placement team needs to correct a self-reported
+    value on someone else's behalf.
+    """
+
+    cgpa: Optional[float] = Field(default=None, ge=0, le=10)
+    backlogs: Optional[int] = Field(default=None, ge=0, le=20)
+
+    @field_validator("cgpa")
+    @classmethod
+    def _cap_precision(cls, value: Optional[float]) -> Optional[float]:
+        if value is None:
+            return None
+        if _round_trip_decimals(value) > MAX_PERCENT_DECIMALS:
+            raise ValueError(
+                f"Use at most {MAX_PERCENT_DECIMALS} decimal places."
+            )
+        return value
+
+
+class StudentAcademicResponse(BaseModel):
+    id: str
+    cgpa: Optional[float] = None
+    backlogs: int = 0
+
+    model_config = ConfigDict(from_attributes=True)
+
 
 class AadhaarUpdate(BaseModel):
     aadhaar: str = Field(..., min_length=12, max_length=12)

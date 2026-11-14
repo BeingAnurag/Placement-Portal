@@ -4,13 +4,21 @@ import {
   Award,
   BriefcaseBusiness,
   Building2,
-  CalendarRange,
+  Calendar,
   GraduationCap,
   Target,
   TrendingUp,
   Users,
 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { formatRupees, formatStipend } from "@/lib/offer-schema";
 
 export type AmountStats = {
@@ -159,7 +167,11 @@ export function AdminDashboard({
             <h1>Placement dashboard</h1>
           </div>
         </section>
-        <div className="admin-error">{backendError ?? "The dashboard is unavailable."}</div>
+        <Alert variant="destructive" className="mt-4">
+          <AlertDescription>
+            {backendError ?? "The dashboard is unavailable."}
+          </AlertDescription>
+        </Alert>
       </div>
     );
   }
@@ -182,32 +194,58 @@ export function AdminDashboard({
           <h1>Placement dashboard</h1>
           <p>Offers, packages, and pipeline for the selected placement season.</p>
         </div>
-        <label className="season-picker">
-          <CalendarRange />
-          <span>Season</span>
-          <select
-            value={overview.season ?? ""}
-            onChange={(event) => selectSeason(event.target.value)}
+        <div className="season-picker">
+          <Select
+            value={overview.season === null ? "" : String(overview.season)}
+            onValueChange={selectSeason}
             disabled={!overview.seasons.length}
-            aria-label="Placement season"
           >
-            {overview.seasons.length ? (
-              overview.seasons.map((season) => (
-                <option key={season} value={season}>
+            <SelectTrigger
+              aria-label="Placement season"
+              // `.season-picker` draws the one visible box (border, fill,
+              // shadow). The icon, the "Select Season" label, and the value
+              // all sit inside this trigger now, so the whole shell opens
+              // the list instead of only the value text doing it. The
+              // trigger itself stays invisible: no border, fill, shadow, or
+              // height of its own beyond its content — same opt-out
+              // `.admin-heading button` needs, since that rule paints every
+              // heading button as a filled navy pill.
+              className="h-auto w-auto gap-2 rounded-none border-0 bg-transparent p-0 text-[14px] font-semibold text-[var(--ink)] normal-case shadow-none hover:transform-none focus-visible:ring-0"
+            >
+              <Calendar className="size-4 text-[var(--ink)]" />
+              <span className="text-[14px] font-semibold text-[var(--ink)]">Select Season</span>
+              <SelectValue placeholder="No seasons yet" className="" />
+            </SelectTrigger>
+            {/* `position="popper"` anchors the list to the trigger's own box
+                (side="bottom" by default) instead of Radix's default
+                item-aligned placement, which centred the list over whichever
+                row was selected and could open above the bar or spill past
+                its edge. `w-` pins it to the trigger's own measured width —
+                `min-w-` alone still let the list shrink-wrap to "2028",
+                its shortest item, and read as narrower than the bar it
+                opened from. */}
+            <SelectContent
+              position="popper"
+              align="start"
+              sideOffset={6}
+              className="w-[var(--radix-select-trigger-width)] min-w-[var(--radix-select-trigger-width)]"
+            >
+              {overview.seasons.map((season) => (
+                <SelectItem key={season} value={String(season)}>
                   {season}
-                </option>
-              ))
-            ) : (
-              <option value="">No seasons yet</option>
-            )}
-          </select>
-        </label>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </section>
 
       {overview.season === null ? (
-        <div className="admin-info">
-          No placement season exists yet. Add a job profile or a placement record to open one.
-        </div>
+        <Alert variant="info" className="mt-4">
+          <AlertDescription>
+            No placement season exists yet. Add a job profile or a placement record to open one.
+          </AlertDescription>
+        </Alert>
       ) : null}
 
       <section className="admin-metrics">

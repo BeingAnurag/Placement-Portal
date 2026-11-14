@@ -9,6 +9,10 @@ datasource db {
 
 enum Role {
   STUDENT
+  // Read-only: NOC requests (including the uploaded document) and placement
+  // records, plus the analytics overview. No create/update/delete anywhere,
+  // and never eligible to apply to a drive (see requireStudent in FastAPI).
+  FACULTY
   PLACEMENT_VOLUNTEER
   PLACEMENT_TEAM
   SUPER_ADMIN
@@ -33,6 +37,11 @@ enum ApplicationStatus {
   INTERVIEW
   SELECTED
   REJECTED
+  /// Candidate confirmed they are taking the offer. Admin-only: students see
+  /// this as SELECTED (see studentFacingStatus in the applications router).
+  OFFER_ACCEPTED
+  /// Candidate turned the offer down. Admin-only, same masking as above.
+  OFFER_DECLINED
   WITHDRAWN
 }
 
@@ -46,6 +55,15 @@ enum NocStatus {
   PENDING
   APPROVED
   REJECTED
+}
+
+/// Whether the offer behind an NOC request came through a portal drive or the
+/// student found it independently. Off-campus offers carry a supporting
+/// document (see NocRequest.offCampusProofUrl) so the placement cell can
+/// confirm the offer is real before proceeding.
+enum NocSource {
+  ON_CAMPUS
+  OFF_CAMPUS
 }
 
 enum AnnouncementCategory {
@@ -72,6 +90,17 @@ enum OfferStatus {
   ACCEPTED
   DECLINED
   REVOKED
+}
+
+enum OfferSource {
+  /// Recruited through a portal drive (or an on-campus process run outside
+  /// the portal).
+  ON_CAMPUS
+  /// The student found and secured this offer independently.
+  OFF_CAMPUS
+  /// Won through a hackathon rather than a conventional interview process.
+  /// Still counted as on-campus for reporting purposes.
+  HACKATHON
 }
 
 enum InterviewExperienceStatus {
@@ -127,7 +156,7 @@ model User {
   bans                         Int                   @default(0)
   qrCodeData                   String?
   createdAt                    DateTime              @default(now())
-  updatedAt                    DateTime              @updatedAt
+  updatedAt                    DateTime              @default(now()) @updatedAt
   accounts                     Account[]
   sessions                     Session[]
   applications                 Application[]
@@ -171,6 +200,11 @@ model VerificationToken {
   identifier String
   token      String
   expires    DateTime
+  /// Staged { name, passwordHash } for a pending registration-OTP claim —
+  /// applied to `User` only once the code is verified, so the target row is
+  /// never touched until mailbox ownership is proven. See the 2026-09-22
+  /// decision. Unused for anything else this table might one day hold.
+  payload    Json?
 
   @@id([identifier, token])
 }
@@ -181,6 +215,15 @@ model Company {
   logoUrl       String?
   website       String?
   description   String?
+  // How hard the drive is to clear, in the placement cell's own words: a
+  // dream-round company may be applied to even after an offer is in hand.
+  category      String?
+  // Recruiting season the record was raised for. The same idea as
+  // JobProfile.placementYear, under the label this screen uses.
+  placementSession Int?
+  // Quoted from the company as stated, so it stays free text rather than a
+  // parsed figure with an invented currency and unit.
+  turnover      String?
   createdAt     DateTime       @default(now())
   jobs          JobProfile[]
   announcements Announcement[]
@@ -196,6 +239,12 @@ model JobProfile {
   ctcStipend           Float?
   ctcStipendInfo       String?
   minCGPA              Float          @default(0)
+  // Unset means no threshold, the same convention `minCGPA`'s own default of
+  // 0 already carries. Optional eligibility criteria the event form's
+  // "Enable Optional Eligibility Criteria" toggle reveals, alongside gender
+  // and placement bans.
+  min10Percent         Float?
+  min12Percent         Float?
   maxBacklogs          Int            @default(0)
   maxBans              Int            @default(0)
   allowedBranches      String[]
@@ -203,11 +252,32 @@ model JobProfile {
   allowedGenders       String[]
   jobCategory          String?
   batch                Int
+  // Season the drive belongs to, which is not always the graduating batch it
+  // is open to: a 2027-season internship recruits the 2028 batch.
+  placementYear        Int
   registrationDeadline DateTime
   status               JobStatus      @default(DRAFT)
   description          String?
   openingOverview      String?
-  attachments          String[]
+  // Policy and offer terms the placement cell writes as the company states
+  // them, so they stay free text rather than a parsed figure.
+  cap                  String?
+  companyBond          String?
+  duration             String?
+  redirectUrl          String?
+  // `{ fileName, fileUrl, mimeType, sizeBytes }[]`, the same shape
+  // `AnnouncementAttachment` carries as columns — an inline JSON array
+  // instead of a child table for the same reason `questions` is one: a
+  // handful of files read and written together by the one form that owns
+  // them, nothing queried per-file. Every row predates this column and was
+  // always created with an empty array, so the type change carries no data.
+  attachments          Json?
+  // Extra questions the placement cell asks on top of the resume: each entry
+  // is `{ id, type: "TEXT" | "MCQ" | "CHECKBOX" | "FILE", question, options? }`.
+  // `options` only applies to MCQ/CHECKBOX. Nothing reads or writes a
+  // student's answer yet — that needs its own column on `Application` and is
+  // the deliberately separate next step.
+  questions            Json?
   createdAt            DateTime       @default(now())
   createdById          String
   company              Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
@@ -216,6 +286,12 @@ model JobProfile {
   coordinators         Coordinator[]
   offers               Offer[]
   announcements        Announcement[]
+
+  // The admin drives list and the student-facing "open opportunities" query
+  // both filter on status (ACTIVE vs DRAFT/CLOSED) and order by deadline;
+  // neither had an index to filter or sort with before this one.
+  @@index([status])
+  @@index([registrationDeadline])
 }
 
 model Application {
@@ -225,13 +301,18 @@ model Application {
   resumeId     String?
   status       ApplicationStatus @default(APPLIED)
   appliedAt    DateTime          @default(now())
-  updatedAt    DateTime          @updatedAt
+  updatedAt    DateTime          @default(now()) @updatedAt
   user         User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   jobProfile   JobProfile        @relation(fields: [jobProfileId], references: [id], onDelete: Cascade)
   resume       Resume?           @relation(fields: [resumeId], references: [id], onDelete: SetNull)
   offer        Offer?
 
+  // `@@unique([userId, jobProfileId])` already indexes that pair, but with
+  // `userId` leading — no help to the admin list's `WHERE jobProfileId = ?`
+  // or `WHERE status = ?`, which is exactly what it filters on.
   @@unique([userId, jobProfileId])
+  @@index([jobProfileId])
+  @@index([status])
 }
 
 model Announcement {
@@ -288,6 +369,12 @@ model Offer {
   applicationId String?     @unique
   type          OfferType
   status        OfferStatus @default(OFFERED)
+  source        OfferSource @default(ON_CAMPUS)
+  /// Role as the office records it. A drive's own title is the default, but an
+  /// offer can be for a role the drive was not named after, and an offer with
+  /// no drive behind it has no other place to keep one. Reads fall back to
+  /// `jobProfile.title` so rows recorded before this column keep their role.
+  jobTitle      String?
   /// Placement season, held as the graduating batch year.
   batch         Int
   /// Annual CTC in rupees. Required for FTE and PPO offers.
@@ -301,7 +388,12 @@ model Offer {
   joiningDate   DateTime?
   remarks       String?
   createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
+  /// A DB-level default, not just Prisma's own `@updatedAt` bookkeeping: the
+  /// backend writes this table directly with SQLAlchemy, which never sets
+  /// this column itself, so a plain `@updatedAt` with no server-side default
+  /// left it NULL on every insert (see SystemSetting.updatedAt for the same
+  /// fix applied earlier).
+  updatedAt     DateTime    @default(now()) @updatedAt
   createdById   String
 
   user        User         @relation("OfferHolder", fields: [userId], references: [id], onDelete: Cascade)
@@ -345,8 +437,28 @@ model NocRequest {
   // a decision never overwrites what the student wrote.
   adminRemarks String?
   documentUrl  String?
+  // Defaults ON_CAMPUS rather than being left unset, so every pre-existing row
+  // (all recorded before this column existed) reads the same way they always
+  // implicitly were: routed through a portal drive.
+  source       NocSource @default(ON_CAMPUS)
+  // The student's own proof of an off-campus offer (an offer letter or
+  // equivalent), required by the form when source is OFF_CAMPUS. Separate
+  // from `documentUrl`, which is the placement cell's signed NOC certificate
+  // issued after a decision — this one is submitted by the student, before
+  // any decision exists.
+  offCampusProofUrl       String?
+  // An independent marker, not a workflow gate: the placement cell can check
+  // the uploaded proof and flip this whenever, but it is never required
+  // before approving or rejecting the request.
+  verifiedByPlacementTeam Boolean   @default(false)
+  // False means the student is only recording an internship's company and
+  // dates for the placement cell's records — no certificate is issued and no
+  // approve/reject decision is made. `create_noc` sets `status` straight to
+  // APPROVED for these rows since there is nothing left to decide; the UI
+  // tells the two apart by this flag, not by status.
+  nocRequired  Boolean   @default(true)
   createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  updatedAt    DateTime  @default(now()) @updatedAt
   user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
@@ -379,7 +491,7 @@ model InterviewExperience {
   reviewedById            String?
   reviewedAt              DateTime?
   createdAt               DateTime                  @default(now())
-  updatedAt               DateTime                  @updatedAt
+  updatedAt               DateTime                  @default(now()) @updatedAt
   user                    User                      @relation("InterviewExperienceAuthor", fields: [userId], references: [id], onDelete: Cascade)
   reviewedBy              User?                     @relation("InterviewExperienceReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
 }

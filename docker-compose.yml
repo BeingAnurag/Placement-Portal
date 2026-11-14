@@ -9,6 +9,25 @@ name: tnp-portal
 x-database-url: &database-url
   postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-tnp_portal}
 
+# The migration runner and the on-demand database toolbox are the same image
+# with the same environment; only when they run differs. Sharing the `image`
+# tag means the stack builds it once.
+x-db-tools: &db-tools
+  build:
+    # Repository root: the npm workspace lockfile lives there.
+    context: .
+    dockerfile: database/Dockerfile
+  image: tnp-portal/db-tools:local
+  restart: "no"
+  environment:
+    DATABASE_URL: *database-url
+    ADMIN_EMAILS: ${ADMIN_EMAILS:-}
+    STUDENT_EMAIL_DOMAIN: ${STUDENT_EMAIL_DOMAIN:-iiitl.ac.in}
+    DEMO_STUDENT_EMAILS: ${DEMO_STUDENT_EMAILS:-}
+  depends_on:
+    db:
+      condition: service_healthy
+
 services:
   db:
     image: postgres:16-alpine
@@ -30,19 +49,33 @@ services:
       timeout: 5s
       retries: 20
 
+  # Read-through cache for the announcement and event endpoints. Holds nothing
+  # that cannot be rebuilt from Postgres in one query, so it has no volume and
+  # a restart is a cold cache rather than data loss. `allkeys-lru` with a cap
+  # means a key nobody read gets evicted instead of growing the process.
+  cache:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru", "--save", ""]
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   # One-shot: applies Prisma migrations and seeds administrators, then exits.
   migrate:
-    build:
-      # Repository root: the npm workspace lockfile lives there.
-      context: .
-      dockerfile: database/Dockerfile
-    restart: "no"
-    environment:
-      DATABASE_URL: *database-url
-      ADMIN_EMAILS: ${ADMIN_EMAILS:-}
-    depends_on:
-      db:
-        condition: service_healthy
+    <<: *db-tools
+
+  # Never started by `up`; run explicitly, e.g.
+  #   docker compose run --rm tools npm run db:seed:demo
+  # `make` wraps every one of these. The profile is what keeps it out of `up`.
+  tools:
+    <<: *db-tools
+    profiles: ["tools"]
+    command: ["npm", "run", "db:deploy"]
 
   backend:
     build:
@@ -56,10 +89,18 @@ services:
       STUDENT_EMAIL_DOMAIN: ${STUDENT_EMAIL_DOMAIN:-iiitl.ac.in}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
       ENVIRONMENT: ${ENVIRONMENT:-production}
+      # Empty keeps the table browser at /admin off; the backend refuses to
+      # mount it without a password. Only this service needs the value.
+      DB_ADMIN_PASSWORD: ${DB_ADMIN_PASSWORD:-}
       CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME:-}
       CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY:-}
       CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET:-}
       RESEND_API_KEY: ${RESEND_API_KEY:-}
+      # In-cluster, and deliberately not read from .env: that file's REDIS_URL
+      # points at localhost for host-side tooling, and localhost inside this
+      # container is this container. Same reasoning as DATABASE_URL above.
+      REDIS_URL: redis://cache:6379/0
+      CACHE_TTL_SECONDS: ${CACHE_TTL_SECONDS:-300}
     ports:
       - "${BACKEND_PORT:-8000}:8000"
     depends_on:
@@ -67,6 +108,10 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
+      # service_started, not service_healthy: the cache is optional at runtime,
+      # so a sick Redis must not be able to keep the API from booting.
+      cache:
+        condition: service_started
 
   frontend:
     build:
@@ -83,12 +128,22 @@ services:
       ADMIN_EMAILS: ${ADMIN_EMAILS:-}
       STUDENT_EMAIL_DOMAIN: ${STUDENT_EMAIL_DOMAIN:-iiitl.ac.in}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?ENCRYPTION_KEY must be set in .env}
+      # In-cluster, same reasoning as the backend's own REDIS_URL above: the
+      # login and registration-OTP throttles (frontend/src/lib/rate-limit.ts)
+      # share this Redis so a brute-force count is visible to every replica,
+      # not just whichever one answered a given request.
+      REDIS_URL: redis://cache:6379/0
       NODE_OPTIONS: "--dns-result-order=ipv4first"
     ports:
       - "${FRONTEND_PORT:-3000}:3000"
     depends_on:
       backend:
         condition: service_healthy
+      # service_started, not service_healthy: the throttle is optional at
+      # runtime (it fails open), so a sick Redis must not block the frontend
+      # from booting.
+      cache:
+        condition: service_started
 
 volumes:
   postgres_data:

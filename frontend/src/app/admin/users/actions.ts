@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { backendFetch } from "@/lib/api-client";
 import { requirePermission } from "@/lib/admin-session";
+import { invalidateBackendCache } from "@/lib/cache-invalidation";
 import { db } from "@/lib/db";
 import {
   ALL_PERMISSIONS,
@@ -18,7 +19,7 @@ import type { Role } from "@prisma/client";
 
 export type UserActionResult = { error?: string; success?: string };
 
-const roles = ["STUDENT", "PLACEMENT_VOLUNTEER", "PLACEMENT_TEAM", "SUPER_ADMIN"] as const;
+const roles = ["STUDENT", "FACULTY", "PLACEMENT_VOLUNTEER", "PLACEMENT_TEAM", "SUPER_ADMIN"] as const;
 
 const createUserSchema = z.object({
   email: z.string().trim().email("Please enter a valid email address."),
@@ -416,6 +417,11 @@ export async function deleteUserAction(formData: FormData): Promise<UserActionRe
     });
 
     await db.user.delete({ where: { id: userId } });
+
+    // Only on this branch. The API path above reassigns and invalidates on
+    // its own; this one rewrote the author of every drive and announcement
+    // the deleted user created, and the API is caching those names.
+    await invalidateBackendCache("announcements", "events");
   }
 
   revalidatePath("/admin/users");
