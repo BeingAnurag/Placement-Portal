@@ -73,6 +73,9 @@ export const PERM_TEAM_MANAGE = "team.manage";
 
 export const PERM_SETTINGS_MANAGE = "settings.manage";
 
+export const PERM_CALENDAR_VIEW = "calendar.view";
+export const PERM_CALENDAR_MANAGE = "calendar.manage";
+
 export const ALL_PERMISSIONS = [
   PERM_ANALYTICS_VIEW,
   PERM_ANNOUNCEMENTS_VIEW,
@@ -123,6 +126,8 @@ export const ALL_PERMISSIONS = [
   PERM_TEAM_VIEW,
   PERM_TEAM_MANAGE,
   PERM_SETTINGS_MANAGE,
+  PERM_CALENDAR_VIEW,
+  PERM_CALENDAR_MANAGE,
 ] as const;
 
 export type PermissionKey = (typeof ALL_PERMISSIONS)[number];
@@ -140,7 +145,8 @@ export type PermissionCategory =
   | "Interview Experiences"
   | "Feedback"
   | "Team"
-  | "Settings";
+  | "Settings"
+  | "Calendar";
 
 export type PermissionDefinition = {
   key: PermissionKey;
@@ -211,6 +217,9 @@ export const PERMISSION_DEFINITIONS: PermissionDefinition[] = [
   { key: PERM_TEAM_MANAGE, label: "Manage Placement Team", category: "Team", description: "Add, edit, reorder, and remove placement-cell team members." },
 
   { key: PERM_SETTINGS_MANAGE, label: "System Settings", category: "Settings", description: "Configure portal settings and the administrator allowlist. Super Admin only." },
+
+  { key: PERM_CALENDAR_VIEW, label: "View Calendar", category: "Calendar", description: "See the placement calendar. Staff see every non-personal entry; students see what is shared with them." },
+  { key: PERM_CALENDAR_MANAGE, label: "Manage Calendar", category: "Calendar", description: "Create, edit, and delete placement calendar entries, assign POCs, and choose who can see them." },
 ];
 
 /**
@@ -233,6 +242,8 @@ export const DEFAULT_PLACEMENT_TEAM_PERMISSIONS: readonly PermissionKey[] = [
   PERM_ANNOUNCEMENTS_UPDATE,
   PERM_ANNOUNCEMENTS_PUBLISH,
   PERM_ANALYTICS_VIEW,
+  PERM_CALENDAR_VIEW,
+  PERM_CALENDAR_MANAGE,
 ];
 
 /**
@@ -254,6 +265,7 @@ export const STUDENT_SCOPED_PERMISSIONS: readonly PermissionKey[] = [
   PERM_INTERVIEW_EXPERIENCES_CREATE,
   PERM_FEEDBACK_VIEW_OWN,
   PERM_FEEDBACK_CREATE,
+  PERM_CALENDAR_VIEW,
 ];
 
 const STUDENT_DEFAULTS: readonly PermissionKey[] = STUDENT_SCOPED_PERMISSIONS;
@@ -270,6 +282,7 @@ const FACULTY_DEFAULTS: readonly PermissionKey[] = [
   PERM_ANALYTICS_VIEW,
   PERM_NOC_VIEW,
   PERM_PLACEMENT_RECORDS_VIEW,
+  PERM_CALENDAR_VIEW,
 ];
 
 const PLACEMENT_VOLUNTEER_DEFAULTS: readonly PermissionKey[] = [
@@ -286,6 +299,8 @@ const PLACEMENT_VOLUNTEER_DEFAULTS: readonly PermissionKey[] = [
   PERM_FEEDBACK_VIEW,
   PERM_FEEDBACK_RESPOND,
   PERM_TEAM_VIEW,
+  PERM_CALENDAR_VIEW,
+  PERM_CALENDAR_MANAGE,
 ];
 
 const PLACEMENT_TEAM_DEFAULTS: readonly PermissionKey[] = [
@@ -321,6 +336,8 @@ const PLACEMENT_TEAM_DEFAULTS: readonly PermissionKey[] = [
   PERM_FEEDBACK_RESOLVE,
   PERM_TEAM_VIEW,
   PERM_TEAM_MANAGE,
+  PERM_CALENDAR_VIEW,
+  PERM_CALENDAR_MANAGE,
 ];
 
 /**
@@ -489,6 +506,7 @@ export const ROUTE_PERMISSIONS: Record<string, PermissionKey[]> = {
   // is worse than not offering it.
   "/admin/team": [PERM_TEAM_MANAGE],
   "/admin/settings": [PERM_SETTINGS_MANAGE],
+  "/admin/calendar": [PERM_CALENDAR_VIEW],
 };
 
 export function canAccessAdminRoute(user: PermissionSubject, pathname: string): boolean {

@@ -29,7 +29,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-from app.routers import auth, dashboard, profile, jobs, applications, feedback, noc, announcements, team, notifications, uploads, users, interview_experiences, students, offers, analytics
+from app.routers import auth, dashboard, profile, jobs, applications, feedback, noc, announcements, team, notifications, uploads, users, interview_experiences, students, offers, analytics, calendar
 from app.routers import cache as cache_router
 
 app.include_router(auth.router, prefix="/api/v1")
@@ -48,6 +48,7 @@ app.include_router(interview_experiences.router, prefix="/api/v1")
 app.include_router(students.router, prefix="/api/v1")
 app.include_router(offers.router, prefix="/api/v1")
 app.include_router(analytics.router, prefix="/api/v1")
+app.include_router(calendar.router, prefix="/api/v1")
 app.include_router(cache_router.router, prefix="/api/v1")
 
 # Database table browser at /admin, distinct from the frontend's admin portal.

@@ -137,3 +137,71 @@ export type BackendAnnouncement = {
   /** ISO-8601 timestamp. */
   publishedAt: string | null;
 };
+
+// ---------------------------------------------------------------------------
+// Placement calendar (backend/app/schemas/calendar.py)
+// ---------------------------------------------------------------------------
+
+export type CalendarEventType =
+  | "COMPANY_VISIT"
+  | "PRE_PLACEMENT_TALK"
+  | "TEST"
+  | "INTERVIEW"
+  | "DEADLINE"
+  | "OTHER"
+  | "PERSONAL";
+
+export type CalendarVisibility = "STAFF" | "STUDENTS" | "TARGETED" | "ATTENDEES" | "PRIVATE";
+
+export type CalendarPerson = {
+  id: string;
+  name: string | null;
+  email: string | null;
+  rollNumber?: string | null;
+  branch?: string | null;
+  batch?: number | null;
+};
+
+export type BackendCalendarEvent = {
+  id: string;
+  title: string;
+  description: string | null;
+  type: CalendarEventType;
+  /** ISO-8601 with an explicit offset (UTC). */
+  startsAt: string;
+  endsAt: string;
+  allDay: boolean;
+  location: string | null;
+  meetingLink: string | null;
+  companyId: string | null;
+  companyName: string | null;
+  jobProfileId: string | null;
+  jobTitle: string | null;
+  visibility: CalendarVisibility;
+  targetBatches: number[];
+  targetBranches: string[];
+  createdById: string;
+  createdByName: string | null;
+  pocs: CalendarPerson[];
+  /** Staff only; null for a student. */
+  attendees: CalendarPerson[] | null;
+  attendeeCount: number;
+  isAttendee: boolean;
+  canEdit: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type BackendCalendarSaveResponse = {
+  event: BackendCalendarEvent;
+  warnings: string[];
+};
+
+export type BackendCalendarOptions = {
+  staff: CalendarPerson[];
+  students: CalendarPerson[];
+  companies: { id: string; name: string }[];
+  jobs: { id: string; title: string; companyId: string; companyName: string | null; status: string }[];
+  batches: number[];
+  branches: string[];
+};

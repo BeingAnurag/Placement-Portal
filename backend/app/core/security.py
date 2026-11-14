@@ -86,6 +86,9 @@ PERM_TEAM_MANAGE = "team.manage"
 
 PERM_SETTINGS_MANAGE = "settings.manage"
 
+PERM_CALENDAR_VIEW = "calendar.view"
+PERM_CALENDAR_MANAGE = "calendar.manage"
+
 ALL_PERMISSIONS = [
     PERM_ANALYTICS_VIEW,
     PERM_ANNOUNCEMENTS_VIEW,
@@ -136,6 +139,8 @@ ALL_PERMISSIONS = [
     PERM_TEAM_VIEW,
     PERM_TEAM_MANAGE,
     PERM_SETTINGS_MANAGE,
+    PERM_CALENDAR_VIEW,
+    PERM_CALENDAR_MANAGE,
 ]
 
 # Permissions that describe a student acting on their own data. Holding only
@@ -155,12 +160,14 @@ STUDENT_SCOPED_PERMISSIONS = [
     PERM_INTERVIEW_EXPERIENCES_CREATE,
     PERM_FEEDBACK_VIEW_OWN,
     PERM_FEEDBACK_CREATE,
+    PERM_CALENDAR_VIEW,
 ]
 
 _FACULTY_DEFAULTS = [
     PERM_ANALYTICS_VIEW,
     PERM_NOC_VIEW,
     PERM_PLACEMENT_RECORDS_VIEW,
+    PERM_CALENDAR_VIEW,
 ]
 
 _PLACEMENT_VOLUNTEER_DEFAULTS = [
@@ -177,6 +184,8 @@ _PLACEMENT_VOLUNTEER_DEFAULTS = [
     PERM_FEEDBACK_VIEW,
     PERM_FEEDBACK_RESPOND,
     PERM_TEAM_VIEW,
+    PERM_CALENDAR_VIEW,
+    PERM_CALENDAR_MANAGE,
 ]
 
 _PLACEMENT_TEAM_DEFAULTS = [
@@ -212,6 +221,8 @@ _PLACEMENT_TEAM_DEFAULTS = [
     PERM_FEEDBACK_RESOLVE,
     PERM_TEAM_VIEW,
     PERM_TEAM_MANAGE,
+    PERM_CALENDAR_VIEW,
+    PERM_CALENDAR_MANAGE,
 ]
 
 ROLE_DEFAULT_PERMISSIONS: dict[str, list[str]] = {
@@ -272,6 +283,8 @@ PERMISSION_METADATA = [
     {"key": PERM_TEAM_VIEW, "label": "View Placement Team", "category": "Team", "description": "View the published placement-cell team directory."},
     {"key": PERM_TEAM_MANAGE, "label": "Manage Placement Team", "category": "Team", "description": "Add, edit, reorder, and remove placement-cell team members."},
     {"key": PERM_SETTINGS_MANAGE, "label": "System Settings", "category": "Settings", "description": "Configure portal settings and the administrator allowlist. Super Admin only."},
+    {"key": PERM_CALENDAR_VIEW, "label": "View Calendar", "category": "Calendar", "description": "See the placement calendar. Staff see every non-personal entry; students see what is shared with them."},
+    {"key": PERM_CALENDAR_MANAGE, "label": "Manage Calendar", "category": "Calendar", "description": "Create, edit, and delete placement calendar entries, assign POCs, and choose who can see them."},
 ]
 
 

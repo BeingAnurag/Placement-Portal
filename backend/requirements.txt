@@ -1,6 +1,6 @@
 fastapi>=0.115
 uvicorn[standard]>=0.30
-sqlalchemy[asyncio]>=2.0
+sqlalchemy[asyncio]>=2.0,<2.1
 # Database table browser mounted at /admin. Drives the existing SQLAlchemy
 # models, so it adds a view over the current data layer rather than a new one.
 sqladmin>=0.20

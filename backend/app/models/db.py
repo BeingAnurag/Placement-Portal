@@ -119,6 +119,24 @@ class InterviewExperienceStatus(str, enum.Enum):
     REJECTED = "REJECTED"
 
 
+class CalendarEventType(str, enum.Enum):
+    COMPANY_VISIT = "COMPANY_VISIT"
+    PRE_PLACEMENT_TALK = "PRE_PLACEMENT_TALK"
+    TEST = "TEST"
+    INTERVIEW = "INTERVIEW"
+    DEADLINE = "DEADLINE"
+    OTHER = "OTHER"
+    PERSONAL = "PERSONAL"
+
+
+class CalendarVisibility(str, enum.Enum):
+    STAFF = "STAFF"
+    STUDENTS = "STUDENTS"
+    TARGETED = "TARGETED"
+    ATTENDEES = "ATTENDEES"
+    PRIVATE = "PRIVATE"
+
+
 # ---------------------------------------------------------------------------
 # Models
 # ---------------------------------------------------------------------------
@@ -535,3 +553,69 @@ class SystemSetting(Base):
     key: Mapped[str] = mapped_column(String, primary_key=True)
     value: Mapped[str] = mapped_column(Text)
     updatedAt: Mapped[datetime] = mapped_column(DateTime(timezone=True), onupdate=func.now(), server_default=func.now())
+
+
+class CalendarEvent(Base):
+    """A dated entry on the placement calendar. See the 2026-11-15 decision."""
+
+    __tablename__ = "CalendarEvent"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    title: Mapped[str] = mapped_column(String)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    type: Mapped[CalendarEventType] = mapped_column(
+        Enum(CalendarEventType, name="CalendarEventType"), default=CalendarEventType.OTHER
+    )
+    startsAt: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    endsAt: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    allDay: Mapped[bool] = mapped_column(Boolean, default=False)
+    location: Mapped[str | None] = mapped_column(String, nullable=True)
+    meetingLink: Mapped[str | None] = mapped_column(String, nullable=True)
+    companyId: Mapped[str | None] = mapped_column(
+        String, ForeignKey("Company.id", ondelete="SET NULL"), nullable=True
+    )
+    jobProfileId: Mapped[str | None] = mapped_column(
+        String, ForeignKey("JobProfile.id", ondelete="SET NULL"), nullable=True
+    )
+    visibility: Mapped[CalendarVisibility] = mapped_column(
+        Enum(CalendarVisibility, name="CalendarVisibility"), default=CalendarVisibility.STAFF
+    )
+    targetBatches: Mapped[list[int]] = mapped_column(ARRAY(Integer), default=list)
+    targetBranches: Mapped[list[str]] = mapped_column(ARRAY(String), default=list)
+    createdById: Mapped[str] = mapped_column(String, ForeignKey("User.id", ondelete="CASCADE"))
+    createdAt: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updatedAt: Mapped[datetime] = mapped_column(DateTime(timezone=True), onupdate=func.now(), server_default=func.now())
+
+    company: Mapped["Company | None"] = relationship()
+    job_profile: Mapped["JobProfile | None"] = relationship()
+    created_by: Mapped["User"] = relationship()
+    pocs: Mapped[list["CalendarEventPoc"]] = relationship(
+        back_populates="event", cascade="all, delete-orphan"
+    )
+    attendees: Mapped[list["CalendarEventAttendee"]] = relationship(
+        back_populates="event", cascade="all, delete-orphan"
+    )
+
+
+class CalendarEventPoc(Base):
+    __tablename__ = "CalendarEventPoc"
+
+    eventId: Mapped[str] = mapped_column(
+        String, ForeignKey("CalendarEvent.id", ondelete="CASCADE"), primary_key=True
+    )
+    userId: Mapped[str] = mapped_column(String, ForeignKey("User.id", ondelete="CASCADE"), primary_key=True)
+
+    event: Mapped["CalendarEvent"] = relationship(back_populates="pocs")
+    user: Mapped["User"] = relationship()
+
+
+class CalendarEventAttendee(Base):
+    __tablename__ = "CalendarEventAttendee"
+
+    eventId: Mapped[str] = mapped_column(
+        String, ForeignKey("CalendarEvent.id", ondelete="CASCADE"), primary_key=True
+    )
+    userId: Mapped[str] = mapped_column(String, ForeignKey("User.id", ondelete="CASCADE"), primary_key=True)
+
+    event: Mapped["CalendarEvent"] = relationship(back_populates="attendees")
+    user: Mapped["User"] = relationship()
