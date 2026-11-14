@@ -109,6 +109,31 @@ enum InterviewExperienceStatus {
   REJECTED
 }
 
+/// What a calendar entry is about. PERSONAL is reserved for a student's own
+/// reminder; every other type is created by the placement cell.
+enum CalendarEventType {
+  COMPANY_VISIT
+  PRE_PLACEMENT_TALK
+  TEST
+  INTERVIEW
+  DEADLINE
+  OTHER
+  PERSONAL
+}
+
+/// Who can see a calendar entry.
+/// STAFF: placement cell only. STUDENTS: every student. TARGETED: students
+/// whose batch and branch match the event's lists (an empty list matches
+/// any). ATTENDEES: only the students listed on the event. PRIVATE: only the
+/// author (a student's personal reminder).
+enum CalendarVisibility {
+  STAFF
+  STUDENTS
+  TARGETED
+  ATTENDEES
+  PRIVATE
+}
+
 model User {
   id                           String                @id @default(cuid())
   name                         String?
@@ -170,6 +195,9 @@ model User {
   recordedOffers               Offer[]               @relation("OfferRecorder")
   interviewExperiences         InterviewExperience[] @relation("InterviewExperienceAuthor")
   reviewedInterviewExperiences InterviewExperience[] @relation("InterviewExperienceReviewer")
+  createdCalendarEvents        CalendarEvent[]       @relation("CalendarEventCreator")
+  calendarPocAssignments       CalendarEventPoc[]
+  calendarAttendances          CalendarEventAttendee[]
 }
 
 model Account {
@@ -228,6 +256,7 @@ model Company {
   jobs          JobProfile[]
   announcements Announcement[]
   offers        Offer[]
+  calendarEvents CalendarEvent[]
 }
 
 model JobProfile {
@@ -286,6 +315,7 @@ model JobProfile {
   coordinators         Coordinator[]
   offers               Offer[]
   announcements        Announcement[]
+  calendarEvents       CalendarEvent[]
 
   // The admin drives list and the student-facing "open opportunities" query
   // both filter on status (ACTIVE vs DRAFT/CLOSED) and order by deadline;
@@ -541,4 +571,59 @@ model SystemSetting {
   key       String   @id
   value     String
   updatedAt DateTime @default(now()) @updatedAt
+}
+
+/// A dated entry on the placement calendar: a company visit, a test, an
+/// interview slot, or a student's own reminder. Deliberately separate from
+/// JobProfile, which the portal calls an "event" but which carries only a
+/// registration deadline. Times are stored in UTC.
+model CalendarEvent {
+  id             String             @id @default(cuid())
+  title          String
+  description    String?
+  type           CalendarEventType  @default(OTHER)
+  startsAt       DateTime
+  endsAt         DateTime
+  allDay         Boolean            @default(false)
+  location       String?
+  meetingLink    String?
+  companyId      String?
+  jobProfileId   String?
+  visibility     CalendarVisibility @default(STAFF)
+  targetBatches  Int[]              @default([])
+  targetBranches String[]           @default([])
+  createdById    String
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @default(now()) @updatedAt
+  company        Company?           @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  jobProfile     JobProfile?        @relation(fields: [jobProfileId], references: [id], onDelete: SetNull)
+  createdBy      User               @relation("CalendarEventCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  pocs           CalendarEventPoc[]
+  attendees      CalendarEventAttendee[]
+
+  @@index([startsAt])
+  @@index([companyId])
+  @@index([createdById])
+}
+
+/// A placement-cell member responsible for a calendar event.
+model CalendarEventPoc {
+  eventId String
+  userId  String
+  event   CalendarEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user    User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([eventId, userId])
+  @@index([userId])
+}
+
+/// A student an ATTENDEES-visibility event (an interview slot) is meant for.
+model CalendarEventAttendee {
+  eventId String
+  userId  String
+  event   CalendarEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user    User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([eventId, userId])
+  @@index([userId])
 }

@@ -1716,3 +1716,18 @@ separate, explicitly deferred item:
   purpose-scoped internal token the Next.js server mints, posted it to the
   live backend, and confirmed the `[DEV] Email delivery is not configured`
   log line fires for the actual deployment's actual (empty) config.
+
+## 2026-11-15 — Placement calendar is its own table, with per-entry visibility
+
+The placement cell needed one shared view of company visits and interview slots, with an owner (POC) on each so two people do not end up handling the same recruiter at the same time, and a way to share some entries with students and keep others internal.
+
+- **A new `CalendarEvent` table, not columns on `JobProfile`.** The portal already calls a `JobProfile` an "event", but a drive has only a registration deadline, and one drive produces several dated things (a talk, a test, interview slots), as well as entries that belong to no drive at all. A calendar entry may link a `companyId` and a `jobProfileId`, and both are `SET NULL` on delete, so removing a company does not remove the history of its visit.
+- **POCs are staff `User` accounts** (`CalendarEventPoc`, many per entry), limited to active `PLACEMENT_VOLUNTEER`/`PLACEMENT_TEAM`/`SUPER_ADMIN`, so "only my entries" and the clash warnings can key on a person. `Coordinator` (free text) and `TeamMember` (linked by email only) could not carry that.
+- **Five visibility levels**: `STAFF` (placement cell only), `STUDENTS` (everyone), `TARGETED` (batch and branch lists, where an empty list means "any" and at least one list must be non-empty), `ATTENDEES` (named students, `CalendarEventAttendee`; staff can fill it from a drive's applicants at chosen stages), and `PRIVATE`. `PRIVATE` and the `PERSONAL` type always go together: a student's own reminder, which nobody else sees, staff included. A reminder can never be turned into a shared entry, or the other way round.
+- **Who sees what is enforced in FastAPI.** `services/calendar.py::student_can_see` is the single rule for students, and it reads batch and branch from the database rather than the token. A staff viewer is `has_any_admin_permission` plus `calendar.view`, because students hold `calendar.view` too, the same shape as the announcement draft gate. Students are told whether they are on an attendee list, never who else is.
+- **Permissions:** `calendar.view` (students, faculty, every staff role) and `calendar.manage` (volunteers, placement team, super admin, and anyone linked as a team member). Faculty read the staff calendar but cannot change it.
+- **Clashes warn, they do not block.** Saving a shared entry returns `warnings` when the same company overlaps under a different POC, or a POC is booked twice at once. A panel can legitimately run beside a talk, so the save goes ahead.
+- **Times are stored as UTC and shown in IST.** The frontend does all calendar date arithmetic on IST day keys (`frontend/src/lib/calendar-utils.ts`), not in the browser's zone, so the server-rendered page, the browser, and a student abroad agree on which day a drive falls.
+- **Nothing is cached**, because every response depends on the viewer.
+
+Deliberately not built yet: notifications or email on create or change, reminders before an entry starts, `.ics` export or Google Calendar sync, recurring entries, and creating interview slots automatically when an application moves to `INTERVIEW`.

@@ -8,6 +8,7 @@ import {
   BellRing,
   BriefcaseBusiness,
   Building2,
+  CalendarDays,
   ChevronDown,
   FileQuestion,
   FileText,
@@ -82,6 +83,7 @@ const nav: NavItem[] = [
       { label: "Add event", href: "/admin/events/add" },
     ],
   },
+  { label: "Calendar", href: "/admin/calendar", icon: CalendarDays },
   {
     label: "Placement records",
     icon: Award,

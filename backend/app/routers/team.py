@@ -43,6 +43,8 @@ DEFAULT_PLACEMENT_TEAM_PERMISSIONS = [
     "announcements.update",
     "announcements.publish",
     "analytics.view",
+    "calendar.view",
+    "calendar.manage",
 ]
 
 
