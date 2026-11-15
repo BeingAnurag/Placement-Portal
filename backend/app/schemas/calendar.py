@@ -5,6 +5,8 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
+from app.services.branch import canonical_branch_list
+
 CalendarEventTypeLiteral = Literal[
     "COMPANY_VISIT", "PRE_PLACEMENT_TALK", "TEST", "INTERVIEW", "DEADLINE", "OTHER", "PERSONAL"
 ]
@@ -95,7 +97,7 @@ class CalendarEventWrite(BaseModel):
     @field_validator("targetBranches")
     @classmethod
     def clean_branches(cls, v: list[str]) -> list[str]:
-        return sorted({b.strip() for b in v if b and b.strip()})
+        return sorted(canonical_branch_list(v))
 
     @field_validator("pocIds", "attendeeIds")
     @classmethod

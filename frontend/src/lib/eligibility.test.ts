@@ -1,11 +1,13 @@
 import assert from "node:assert/strict";import test from "node:test";import{evaluateEligibility,isEligible}from"./eligibility";import type{JobEligibility,StudentEligibility}from"./eligibility";
-const job:JobEligibility={minCgpa:7.5,batch:2027,branches:["CSE","IT"],degrees:["B.Tech"],genders:[],maxBacklogs:0,maxBans:0};
-const student:StudentEligibility={cgpa:8.2,batch:2027,branch:"CSE",degree:"B.Tech",gender:"Male",backlogs:0,bans:0,documentsComplete:true,class10Percent:85,class12Percent:80};
+const job:JobEligibility={minCgpa:7.5,batch:2027,branches:["CS","IT"],degrees:["B.Tech"],genders:[],maxBacklogs:0,maxBans:0};
+const student:StudentEligibility={cgpa:8.2,batch:2027,branch:"CS",degree:"B.Tech",gender:"Male",backlogs:0,bans:0,documentsComplete:true,class10Percent:85,class12Percent:80};
 const check=(s:Partial<StudentEligibility>,j:Partial<JobEligibility>,key:string)=>evaluateEligibility({...student,...s},{...job,...j}).find(c=>c.key===key)?.pass;
 
 test("eligible student passes every criterion",()=>{assert.equal(isEligible(evaluateEligibility(student,job)),true)});
 test("a failed criterion makes the student ineligible",()=>{const checks=evaluateEligibility({...student,cgpa:6.9},job);assert.equal(isEligible(checks),false);assert.equal(checks.find(c=>c.key==="cgpa")?.pass,false)});
-test("branch comparison is case- and whitespace-insensitive",()=>{assert.equal(check({branch:" cse "},{},"branch"),true)});
+test("branch comparison is case- and whitespace-insensitive",()=>{assert.equal(check({branch:" cs "},{},"branch"),true)});
+test("a legacy CSE profile matches a CS job, and a legacy CSE job admits a CS student",()=>{assert.equal(check({branch:"CSE"},{},"branch"),true);assert.equal(check({branch:"CS"},{branches:["CSE"]},"branch"),true)});
+test("CS does not admit the separate CSAI or CSB branches",()=>{assert.equal(check({branch:"CSAI"},{branches:["CS"]},"branch"),false);assert.equal(check({branch:"CSB"},{branches:["CSE"]},"branch"),false)});
 test("branch comparison still rejects a genuinely different branch",()=>{assert.equal(check({branch:"mech"},{},"branch"),false)});
 
 test("a degree outside the allowed list is rejected",()=>{const checks=evaluateEligibility({...student,degree:"MBA"},job);assert.equal(checks.find(c=>c.key==="degree")?.pass,false);assert.equal(isEligible(checks),false)});

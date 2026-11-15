@@ -1740,3 +1740,16 @@ The calendar is mostly used for recruiters visiting for the first time, and its 
 - A name that is not on record is sent as `companyName`, and `POST`/`PUT /api/v1/calendar/events` resolves it in FastAPI. A case- and whitespace-insensitive match reuses the existing row. Otherwise it creates a `Company` holding only its name, inside the same transaction as the entry, so a refused save leaves no company behind. Category, session and description are filled in later from Companies.
 - This follows the offers screen's precedent (`resolveCompanyId`, which does the same in a Next.js server action), except here the write is in FastAPI, per the 2026-08-20 decision.
 - Creating one requires `calendar.manage`, which every non-personal entry already needs. A personal reminder can never add a company.
+
+## 2026-11-15 — CS is the canonical branch code; CSE is an alias
+
+CS and CSE name the same B.Tech branch, but both spellings had reached the database (four students and ten drives' `allowedBranches` locally). Eligibility compared branches by exact uppercase text, so a CS student was ineligible for a drive open only to "CSE", and the analytics chart drew two bars for one branch.
+
+- `CS` is canonical. The B.Tech branches are `CSB`, `IT`, `CSAI`, `CS` (`BTECH_BRANCHES`). Postgraduate branch names (M.Tech/M.Sc) stay free text and are not reshaped.
+- The rule is defined in four places that must stay in step: `frontend/src/lib/branch.ts`, `backend/app/services/branch.py`, `database/src/branch.ts` (the database package cannot import the frontend), and the `canonical_branch`/`canonical_branch_list` SQL functions. Only the CSE alias is rewritten, matched after trimming and case-insensitively; a list loses the duplicate the rewrite leaves (`["CS","CSE"]` becomes `["CS"]`).
+- Migration `20261115130000_normalize_cse_branch_to_cs` rewrites `User.branch`, `JobProfile.allowedBranches`, and `CalendarEvent.targetBranches` in place. It inserts and deletes nothing, so applications, offers, and history keep their rows and relations.
+- The same migration adds `BEFORE INSERT OR UPDATE` triggers on those three columns that apply the rule. They are a backstop for writers that bypass the application (the `:8000/admin` table browser, psql, future scripts). These are the first triggers in the schema: Prisma neither models nor diffs them, so do not drop them by hand when regenerating a migration.
+- The application also normalizes at every write boundary (admin user create/update, event form, calendar targeting, roster import, demo seed) and every comparison (both eligibility engines, calendar visibility, the applications branch filter, the analytics branch distribution), so a value is right before it reaches the trigger, and a comparison is right even against an unmigrated database.
+- Consequence: CS students become eligible for the drives previously open only to "CSE". That is the intended meaning, not a widening.
+
+To add another alias, add it to all four definitions and write a migration that rewrites existing rows.

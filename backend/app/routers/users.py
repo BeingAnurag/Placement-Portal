@@ -20,6 +20,7 @@ from app.core.security import (
     require_permission,
 )
 from app.dependencies import get_db
+from app.services.branch import canonical_branch_or_none
 from app.models.db import Application, JobProfile, Announcement, Role, User
 from app.schemas.user import (
     PermissionCatalogResponse,
@@ -259,7 +260,7 @@ async def create_user(
         role=role_enum,
         title=data.title.strip() if data.title else None,
         rollNumber=data.rollNumber.strip() if data.rollNumber else None,
-        branch=data.branch.strip() if data.branch else None,
+        branch=canonical_branch_or_none(data.branch),
         batch=data.batch,
         customPermissions=data.customPermissions,
         isActive=data.isActive,
@@ -301,7 +302,7 @@ async def update_user_details(
                 )
         user.rollNumber = clean_roll
     if data.branch is not None:
-        user.branch = data.branch.strip() if data.branch else None
+        user.branch = canonical_branch_or_none(data.branch)
     if data.batch is not None:
         user.batch = data.batch
     if data.personalEmail is not None:

@@ -27,6 +27,7 @@ import { Button } from "@/components/ui/button";
 import { DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { BTECH_BRANCHES } from "@/lib/branch";
 import {
   Select,
   SelectContent,
@@ -491,6 +492,14 @@ export function UsersManager({
 
   return (
     <div className="admin-page">
+      {/* Suggestions for both branch inputs: the canonical B.Tech codes. The
+          field stays free text for postgraduate branches, and the server
+          folds the legacy CSE spelling onto CS. */}
+      <datalist id="branch-suggestions">
+        {BTECH_BRANCHES.map((branch) => (
+          <option key={branch} value={branch} />
+        ))}
+      </datalist>
       {/* Heading */}
       <section className="admin-heading">
         <div>
@@ -650,7 +659,8 @@ export function UsersManager({
                 <Input
                   id="new-user-branch"
                   name="branch"
-                  placeholder="e.g. Computer Science & AI"
+                  list="branch-suggestions"
+                  placeholder="e.g. CS"
                 />
               </div>
 
@@ -918,7 +928,8 @@ export function UsersManager({
                   id="edit-user-branch"
                   name="branch"
                   defaultValue={editingUser.branch ?? ""}
-                  placeholder="e.g. Computer Science"
+                  list="branch-suggestions"
+                  placeholder="e.g. CS"
                 />
               </div>
 

@@ -32,6 +32,7 @@ import type {
   OfferType,
 } from "@prisma/client";
 import { parseAdminEmails } from "../src/admin-emails";
+import { canonicalBranch, canonicalBranchList } from "../src/branch";
 import { loadRootEnv } from "../src/load-root-env";
 
 loadRootEnv();
@@ -304,7 +305,7 @@ async function seedJobs(
       minCGPA: record.minCGPA,
       maxBacklogs: record.maxBacklogs,
       maxBans: record.maxBans,
-      allowedBranches: record.allowedBranches,
+      allowedBranches: canonicalBranchList(record.allowedBranches),
       allowedDegrees: record.allowedDegrees,
       allowedGenders: record.allowedGenders,
       min10Percent: record.min10Percent ?? null,
@@ -556,7 +557,7 @@ async function seedPersonalActivity(
     // Only fill gaps: never overwrite what a real person entered themselves.
     const p = activity.profile;
     const patch: Record<string, unknown> = {};
-    if (user.branch === null) patch.branch = p.branch;
+    if (user.branch === null) patch.branch = canonicalBranch(p.branch);
     if (user.degree === null) patch.degree = p.degree;
     if (user.batch === null) patch.batch = currentYear + p.batchOffset;
     if (user.gender === null) patch.gender = p.gender;

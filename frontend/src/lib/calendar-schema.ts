@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { BackendCalendarEvent, CalendarEventType, CalendarVisibility } from "@/lib/backend-types";
+import { canonicalBranchList } from "@/lib/branch";
 import { addDays, dayKeyOf, isDayKey, istToInstant, timeInputOf } from "@/lib/calendar-utils";
 
 /** Types the placement cell can pick. PERSONAL is implied by a student's reminder form. */
@@ -89,7 +90,7 @@ export const calendarEventFormSchema = z
     jobProfileId: z.string().trim().nullable().optional(),
     visibility: z.enum([...STAFF_VISIBILITIES, "PRIVATE"]),
     targetBatches: z.array(z.number().int().min(2000).max(2100)).max(20),
-    targetBranches: z.array(z.string().trim().min(1)).max(50),
+    targetBranches: z.array(z.string().trim().min(1)).max(50).transform((values) => canonicalBranchList(values)),
     pocIds: z.array(z.string().min(1)).max(10),
     attendeeIds: z.array(z.string().min(1)).max(2000),
     attendeeSourceStatuses: z.array(z.enum(ATTENDEE_SOURCE_STATUSES)),

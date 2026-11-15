@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { PrismaClient, Role } from "@prisma/client";
 import { hash } from "bcryptjs";
+import { canonicalBranch } from "../src/branch";
 import { loadRootEnv } from "../src/load-root-env";
 
 loadRootEnv();
@@ -68,7 +69,8 @@ async function main() {
 
     const data = {
       name: row["Full Name"].trim(),
-      branch: row.Branch.trim(),
+      // A legacy CSE in the roster is stored as CS, the canonical code.
+      branch: canonicalBranch(row.Branch),
       degree: row.Degree.trim(),
       batch: Number.parseInt(row["Graduation Year"], 10),
       personalEmail,

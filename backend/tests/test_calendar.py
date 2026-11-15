@@ -99,7 +99,7 @@ def test_overlap_is_half_open():
 # Who sees what
 # ---------------------------------------------------------------------------
 
-def _see(visibility, student=StudentContext("stu_1", 2027, "CSE"), **kw):
+def _see(visibility, student=StudentContext("stu_1", 2027, "CS"), **kw):
     return student_can_see(
         visibility=visibility,
         created_by_id=kw.get("created_by_id", "usr_team"),
@@ -124,12 +124,12 @@ def test_targeted_matches_batch_and_branch():
     assert not _see("TARGETED", batches=[2028])
     assert _see("TARGETED", branches=["cse"])  # case-insensitive
     assert not _see("TARGETED", branches=["IT"])
-    assert _see("TARGETED", batches=[2027], branches=["CSE", "IT"])
+    assert _see("TARGETED", batches=[2027], branches=["CS", "IT"])
     assert not _see("TARGETED", batches=[2027], branches=["IT"])
 
 
 def test_targeted_excludes_students_with_no_batch_on_record():
-    assert not _see("TARGETED", StudentContext("stu_1", None, "CSE"), batches=[2027])
+    assert not _see("TARGETED", StudentContext("stu_1", None, "CS"), batches=[2027])
 
 
 def test_attendee_events_need_the_student_listed():
@@ -244,13 +244,13 @@ def test_schema_cleans_input():
     payload = _payload(
         title="  Acme  ",
         location="   ",
-        targetBranches=[" CSE", "CSE", ""],
+        targetBranches=[" CS", "CSE", "cse", ""],
         targetBatches=[2028, 2027, 2027],
         pocIds=["u_a", "u_a", " u_b "],
     )
     assert payload.title == "Acme"
     assert payload.location is None
-    assert payload.targetBranches == ["CSE"]
+    assert payload.targetBranches == ["CS"]
     assert payload.targetBatches == [2027, 2028]
     assert payload.pocIds == ["u_a", "u_b"]
 
@@ -278,7 +278,7 @@ def test_edit_rights():
 
 def _event(**overrides):
     poc_user = SimpleNamespace(id="u_a", name="Asha", email="asha@iiitl.ac.in", rollNumber=None, branch=None, batch=None)
-    stu_user = SimpleNamespace(id="stu_1", name="S One", email="s1@iiitl.ac.in", rollNumber="LIT1", branch="CSE", batch=2027)
+    stu_user = SimpleNamespace(id="stu_1", name="S One", email="s1@iiitl.ac.in", rollNumber="LIT1", branch="CS", batch=2027)
     data = dict(
         id="ev_1",
         title="Acme interview",
@@ -358,7 +358,7 @@ def _install_capturing_db(client):
             return result
 
         db.scalars = _scalars
-        db.get = AsyncMock(return_value=SimpleNamespace(id="stu_1", batch=2027, branch="CSE"))
+        db.get = AsyncMock(return_value=SimpleNamespace(id="stu_1", batch=2027, branch="CS"))
         yield db
 
     client.app.dependency_overrides[get_db] = _fake_db

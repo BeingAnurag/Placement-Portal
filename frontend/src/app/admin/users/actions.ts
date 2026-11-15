@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { backendFetch } from "@/lib/api-client";
+import { canonicalBranchOrNull } from "@/lib/branch";
 import { requirePermission } from "@/lib/admin-session";
 import { invalidateBackendCache } from "@/lib/cache-invalidation";
 import { db } from "@/lib/db";
@@ -27,7 +28,7 @@ const createUserSchema = z.object({
   role: z.enum(roles),
   title: z.string().trim().max(100).optional().nullable(),
   rollNumber: z.string().trim().max(40).optional().nullable(),
-  branch: z.string().trim().max(80).optional().nullable(),
+  branch: z.string().trim().max(80).optional().nullable().transform((value) => canonicalBranchOrNull(value)),
   batch: z.coerce.number().int().min(2000).max(2100).optional().nullable(),
   customPermissions: z.array(z.string()).default([]),
   isActive: z.boolean().default(true),
@@ -61,7 +62,7 @@ const updateUserDetailsSchema = z.object({
   name: z.string().trim().min(2, "Name must be at least 2 characters.").max(120).optional().nullable(),
   title: z.string().trim().max(100).optional().nullable(),
   rollNumber: z.string().trim().max(40).optional().nullable(),
-  branch: z.string().trim().max(80).optional().nullable(),
+  branch: z.string().trim().max(80).optional().nullable().transform((value) => canonicalBranchOrNull(value)),
   batch: z.coerce.number().int().min(2000).max(2100).optional().nullable(),
 });
 

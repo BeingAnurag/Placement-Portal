@@ -1,4 +1,5 @@
 import type { EventBranchGroup, EventCompanyOption } from "@/components/admin/event-form";
+import { canonicalBranch } from "@/lib/branch";
 import { db } from "@/lib/db";
 
 /** Branches from students whose degree the roster never recorded. */
@@ -38,14 +39,18 @@ export async function loadEventFormOptions(
   for (const student of roster) {
     const degree = student.degree?.trim() || UNGROUPED_DEGREE;
     const branches = byDegree.get(degree) ?? new Set<string>();
-    if (student.branch?.trim()) branches.add(student.branch.trim());
+    // Canonical code, so a legacy CSE row is offered as CS, never beside it.
+    const branch = student.branch ? canonicalBranch(student.branch) : "";
+    if (branch) branches.add(branch);
     byDegree.set(degree, branches);
   }
 
   // A branch the roster no longer explains still has to be shown, or editing a
   // drive would silently drop it.
   const known = new Set([...byDegree.values()].flatMap((branches) => [...branches]));
-  const orphans = extraBranches.filter((branch) => branch && !known.has(branch));
+  const orphans = [...new Set(extraBranches.map(canonicalBranch))].filter(
+    (branch) => branch && !known.has(branch),
+  );
   if (orphans.length) {
     const fallback = byDegree.get(UNGROUPED_DEGREE) ?? new Set<string>();
     orphans.forEach((branch) => fallback.add(branch));

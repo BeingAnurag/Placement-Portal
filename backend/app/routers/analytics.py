@@ -28,6 +28,7 @@ from app.models.db import (
     Role,
     User,
 )
+from app.services.branch import canonical_branch_or_none
 from app.services.placement_stats import (
     COUNTED_OFFER_STATUSES,
     PLACEMENT_TYPES,
@@ -169,8 +170,11 @@ async def admin_overview(
             "internshipsByDegree": _distribution(
                 o.user.degree if o.user else None for o in internships
             ),
+            # Each offer is counted once under its student's canonical branch,
+            # so a legacy CSE row lands in the CS bar rather than its own.
             "placementsByBranch": _distribution(
-                o.user.branch if o.user else None for o in placements
+                canonical_branch_or_none(o.user.branch) if o.user else None
+                for o in placements
             ),
             "topRecruiters": [
                 {"label": label, "count": count}
