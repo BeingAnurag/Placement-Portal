@@ -1731,3 +1731,12 @@ The placement cell needed one shared view of company visits and interview slots,
 - **Nothing is cached**, because every response depends on the viewer.
 
 Deliberately not built yet: notifications or email on create or change, reminders before an entry starts, `.ics` export or Google Calendar sync, recurring entries, and creating interview slots automatically when an application moves to `INTERVIEW`.
+
+## 2026-11-15 — The calendar can add a company the portal has not seen yet
+
+The calendar is mostly used for recruiters visiting for the first time, and its company dropdown listed only the handful of `Company` rows on record. Making the office leave the form for Companies → Add company first defeated the point of it.
+
+- The calendar's company field is now the shared `CompanySelect`. It searches companies on record plus the curated `COMPANY_OPTIONS` list that interview experiences offer, and accepts a typed name.
+- A name that is not on record is sent as `companyName`, and `POST`/`PUT /api/v1/calendar/events` resolves it in FastAPI. A case- and whitespace-insensitive match reuses the existing row. Otherwise it creates a `Company` holding only its name, inside the same transaction as the entry, so a refused save leaves no company behind. Category, session and description are filled in later from Companies.
+- This follows the offers screen's precedent (`resolveCompanyId`, which does the same in a Next.js server action), except here the write is in FastAPI, per the 2026-08-20 decision.
+- Creating one requires `calendar.manage`, which every non-personal entry already needs. A personal reminder can never add a company.

@@ -53,6 +53,10 @@ class CalendarEventWrite(BaseModel):
     location: Optional[str] = Field(None, max_length=300)
     meetingLink: Optional[str] = Field(None, max_length=1000)
     companyId: Optional[str] = None
+    # A recruiter with no Company row yet, typed or picked from the curated
+    # list. Only read when companyId is empty; the save finds a company with
+    # this name (ignoring case) or creates one.
+    companyName: Optional[str] = Field(None, max_length=200)
     jobProfileId: Optional[str] = None
     visibility: CalendarVisibilityLiteral = "STAFF"
     targetBatches: list[int] = Field(default_factory=list, max_length=20)
@@ -66,7 +70,9 @@ class CalendarEventWrite(BaseModel):
     def strip_title(cls, v: str) -> str:
         return v.strip() if isinstance(v, str) else v
 
-    @field_validator("description", "location", "meetingLink", "companyId", "jobProfileId", mode="before")
+    @field_validator(
+        "description", "location", "meetingLink", "companyId", "companyName", "jobProfileId", mode="before"
+    )
     @classmethod
     def blank_to_none(cls, v: Optional[str]) -> Optional[str]:
         return _blank_to_none(v) if isinstance(v, str) or v is None else v

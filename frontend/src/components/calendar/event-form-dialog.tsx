@@ -2,6 +2,7 @@
 
 import { Check, ChevronDown, X } from "lucide-react";
 import { useMemo, useState } from "react";
+import { CompanySelect } from "@/components/common/company-select";
 import { PortalDialog } from "@/components/common/portal-dialog";
 import { StudentSearch } from "@/components/common/student-search";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -38,6 +39,7 @@ import {
   VISIBILITY_LABELS,
   type CalendarEventFormValues,
 } from "@/lib/calendar-schema";
+import { COMPANY_OPTIONS } from "@/lib/company-options";
 
 const NONE = "__none__";
 
@@ -54,7 +56,7 @@ function personLabel(person: CalendarPerson) {
 
 function Field({ label, htmlFor, children, className }: { label: string; htmlFor?: string; children: React.ReactNode; className?: string }) {
   return (
-    <div className={`grid gap-1.5 ${className ?? ""}`}>
+    <div className={`grid content-start gap-1.5 ${className ?? ""}`}>
       <Label htmlFor={htmlFor}>{label}</Label>
       {children}
     </div>
@@ -206,32 +208,51 @@ export function EventFormDialog({
               </Select>
             </Field>
             <Field label="Company" htmlFor="cal-company">
-              <Select
-                value={form.companyId ?? NONE}
-                onValueChange={(value) => {
-                  const companyId = value === NONE ? null : value;
-                  setForm((previous) => {
-                    const job = options?.jobs.find((item) => item.id === previous.jobProfileId);
-                    return {
-                      ...previous,
-                      companyId,
-                      jobProfileId: job && job.companyId === companyId ? previous.jobProfileId : null,
-                    };
-                  });
-                }}
-              >
-                <SelectTrigger id="cal-company" className="w-full">
-                  <SelectValue placeholder="No company" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={NONE}>No company</SelectItem>
-                  {(options?.companies ?? []).map((company) => (
-                    <SelectItem key={company.id} value={company.id}>
-                      {company.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="flex items-center gap-1">
+                <div className="min-w-0 flex-1">
+                  <CompanySelect
+                    id="cal-company"
+                    options={options?.companies ?? []}
+                    suggestions={COMPANY_OPTIONS}
+                    value={form.companyId ?? form.companyName ?? ""}
+                    placeholder="No company"
+                    onChange={(value) => {
+                      // An id means a company already on the portal; anything
+                      // else is a name FastAPI will add when the entry is saved.
+                      const known = options?.companies.some((company) => company.id === value) ?? false;
+                      setForm((previous) => {
+                        const companyId = known ? value : null;
+                        const job = options?.jobs.find((item) => item.id === previous.jobProfileId);
+                        return {
+                          ...previous,
+                          companyId,
+                          companyName: known ? null : value,
+                          jobProfileId: job && job.companyId === companyId ? previous.jobProfileId : null,
+                        };
+                      });
+                    }}
+                  />
+                </div>
+                {form.companyId || form.companyName ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Clear company"
+                    onClick={() =>
+                      setForm((previous) => ({ ...previous, companyId: null, companyName: null, jobProfileId: null }))
+                    }
+                  >
+                    <X />
+                  </Button>
+                ) : null}
+              </div>
+              {form.companyName ? (
+                <p className="text-xs text-muted-foreground">
+                  New to the portal: &ldquo;{form.companyName}&rdquo; is added to Companies when you save. Fill in
+                  its details there later.
+                </p>
+              ) : null}
             </Field>
             <Field label="Drive (optional)" htmlFor="cal-job">
               <Select
@@ -243,6 +264,7 @@ export function EventFormDialog({
                     ...previous,
                     jobProfileId,
                     companyId: job ? job.companyId : previous.companyId,
+                    companyName: job ? null : previous.companyName,
                   }));
                 }}
               >

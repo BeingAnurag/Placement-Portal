@@ -448,3 +448,81 @@ def test_editing_a_missing_or_hidden_entry_is_404(client):
     }
     assert client.put("/api/v1/calendar/events/ev_x", json=body).status_code == 404
     assert client.delete("/api/v1/calendar/events/ev_x").status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Adding a company from the calendar
+# ---------------------------------------------------------------------------
+
+def test_schema_blank_company_name_is_none():
+    assert _payload(companyName="   ").companyName is None
+    assert _payload(companyName=" Demandbase ").companyName == "Demandbase"
+
+
+def test_company_name_query_matches_case_insensitively():
+    import asyncio
+
+    from app.routers.calendar import _company_by_name
+
+    captured: dict = {}
+    existing = SimpleNamespace(id="co_amazon")
+
+    async def run():
+        db = AsyncMock()
+
+        async def _scalars(stmt):
+            captured["sql"] = _compiled(stmt)
+            result = MagicMock()
+            result.first.return_value = existing
+            return result
+
+        db.scalars = _scalars
+        company_id = await _company_by_name(db, "  amazon   web  services ")
+        db.add.assert_not_called()
+        return company_id
+
+    assert asyncio.run(run()) == "co_amazon"
+    assert "lower" in captured["sql"].lower()
+    assert "'amazon web services'" in captured["sql"]
+
+
+def test_company_name_creates_a_minimal_company_when_missing():
+    import asyncio
+
+    from app.models.db import Company
+    from app.routers.calendar import _company_by_name
+
+    async def run():
+        db = AsyncMock()
+        db.add = MagicMock()
+
+        async def _scalars(stmt):
+            result = MagicMock()
+            result.first.return_value = None
+            return result
+
+        db.scalars = _scalars
+        company_id = await _company_by_name(db, "Demandbase")
+        added = db.add.call_args.args[0]
+        return company_id, added
+
+    company_id, added = asyncio.run(run())
+    assert isinstance(added, Company)
+    assert added.name == "Demandbase"
+    assert added.id == company_id
+
+
+def test_personal_reminder_cannot_add_a_company(client):
+    _as(client, STUDENT)
+    _install_capturing_db(client)
+    body = {
+        "title": "Prep",
+        "type": "PERSONAL",
+        "visibility": "PRIVATE",
+        "startsAt": "2026-11-20T10:00:00+05:30",
+        "endsAt": "2026-11-20T11:00:00+05:30",
+        "companyName": "Totally New Co",
+    }
+    response = client.post("/api/v1/calendar/events", json=body)
+    assert response.status_code == 400
+    assert "company" in response.json()["detail"].lower()

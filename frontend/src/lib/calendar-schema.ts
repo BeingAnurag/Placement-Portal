@@ -84,6 +84,8 @@ export const calendarEventFormSchema = z
       "Meeting link must start with http:// or https://.",
     ),
     companyId: z.string().trim().nullable().optional(),
+    /** A recruiter not yet on the portal; FastAPI finds or creates it on save. */
+    companyName: optionalText(200),
     jobProfileId: z.string().trim().nullable().optional(),
     visibility: z.enum([...STAFF_VISIBILITIES, "PRIVATE"]),
     targetBatches: z.array(z.number().int().min(2000).max(2100)).max(20),
@@ -158,6 +160,7 @@ export type CalendarEventPayload = {
   location: string | null;
   meetingLink: string | null;
   companyId: string | null;
+  companyName: string | null;
   jobProfileId: string | null;
   visibility: CalendarVisibility;
   targetBatches: number[];
@@ -184,6 +187,9 @@ export function toCalendarPayload(data: CalendarEventFormData): CalendarEventPay
     location: data.location ?? null,
     meetingLink: data.meetingLink ?? null,
     companyId: data.companyId || null,
+    // Only one of the two is ever sent: an id wins, and a personal reminder
+    // never names a new company.
+    companyName: data.companyId || personal ? null : (data.companyName ?? null),
     jobProfileId: data.jobProfileId || null,
     visibility: data.visibility,
     targetBatches: data.visibility === "TARGETED" ? data.targetBatches : [],
@@ -215,6 +221,7 @@ export function emptyCalendarForm(
     location: "",
     meetingLink: "",
     companyId: null,
+    companyName: null,
     jobProfileId: null,
     visibility: mode === "staff" ? "STAFF" : "PRIVATE",
     targetBatches: [],
@@ -246,6 +253,7 @@ export function calendarFormFromEvent(event: BackendCalendarEvent): CalendarEven
     location: event.location ?? "",
     meetingLink: event.meetingLink ?? "",
     companyId: event.companyId,
+    companyName: null,
     jobProfileId: event.jobProfileId,
     visibility: event.visibility,
     targetBatches: [...event.targetBatches],
