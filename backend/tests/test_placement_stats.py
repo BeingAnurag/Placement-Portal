@@ -55,7 +55,7 @@ def test_distributions_group_the_unfilled_field_instead_of_dropping_it():
 
 
 def test_distributions_are_largest_first_then_alphabetical():
-    assert counts_by_label(["IT", "CSE", "CSE", "ECE"]) == [("CSE", 2), ("ECE", 1), ("IT", 1)]
+    assert counts_by_label(["IT", "CS", "CS", "ECE"]) == [("CS", 2), ("ECE", 1), ("IT", 1)]
 
 
 def test_placement_rate_is_a_whole_percent_and_survives_an_empty_batch():

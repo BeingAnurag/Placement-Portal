@@ -1,8 +1,11 @@
+import{branchKey}from"./branch";
+
 export type StudentEligibility={cgpa:number;batch:number;branch:string;degree:string|null;gender:string|null;backlogs:number;bans:number;documentsComplete:boolean;class10Percent:number|null;class12Percent:number|null};
 export type JobEligibility={minCgpa:number;batch:number;branches:readonly string[];degrees:readonly string[];genders:readonly string[];maxBacklogs:number;maxBans?:number;min10Percent?:number|null;min12Percent?:number|null};
 export type EligibilityCheck={key:string;label:string;pass:boolean};
 
-function normalizeBranch(branch:string):string{return branch.trim().toUpperCase()}
+/** Trim, uppercase, and fold a legacy alias (CSE) onto its canonical code (CS). */
+function normalizeBranch(branch:string):string{return branchKey(branch)}
 
 /**
  * Degree and gender are free text on both sides: the student types them into

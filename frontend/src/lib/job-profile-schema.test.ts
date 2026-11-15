@@ -13,7 +13,7 @@ const validInput = {
   minCGPA: "7.5",
   maxBacklogs: "0",
   maxBans: "0",
-  allowedBranches: JSON.stringify(["CSE", "IT", "CSE"]),
+  allowedBranches: JSON.stringify(["CS", "IT", "CS"]),
   allowedDegrees: JSON.stringify(["BTech"]),
   allowedGenders: "[]",
   jobCategory: "Tech",
@@ -33,7 +33,7 @@ test("job profile input normalizes numbers, posting places, and picked lists", (
   const parsed = jobProfileFormSchema.parse(validInput);
   assert.equal(parsed.ctcStipend, 1_800_000);
   assert.deepEqual(parsed.locations, ["Bengaluru", "Remote"]);
-  assert.deepEqual(parsed.allowedBranches, ["CSE", "IT"]);
+  assert.deepEqual(parsed.allowedBranches, ["CS", "IT"]);
   assert.equal(parsed.allowedGenders.length, 0);
   assert.equal(parsed.placementYear, 2026);
   assert.equal(parsed.cap, null);
@@ -43,7 +43,7 @@ test("job profile input normalizes numbers, posting places, and picked lists", (
 test("a comma-separated eligibility list still parses", () => {
   const parsed = jobProfileFormSchema.parse({
     ...validInput,
-    allowedBranches: "CSE, IT",
+    allowedBranches: "CS, IT",
     allowedDegrees: "BTech, MTech",
   });
   assert.deepEqual(parsed.allowedDegrees, ["BTech", "MTech"]);
@@ -82,4 +82,12 @@ test("a redirect link must be a full URL", () => {
       .redirectUrl,
     "https://careers.example.com/apply",
   );
+});
+
+test("a legacy CSE branch is saved as CS, without a duplicate", () => {
+  const parsed = jobProfileFormSchema.parse({
+    ...validInput,
+    allowedBranches: JSON.stringify(["CSE", "IT", "CS", " cse "]),
+  });
+  assert.deepEqual(parsed.allowedBranches, ["CS", "IT"]);
 });

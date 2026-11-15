@@ -36,6 +36,7 @@ from app.services.eligibility import (
     is_eligible,
     to_eligibility_profile,
 )
+from app.services.branch import canonical_branch
 from app.services.email import send_notification_email
 
 router = APIRouter(prefix="/applications", tags=["applications"])
@@ -294,7 +295,7 @@ async def list_admin_applications(
     if (branch and branch != "ALL") or batch or term:
         stmt = stmt.join(Application.user)
         if branch and branch != "ALL":
-            stmt = stmt.where(User.branch == branch)
+            stmt = stmt.where(User.branch == canonical_branch(branch))
         if batch:
             stmt = stmt.where(User.batch == batch)
 
@@ -532,7 +533,7 @@ async def export_applications_csv(
     if (branch and branch != "ALL") or batch or term:
         stmt = stmt.join(Application.user)
         if branch and branch != "ALL":
-            stmt = stmt.where(User.branch == branch)
+            stmt = stmt.where(User.branch == canonical_branch(branch))
         if batch:
             stmt = stmt.where(User.batch == batch)
 

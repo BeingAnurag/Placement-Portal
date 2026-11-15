@@ -6,6 +6,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from app.services.branch import branch_key
+
 
 @dataclass
 class EligibilityCheck:
@@ -115,7 +117,9 @@ def evaluate_eligibility(
         EligibilityCheck(
             key="branch",
             label=f"Branch {branch}",
-            passed=branch.strip().upper() in {b.strip().upper() for b in allowed_branches},
+            # branch_key folds the legacy CSE alias onto CS as well as trimming
+            # and uppercasing, so a job or profile not yet migrated still matches.
+            passed=branch_key(branch) in {branch_key(b) for b in allowed_branches},
         ),
         EligibilityCheck(
             key="degree",

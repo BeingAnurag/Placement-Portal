@@ -23,7 +23,7 @@ type Row = {
 const rows: Row[] = [
   {
     name: "Isha Verma",
-    branch: "CSE",
+    branch: "CS",
     batch: 2027,
     cgpa: 9.2,
     offered: true,
@@ -150,11 +150,11 @@ test("filters combine with AND across fields and OR inside one field", () => {
   ];
 
   assert.equal(
-    rowMatchesFilters(rows[0], filters, { branch: ["CSE", "IT"] }),
+    rowMatchesFilters(rows[0], filters, { branch: ["CS", "IT"] }),
     true,
   );
   assert.equal(
-    rowMatchesFilters(rows[0], filters, { branch: ["CSE"], tags: ["FTE"] }),
+    rowMatchesFilters(rows[0], filters, { branch: ["CS"], tags: ["FTE"] }),
     false,
   );
   assert.equal(
@@ -216,7 +216,7 @@ test("the whole pipeline runs in order: search, filter, sort, paginate", () => {
     query: "2027",
     searchText,
     filters: [{ id: "branch", value: (row: Row) => row.branch }],
-    filterState: { branch: ["CSE", "CSAI"] },
+    filterState: { branch: ["CS", "CSAI"] },
     sort: { columnId: "cgpa", direction: "desc" },
     sortValue,
     page: 1,
@@ -291,7 +291,7 @@ test("a real change to the view is reported", () => {
   for (const change of [
     { query: "isha" },
     { sort: { columnId: "name", direction: "asc" as const } },
-    { filters: { branch: ["CSE"] } },
+    { filters: { branch: ["CS"] } },
     { filteredCount: 99 },
     { page: 2 },
     { pageCount: 5 },

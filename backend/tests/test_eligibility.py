@@ -13,7 +13,7 @@ BASE_KWARGS = dict(
     documents_complete=True,
     min_cgpa=7.5,
     job_batch=2027,
-    allowed_branches=["CSE", "IT"],
+    allowed_branches=["CS", "IT"],
     allowed_degrees=["B.Tech"],
     allowed_genders=[],
     max_backlogs=0,
@@ -22,20 +22,20 @@ BASE_KWARGS = dict(
 
 def passed(key: str, **overrides) -> bool:
     kwargs = dict(BASE_KWARGS, **overrides)
-    branch = kwargs.pop("branch", "CSE")
+    branch = kwargs.pop("branch", "CS")
     return next(
         c for c in evaluate_eligibility(branch=branch, **kwargs) if c.key == key
     ).passed
 
 
 def test_eligible_student_passes_every_criterion():
-    checks = evaluate_eligibility(branch="CSE", **BASE_KWARGS)
+    checks = evaluate_eligibility(branch="CS", **BASE_KWARGS)
     assert is_eligible(checks)
 
 
 def test_a_failed_criterion_makes_the_student_ineligible():
     kwargs = dict(BASE_KWARGS, cgpa=6.9)
-    checks = evaluate_eligibility(branch="CSE", **kwargs)
+    checks = evaluate_eligibility(branch="CS", **kwargs)
     assert not is_eligible(checks)
     assert next(c for c in checks if c.key == "cgpa").passed is False
 
@@ -53,7 +53,7 @@ def test_branch_comparison_still_rejects_a_genuinely_different_branch():
 
 
 def test_a_degree_outside_the_allowed_list_is_rejected():
-    checks = evaluate_eligibility(branch="CSE", **dict(BASE_KWARGS, degree="MBA"))
+    checks = evaluate_eligibility(branch="CS", **dict(BASE_KWARGS, degree="MBA"))
     assert next(c for c in checks if c.key == "degree").passed is False
     assert not is_eligible(checks)
 
@@ -99,3 +99,13 @@ def test_a_percentage_floor_accepts_a_student_at_or_above_it():
 
 def test_an_unset_student_percentage_fails_a_job_that_sets_a_floor():
     assert passed("class10Percent", class10_percent=None, min_10_percent=75) is False
+
+
+def test_a_legacy_cse_profile_or_job_matches_cs():
+    assert passed("branch", branch="CSE") is True
+    assert passed("branch", branch="cs", allowed_branches=["CSE"]) is True
+
+
+def test_cs_does_not_admit_csai_or_csb():
+    assert passed("branch", branch="CSAI", allowed_branches=["CS"]) is False
+    assert passed("branch", branch="CSB", allowed_branches=["CSE"]) is False

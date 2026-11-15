@@ -55,6 +55,7 @@ from app.schemas.calendar import (
     CalendarOptionsResponse,
     CalendarPerson,
 )
+from app.services.branch import canonical_branch_list
 from app.services.calendar import (
     MAX_EVENT_DURATION,
     MAX_RANGE,
@@ -335,7 +336,7 @@ async def calendar_options(
             for j in jobs
         ],
         batches=[b for b in batches if b is not None],
-        branches=[b for b in branches if b],
+        branches=sorted(canonical_branch_list(branches)),
     )
 
 

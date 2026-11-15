@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { canonicalBranchList } from "@/lib/branch";
 import { sanitizeRichText, stripHtmlToText } from "@/lib/rich-text";
 
 /**
@@ -115,6 +116,14 @@ const jsonList = (label: string, required = false) =>
     return values;
   });
 
+/**
+ * `jsonList` for branch codes: a legacy alias is folded onto its canonical
+ * code and the duplicate that leaves is dropped, so an event can never be
+ * saved open to "CSE" as a branch separate from "CS".
+ */
+const branchList = (required = false) =>
+  jsonList("branch", required).transform((values) => canonicalBranchList(values));
+
 /** The types the event form's question builder offers, in menu order. */
 export const JOB_QUESTION_TYPES = ["TEXT", "MCQ", "CHECKBOX", "FILE"] as const;
 
@@ -198,7 +207,7 @@ export const jobProfileFormSchema = z
     min12Percent: optionalNumber(z.number().min(0).max(100)),
     maxBacklogs: requiredNumber(z.number().int().min(0).max(100)),
     maxBans: requiredNumber(z.number().int().min(0).max(100)),
-    allowedBranches: jsonList("branch", true),
+    allowedBranches: branchList(true),
     allowedDegrees: jsonList("degree", true),
     allowedGenders: jsonList("gender"),
     questions: jobQuestionsList,

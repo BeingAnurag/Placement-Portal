@@ -22,7 +22,7 @@ test("eligibility remains unavailable until required academic fields exist", () 
   assert.equal(toEligibilityProfile({
     cgpa: null,
     batch: 2027,
-    branch: "CSE",
+    branch: "CS",
     degree: "B.Tech",
     gender: "Male",
     backlogs: 0,
@@ -38,7 +38,7 @@ test("a missing degree or gender does not block eligibility on its own", () => {
   const profile = toEligibilityProfile({
     cgpa: 8.2,
     batch: 2027,
-    branch: "CSE",
+    branch: "CS",
     degree: null,
     gender: null,
     backlogs: 0,
@@ -57,7 +57,7 @@ test("eligibility document completeness reflects stored documents and resume", (
   const profile = toEligibilityProfile({
     cgpa: 8.2,
     batch: 2027,
-    branch: "CSE",
+    branch: "CS",
     degree: "B.Tech",
     gender: "Male",
     backlogs: 0,

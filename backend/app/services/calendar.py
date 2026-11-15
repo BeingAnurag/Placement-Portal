@@ -10,6 +10,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 
+from app.services.branch import branch_key
+
 # A range wider than this is refused: the widest view (a month grid with its
 # leading and trailing days) is six weeks, and an unbounded range is an
 # unbounded query.
@@ -47,7 +49,8 @@ class StudentContext:
 
 
 def _norm_branch(value: str | None) -> str:
-    return (value or "").strip().lower()
+    # Canonical code (CSE folds onto CS), compared case-insensitively.
+    return branch_key(value)
 
 
 def student_can_see(
