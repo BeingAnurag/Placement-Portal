@@ -77,7 +77,11 @@ def test_overview_is_read_through_the_analytics_topic(client, monkeypatch):
     response = client.get("/api/v1/analytics/admin/overview", params={"batch": 2027})
 
     assert response.status_code == 200
-    assert response.json() == canned
+    body = response.json()
+    # `live` is added around the cached payload, never stored in it: it holds
+    # figures that depend on the clock.
+    assert body.pop("live") == {"openDrives": 0}
+    assert body == canned
     assert calls == [(cache.TOPIC_ANALYTICS, {"season": 2027})]
 
 
@@ -95,3 +99,37 @@ def test_different_seasons_are_different_cache_entries(client, monkeypatch):
     client.get("/api/v1/analytics/admin/overview", params={"batch": 2028})
 
     assert seen_keys == [{"season": 2027}, {"season": 2028}]
+
+
+def test_clock_dependent_figures_stay_out_of_the_cached_payload(client, monkeypatch):
+    stored: list[dict] = []
+
+    async def _fake_get_or_set(topic, key, loader, **kwargs):
+        payload = await loader()
+        stored.append(payload)
+        return payload
+
+    monkeypatch.setattr(cache, "get_or_set", _fake_get_or_set)
+    _install_db_for_overview(client, season=2027)
+
+    response = client.get("/api/v1/analytics/admin/overview", params={"batch": 2027})
+
+    assert response.status_code == 200
+    assert "live" not in stored[0]
+    assert "live" in response.json()
+
+
+def test_upcoming_drives_needs_jobs_view(client):
+    from app.core.security import PERM_JOBS_VIEW  # noqa: PLC0415
+
+    client.app.dependency_overrides[get_current_user] = lambda: {
+        "sub": "usr_faculty",
+        "email": "faculty@iiitl.ac.in",
+        "role": "FACULTY",
+        "permissions": ["analytics.view"],
+    }
+    assert PERM_JOBS_VIEW == "jobs.view"
+
+    response = client.get("/api/v1/analytics/admin/upcoming-drives")
+
+    assert response.status_code == 403

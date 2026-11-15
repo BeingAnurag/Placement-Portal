@@ -129,3 +129,25 @@ def test_a_bulk_run_needs_at_least_one_roll_number_and_has_an_upper_bound():
             ctc=1,
             rollNumbers=[f"ROLL{index}" for index in range(501)],
         )
+
+
+def test_top_recruiters_split_placements_from_internships():
+    from types import SimpleNamespace  # noqa: PLC0415
+
+    from app.models.db import OfferType  # noqa: PLC0415
+    from app.routers.analytics import _top_recruiters  # noqa: PLC0415
+
+    def offer(company, kind):
+        return SimpleNamespace(company=SimpleNamespace(name=company), type=kind)
+
+    ranked = _top_recruiters(
+        [
+            offer("Acme", OfferType.FTE),
+            offer("Acme", OfferType.INTERNSHIP),
+            offer("Acme", OfferType.PPO),
+            offer("Globex", OfferType.INTERNSHIP),
+        ]
+    )
+
+    assert ranked[0] == {"label": "Acme", "count": 3, "placements": 2, "internships": 1}
+    assert ranked[1] == {"label": "Globex", "count": 1, "placements": 0, "internships": 1}

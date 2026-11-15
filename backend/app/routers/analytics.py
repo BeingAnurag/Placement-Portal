@@ -7,15 +7,16 @@ running a dozen queries of its own.
 """
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import func, select
+from sqlalchemy import exists, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core import cache
-from app.core.security import PERM_ANALYTICS_VIEW, require_permission
+from app.core.security import PERM_ANALYTICS_VIEW, PERM_JOBS_VIEW, require_permission
 from app.dependencies import get_db
 from app.models.db import (
     Application,
@@ -84,8 +85,37 @@ async def admin_overview(
     # Without an explicit choice, open on the newest season that has results.
     # The newest season overall is usually next year's batch, whose drives have
     # not run yet, and an empty dashboard is not what the office wants to see.
+    # A season holding only internship offers is not a placement result either,
+    # so a season with a counted FTE/PPO offer is preferred over one without.
+    placement_seasons = sorted(
+        (
+            await db.scalars(
+                select(Offer.batch)
+                .distinct()
+                .where(Offer.type.in_(PLACEMENT_TYPES), Offer.status.in_(COUNTED_OFFER_STATUSES))
+            )
+        ).all(),
+        reverse=True,
+    )
     offer_seasons = sorted((await db.scalars(select(Offer.batch).distinct())).all(), reverse=True)
-    season = batch or (offer_seasons[0] if offer_seasons else (seasons[0] if seasons else None))
+    season = batch or (
+        placement_seasons[0]
+        if placement_seasons
+        else (offer_seasons[0] if offer_seasons else (seasons[0] if seasons else None))
+    )
+
+    # Not part of the cached season payload: whether a drive is still taking
+    # applications depends on the clock, and a cached answer would go stale the
+    # minute a deadline passed.
+    live = {
+        "openDrives": await db.scalar(
+            select(func.count(JobProfile.id)).where(
+                JobProfile.status == JobStatus.ACTIVE,
+                JobProfile.registrationDeadline > datetime.now(timezone.utc),
+            )
+        )
+        or 0
+    }
 
     # Portal-wide totals. These do not belong to a season: they describe the
     # register, not the year's results.
@@ -111,6 +141,7 @@ async def admin_overview(
                 "placedStudents": 0,
                 "placementRate": 0,
                 "recruiters": 0,
+                "placementRecruiters": 0,
             },
             "packages": {
                 key: _stats_payload(summarize_amounts([]))
@@ -120,8 +151,9 @@ async def admin_overview(
             "internshipsByDegree": [],
             "placementsByBranch": [],
             "topRecruiters": [],
-            "applicationFunnel": {"total": 0, "shortlisted": 0, "interviews": 0, "selected": 0},
+            "applicationFunnel": _empty_funnel(),
             "recentApplications": [],
+            "live": live,
         }
 
     async def load() -> dict:
@@ -157,6 +189,7 @@ async def admin_overview(
                 "placedStudents": len(placed_students),
                 "placementRate": placement_rate(len(placed_students), season_students or 0),
                 "recruiters": len({o.companyId for o in offers}),
+                "placementRecruiters": len({o.companyId for o in placements}),
             },
             "packages": {
                 "placement": _stats_payload(summarize_amounts(o.ctc for o in fte)),
@@ -176,12 +209,7 @@ async def admin_overview(
                 canonical_branch_or_none(o.user.branch) if o.user else None
                 for o in placements
             ),
-            "topRecruiters": [
-                {"label": label, "count": count}
-                for label, count in counts_by_label(
-                    o.company.name if o.company else None for o in offers
-                )[:8]
-            ],
+            "topRecruiters": _top_recruiters(offers),
             "applicationFunnel": await _funnel(db, season),
             "recentApplications": await _recent_applications(db, season),
         }
@@ -192,7 +220,103 @@ async def admin_overview(
     # the admin applications list needed. Keyed by season alone: the response
     # is the same for every caller who holds `analytics.view`, admin or
     # student, so there is no viewer dimension to add to the key.
-    return await cache.get_or_set(cache.TOPIC_ANALYTICS, {"season": season}, load)
+    payload = await cache.get_or_set(cache.TOPIC_ANALYTICS, {"season": season}, load)
+    return {**payload, "live": live}
+
+
+def _top_recruiters(offers) -> list[dict]:
+    """
+    Companies by counted offers, with the placement/internship split so the
+    list can say which kind of recruiter each one is. Ties break on name, the
+    same order `counts_by_label` already gives.
+    """
+    ranked = counts_by_label(o.company.name if o.company else None for o in offers)[:8]
+    split: dict[str, dict[str, int]] = {}
+    for o in offers:
+        name = ((o.company.name if o.company else None) or "").strip() or "Not specified"
+        bucket = split.setdefault(name, {"placements": 0, "internships": 0})
+        if o.type in PLACEMENT_TYPES:
+            bucket["placements"] += 1
+        elif o.type == OfferType.INTERNSHIP:
+            bucket["internships"] += 1
+    return [
+        {"label": label, "count": count, **split.get(label, {"placements": 0, "internships": 0})}
+        for label, count in ranked
+    ]
+
+
+@router.get("/admin/upcoming-drives")
+async def upcoming_drives(
+    limit: int = Query(5, ge=1, le=20),
+    caller: dict = Depends(require_permission(PERM_JOBS_VIEW)),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Drives still taking applications, soonest deadline first, with how many
+    applications each has so far. Computed per request: the deadline is
+    compared with the clock, so it is never cached.
+    """
+    now = datetime.now(timezone.utc)
+    applications = (
+        select(Application.jobProfileId, func.count(Application.id).label("n"))
+        .group_by(Application.jobProfileId)
+        .subquery()
+    )
+    rows = (
+        await db.execute(
+            select(JobProfile, func.coalesce(applications.c.n, 0))
+            .outerjoin(applications, applications.c.jobProfileId == JobProfile.id)
+            .options(selectinload(JobProfile.company))
+            .where(JobProfile.status == JobStatus.ACTIVE, JobProfile.registrationDeadline > now)
+            .order_by(JobProfile.registrationDeadline.asc())
+            .limit(limit)
+        )
+    ).all()
+
+    return [
+        {
+            "id": job.id,
+            "title": job.title,
+            "company": job.company.name if job.company else "",
+            "type": job.type.value if hasattr(job.type, "value") else str(job.type),
+            "batch": job.batch,
+            "registrationDeadline": job.registrationDeadline.isoformat(),
+            "applications": count,
+        }
+        for job, count in rows
+    ]
+
+
+def _empty_funnel() -> dict:
+    return {
+        "total": 0,
+        "shortlisted": 0,
+        "interviews": 0,
+        "selected": 0,
+        "applied": 0,
+        "rejected": 0,
+        "withdrawn": 0,
+        "offerAccepted": 0,
+        "offerDeclined": 0,
+        "reachedShortlist": 0,
+        "reachedInterview": 0,
+        "reachedSelection": 0,
+        "selectedWithoutOffer": 0,
+    }
+
+
+# Stages at or beyond each milestone. An application records only where it is
+# now, not where it has been, so a REJECTED one cannot be placed on the way up:
+# the "reached" counts are therefore a floor, never an overcount.
+_SHORTLIST_OR_LATER = (
+    ApplicationStatus.SHORTLISTED,
+    ApplicationStatus.INTERVIEW,
+    ApplicationStatus.SELECTED,
+    ApplicationStatus.OFFER_ACCEPTED,
+    ApplicationStatus.OFFER_DECLINED,
+)
+_INTERVIEW_OR_LATER = _SHORTLIST_OR_LATER[1:]
+_SELECTED_OR_LATER = _SHORTLIST_OR_LATER[2:]
 
 
 async def _funnel(db: AsyncSession, season: int) -> dict:
@@ -209,11 +333,40 @@ async def _funnel(db: AsyncSession, season: int) -> dict:
     def value(status: ApplicationStatus) -> int:
         return counts.get(status, 0)
 
+    def at_or_after(stages) -> int:
+        return sum(value(stage) for stage in stages)
+
+    # Selected students the office has no offer on file for: the same student
+    # and the same company, in this season. Matching on the application link
+    # alone would flag offers entered by roll number in bulk, which carry none.
+    unrecorded = await db.scalar(
+        select(func.count(Application.id))
+        .join(Application.job_profile)
+        .where(
+            JobProfile.batch == season,
+            Application.status.in_((ApplicationStatus.SELECTED, ApplicationStatus.OFFER_ACCEPTED)),
+            ~exists().where(
+                Offer.userId == Application.userId,
+                Offer.companyId == JobProfile.companyId,
+                Offer.batch == season,
+            ),
+        )
+    )
+
     return {
         "total": sum(counts.values()),
         "shortlisted": value(ApplicationStatus.SHORTLISTED),
         "interviews": value(ApplicationStatus.INTERVIEW),
         "selected": value(ApplicationStatus.SELECTED),
+        "applied": value(ApplicationStatus.APPLIED),
+        "rejected": value(ApplicationStatus.REJECTED),
+        "withdrawn": value(ApplicationStatus.WITHDRAWN),
+        "offerAccepted": value(ApplicationStatus.OFFER_ACCEPTED),
+        "offerDeclined": value(ApplicationStatus.OFFER_DECLINED),
+        "reachedShortlist": at_or_after(_SHORTLIST_OR_LATER),
+        "reachedInterview": at_or_after(_INTERVIEW_OR_LATER),
+        "reachedSelection": at_or_after(_SELECTED_OR_LATER),
+        "selectedWithoutOffer": unrecorded or 0,
     }
 
 
