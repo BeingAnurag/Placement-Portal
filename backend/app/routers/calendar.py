@@ -18,7 +18,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
-from sqlalchemy import and_, distinct, exists, or_, select
+from sqlalchemy import and_, distinct, exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -380,8 +380,38 @@ def check_write_rules(payload: CalendarEventWrite, caller: dict) -> None:
         raise HTTPException(status_code=400, detail="Add at least one student to this entry.")
 
 
+async def _company_by_name(db: AsyncSession, name: str) -> str:
+    """
+    The id of the company called `name`, creating a minimal row if none exists.
+
+    The calendar is mostly used for recruiters visiting for the first time, so
+    making the office leave the form to register a company first would defeat
+    it. A case-insensitive match reuses an existing row ("amazon" is Amazon).
+    A new row carries only its name; category, session and description are
+    filled in later from Companies, the same trade the offers screen makes
+    for an off-campus recruiter (resolveCompanyId in placement-records).
+    """
+    name = " ".join(name.split())
+    existing = (
+        await db.scalars(select(Company).where(func.lower(Company.name) == name.lower()).limit(1))
+    ).first()
+    if existing is not None:
+        return existing.id
+    company = Company(id=str(uuid.uuid4()), name=name, createdAt=datetime.now(timezone.utc))
+    db.add(company)
+    await db.flush()
+    return company.id
+
+
 async def _resolve_links(db: AsyncSession, payload: CalendarEventWrite) -> tuple[str | None, str | None]:
     company_id, job_id = payload.companyId, payload.jobProfileId
+    if not company_id and payload.companyName:
+        # A personal reminder never writes to the company register: only the
+        # placement cell (calendar.manage, already checked for every
+        # non-personal entry) adds recruiters.
+        if payload.type == CalendarEventType.PERSONAL.value:
+            raise HTTPException(status_code=400, detail="Personal reminders cannot add a new company.")
+        company_id = await _company_by_name(db, payload.companyName)
     if job_id:
         job = await db.get(JobProfile, job_id)
         if job is None:

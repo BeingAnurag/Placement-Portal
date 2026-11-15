@@ -146,3 +146,21 @@ test("editing an event round-trips its times", () => {
   assert.equal(allDay.startDate, "2026-11-20");
   assert.equal(allDay.endDate, "2026-11-20");
 });
+
+test("a company not yet on the portal is sent by name, an existing one by id", () => {
+  const byName = toCalendarPayload(calendarEventFormSchema.parse(staffForm({ companyName: " Demandbase " })));
+  assert.equal(byName.companyId, null);
+  assert.equal(byName.companyName, "Demandbase");
+
+  const byId = toCalendarPayload(
+    calendarEventFormSchema.parse(staffForm({ companyId: "co_1", companyName: "Demandbase" })),
+  );
+  assert.equal(byId.companyId, "co_1");
+  assert.equal(byId.companyName, null);
+});
+
+test("a personal reminder never sends a new company name", () => {
+  const form = { ...emptyCalendarForm("2026-11-20", "10:00", "student"), title: "Prep", companyName: "New Co" };
+  const payload = toCalendarPayload(calendarEventFormSchema.parse(form));
+  assert.equal(payload.companyName, null);
+});
